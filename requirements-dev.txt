@@ -1,0 +1,6 @@
+black
+isort
+ruff
+pre-commit
+pytest
+pytest-django
