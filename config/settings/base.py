@@ -59,6 +59,8 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {"default": env.db("DATABASE_URL", default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')}
 
+AUTH_USER_MODEL = "accounts.User"
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {
