@@ -1,8 +1,10 @@
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.models import User
+from tickets.filters import TicketFilter
 from tickets.models import Ticket
 from tickets.permissions import IsCustomerOwnerOrReadOwn
 from tickets.serializers import (
@@ -16,6 +18,8 @@ from tickets.serializers import (
 class TicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
     permission_classes = [IsCustomerOwnerOrReadOwn]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = TicketFilter
 
     def get_queryset(self):
         user = self.request.user
