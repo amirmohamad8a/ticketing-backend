@@ -60,3 +60,18 @@ class TicketSerializer(serializers.ModelSerializer):
                 )
 
         return instance
+
+
+class TicketEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TicketEvent
+        fields = [
+            "id",
+            "ticket",
+            "actor",
+            "field_changed",
+            "old_value",
+            "new_value",
+            "created_at",
+        ]
+        read_only_fields = fields
