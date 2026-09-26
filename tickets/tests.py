@@ -1,9 +1,15 @@
+import shutil
+import tempfile
+
 from django.contrib.admin.sites import site
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from accounts.models import User
-from tickets.models import Comment, Ticket, TicketEvent
+from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
 
 class TicketModelTests(TestCase):
@@ -263,4 +269,151 @@ class CommentAdminRegistrationTests(TestCase):
     def test_admin_list_display_includes_key_fields(self):
         admin_instance = site._registry[Comment]
         for field in ("ticket", "author", "is_internal"):
+            self.assertIn(field, admin_instance.list_display)
+
+
+TEST_MEDIA_ROOT = tempfile.mkdtemp()
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class AttachmentModelTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+
+    def setUp(self):
+        self.customer = User.objects.create_user(
+            username="cust4", password="pass12345", role=User.Role.CUSTOMER
+        )
+        self.agent = User.objects.create_user(
+            username="agent4", password="pass12345", role=User.Role.AGENT
+        )
+        self.ticket = Ticket.objects.create(
+            title="Attachment issue", description="Details here.", customer=self.customer
+        )
+        self.comment = Comment.objects.create(
+            ticket=self.ticket, author=self.customer, body="See attached."
+        )
+
+    def _file(self, name="test.txt", content=b"hello world"):
+        return SimpleUploadedFile(name, content, content_type="text/plain")
+
+    def test_create_attachment_on_ticket(self):
+        attachment = Attachment.objects.create(
+            ticket=self.ticket,
+            file=self._file(),
+            uploaded_by=self.customer,
+            size=11,
+            content_type="text/plain",
+        )
+        self.assertEqual(attachment.ticket, self.ticket)
+        self.assertIsNone(attachment.comment)
+
+    def test_create_attachment_on_comment(self):
+        attachment = Attachment.objects.create(
+            comment=self.comment,
+            file=self._file(),
+            uploaded_by=self.customer,
+            size=11,
+            content_type="text/plain",
+        )
+        self.assertEqual(attachment.comment, self.comment)
+        self.assertIsNone(attachment.ticket)
+
+    def test_clean_rejects_neither_parent_set(self):
+        attachment = Attachment(
+            file=self._file(), uploaded_by=self.customer, size=11, content_type="text/plain"
+        )
+        with self.assertRaises(ValidationError):
+            attachment.clean()
+
+    def test_clean_rejects_both_parents_set(self):
+        attachment = Attachment(
+            ticket=self.ticket,
+            comment=self.comment,
+            file=self._file(),
+            uploaded_by=self.customer,
+            size=11,
+            content_type="text/plain",
+        )
+        with self.assertRaises(ValidationError):
+            attachment.clean()
+
+    def test_db_constraint_rejects_neither_parent(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Attachment.objects.create(
+                    file=self._file(),
+                    uploaded_by=self.customer,
+                    size=11,
+                    content_type="text/plain",
+                )
+
+    def test_db_constraint_rejects_both_parents(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Attachment.objects.create(
+                    ticket=self.ticket,
+                    comment=self.comment,
+                    file=self._file(),
+                    uploaded_by=self.customer,
+                    size=11,
+                    content_type="text/plain",
+                )
+
+    def test_deleting_uploaded_by_sets_null(self):
+        attachment = Attachment.objects.create(
+            ticket=self.ticket,
+            file=self._file(),
+            uploaded_by=self.agent,
+            size=11,
+            content_type="text/plain",
+        )
+        self.agent.delete()
+        attachment.refresh_from_db()
+        self.assertIsNone(attachment.uploaded_by)
+
+    def test_deleting_ticket_cascades_to_attachment(self):
+        attachment = Attachment.objects.create(
+            ticket=self.ticket,
+            file=self._file(),
+            uploaded_by=self.customer,
+            size=11,
+            content_type="text/plain",
+        )
+        attachment_id = attachment.id
+        self.ticket.delete()
+        self.assertFalse(Attachment.objects.filter(id=attachment_id).exists())
+
+    def test_deleting_comment_cascades_to_attachment(self):
+        attachment = Attachment.objects.create(
+            comment=self.comment,
+            file=self._file(),
+            uploaded_by=self.customer,
+            size=11,
+            content_type="text/plain",
+        )
+        attachment_id = attachment.id
+        self.comment.delete()
+        self.assertFalse(Attachment.objects.filter(id=attachment_id).exists())
+
+    def test_str_representation(self):
+        attachment = Attachment.objects.create(
+            ticket=self.ticket,
+            file=self._file(),
+            uploaded_by=self.customer,
+            size=11,
+            content_type="text/plain",
+        )
+        self.assertEqual(str(attachment), f"Attachment #{attachment.pk} ({attachment.file.name})")
+
+
+class AttachmentAdminRegistrationTests(TestCase):
+    def test_attachment_model_registered_in_admin(self):
+        self.assertIn(Attachment, site._registry)
+
+    def test_admin_list_display_includes_key_fields(self):
+        admin_instance = site._registry[Attachment]
+        for field in ("ticket", "comment", "uploaded_by", "content_type", "size"):
             self.assertIn(field, admin_instance.list_display)

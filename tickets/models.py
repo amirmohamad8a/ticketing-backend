@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from core.models import TimeStampedModel
@@ -82,3 +83,49 @@ class Comment(TimeStampedModel):
 
     def __str__(self):
         return f"Comment #{self.pk} on Ticket #{self.ticket_id}"
+
+
+class Attachment(TimeStampedModel):
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
+    comment = models.ForeignKey(
+        Comment,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
+    file = models.FileField(upload_to="attachments/%Y/%m/%d/")
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
+    size = models.PositiveIntegerField()
+    content_type = models.CharField(max_length=255)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(ticket__isnull=False, comment__isnull=True)
+                    | models.Q(ticket__isnull=True, comment__isnull=False)
+                ),
+                name="attachment_exactly_one_parent",
+            )
+        ]
+
+    def clean(self):
+        if bool(self.ticket_id) == bool(self.comment_id):
+            raise ValidationError("Attachment must belong to exactly one of ticket or comment.")
+
+    def __str__(self):
+        return f"Attachment #{self.pk} ({self.file.name})"

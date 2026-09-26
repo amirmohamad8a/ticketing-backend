@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from tickets.models import Comment, Ticket, TicketEvent
+from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
 
 @admin.register(Ticket)
@@ -39,3 +39,19 @@ class CommentAdmin(admin.ModelAdmin):
     list_filter = ("is_internal",)
     search_fields = ("body", "ticket__title", "author__username")
     autocomplete_fields = ("ticket", "author")
+
+
+@admin.register(Attachment)
+class AttachmentAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "ticket",
+        "comment",
+        "uploaded_by",
+        "content_type",
+        "size",
+        "created_at",
+    )
+    list_filter = ("content_type",)
+    search_fields = ("file", "ticket__title", "uploaded_by__username")
+    autocomplete_fields = ("ticket", "comment", "uploaded_by")
