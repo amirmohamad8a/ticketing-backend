@@ -8,6 +8,7 @@ from tickets.filters import TicketFilter
 from tickets.models import Ticket
 from tickets.pagination import TicketCursorPagination
 from tickets.permissions import IsCustomerOwnerOrReadOwn
+from tickets.schema import ticket_schema
 from tickets.serializers import (
     AttachmentSerializer,
     CommentSerializer,
@@ -16,6 +17,7 @@ from tickets.serializers import (
 )
 
 
+@ticket_schema
 class TicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
     permission_classes = [IsCustomerOwnerOrReadOwn]
