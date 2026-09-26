@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from accounts.models import User
 from tickets.filters import TicketFilter
 from tickets.models import Ticket
+from tickets.pagination import TicketCursorPagination
 from tickets.permissions import IsCustomerOwnerOrReadOwn
 from tickets.serializers import (
     AttachmentSerializer,
@@ -20,6 +21,7 @@ class TicketViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomerOwnerOrReadOwn]
     filter_backends = [DjangoFilterBackend]
     filterset_class = TicketFilter
+    pagination_class = TicketCursorPagination
 
     def get_queryset(self):
         user = self.request.user
