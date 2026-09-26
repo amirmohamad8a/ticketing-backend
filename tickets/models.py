@@ -40,3 +40,26 @@ class Ticket(TimeStampedModel):
 
     def __str__(self):
         return f"#{self.pk} {self.title}"
+
+
+class TicketEvent(models.Model):
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="events")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ticket_events",
+    )
+    field_changed = models.CharField(max_length=50)
+    old_value = models.CharField(max_length=255, blank=True, default="")
+    new_value = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return (
+            f"Ticket #{self.ticket_id} {self.field_changed}: {self.old_value} -> {self.new_value}"
+        )

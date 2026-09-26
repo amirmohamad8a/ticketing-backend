@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from tickets.models import Ticket
+from tickets.models import Ticket, TicketEvent
 
 
 @admin.register(Ticket)
@@ -9,3 +9,25 @@ class TicketAdmin(admin.ModelAdmin):
     list_filter = ("status", "priority")
     search_fields = ("title", "description", "customer__username", "assignee__username")
     autocomplete_fields = ("customer", "assignee")
+
+
+@admin.register(TicketEvent)
+class TicketEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "ticket",
+        "actor",
+        "field_changed",
+        "old_value",
+        "new_value",
+        "created_at",
+    )
+    list_filter = ("field_changed",)
+    search_fields = ("ticket__title", "actor__username", "field_changed")
+    autocomplete_fields = ("ticket", "actor")
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
