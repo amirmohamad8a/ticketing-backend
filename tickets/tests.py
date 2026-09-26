@@ -3,7 +3,7 @@ from django.db.models import ProtectedError
 from django.test import TestCase
 
 from accounts.models import User
-from tickets.models import Ticket, TicketEvent
+from tickets.models import Comment, Ticket, TicketEvent
 
 
 class TicketModelTests(TestCase):
@@ -191,3 +191,76 @@ class TicketEventAdminRegistrationTests(TestCase):
     def test_delete_permission_is_disabled(self):
         admin_instance = site._registry[TicketEvent]
         self.assertFalse(admin_instance.has_delete_permission(request=None))
+
+
+class CommentModelTests(TestCase):
+    def setUp(self):
+        self.customer = User.objects.create_user(
+            username="cust3", password="pass12345", role=User.Role.CUSTOMER
+        )
+        self.agent = User.objects.create_user(
+            username="agent3", password="pass12345", role=User.Role.AGENT
+        )
+        self.ticket = Ticket.objects.create(
+            title="Cannot export report", description="Details here.", customer=self.customer
+        )
+
+    def test_create_comment(self):
+        comment = Comment.objects.create(
+            ticket=self.ticket, author=self.customer, body="Any update on this?"
+        )
+        self.assertEqual(comment.ticket, self.ticket)
+        self.assertEqual(comment.author, self.customer)
+        self.assertFalse(comment.is_internal)
+
+    def test_create_internal_comment(self):
+        comment = Comment.objects.create(
+            ticket=self.ticket,
+            author=self.agent,
+            body="Escalating to backend team.",
+            is_internal=True,
+        )
+        self.assertTrue(comment.is_internal)
+
+    def test_timestamps_set_on_create(self):
+        comment = Comment.objects.create(
+            ticket=self.ticket, author=self.agent, body="Looking into it."
+        )
+        self.assertIsNotNone(comment.created_at)
+        self.assertIsNotNone(comment.updated_at)
+
+    def test_deleting_author_sets_null(self):
+        comment = Comment.objects.create(ticket=self.ticket, author=self.agent, body="On it.")
+        self.agent.delete()
+        comment.refresh_from_db()
+        self.assertIsNone(comment.author)
+
+    def test_deleting_ticket_cascades_to_comments(self):
+        comment = Comment.objects.create(ticket=self.ticket, author=self.customer, body="Thanks!")
+        comment_id = comment.id
+        self.ticket.delete()
+        self.assertFalse(Comment.objects.filter(id=comment_id).exists())
+
+    def test_comments_ordered_chronologically(self):
+        first = Comment.objects.create(
+            ticket=self.ticket, author=self.customer, body="First message"
+        )
+        second = Comment.objects.create(
+            ticket=self.ticket, author=self.agent, body="Second message"
+        )
+        comments = list(self.ticket.comments.all())
+        self.assertEqual(comments, [first, second])
+
+    def test_str_representation(self):
+        comment = Comment.objects.create(ticket=self.ticket, author=self.customer, body="Hello")
+        self.assertEqual(str(comment), f"Comment #{comment.pk} on Ticket #{self.ticket.pk}")
+
+
+class CommentAdminRegistrationTests(TestCase):
+    def test_comment_model_registered_in_admin(self):
+        self.assertIn(Comment, site._registry)
+
+    def test_admin_list_display_includes_key_fields(self):
+        admin_instance = site._registry[Comment]
+        for field in ("ticket", "author", "is_internal"):
+            self.assertIn(field, admin_instance.list_display)

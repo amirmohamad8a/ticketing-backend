@@ -63,3 +63,22 @@ class TicketEvent(models.Model):
         return (
             f"Ticket #{self.ticket_id} {self.field_changed}: {self.old_value} -> {self.new_value}"
         )
+
+
+class Comment(TimeStampedModel):
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="comments",
+    )
+    body = models.TextField()
+    is_internal = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Comment #{self.pk} on Ticket #{self.ticket_id}"

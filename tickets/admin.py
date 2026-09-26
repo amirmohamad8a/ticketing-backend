@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from tickets.models import Ticket, TicketEvent
+from tickets.models import Comment, Ticket, TicketEvent
 
 
 @admin.register(Ticket)
@@ -31,3 +31,11 @@ class TicketEventAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(Comment)
+class CommentAdmin(admin.ModelAdmin):
+    list_display = ("id", "ticket", "author", "is_internal", "created_at")
+    list_filter = ("is_internal",)
+    search_fields = ("body", "ticket__title", "author__username")
+    autocomplete_fields = ("ticket", "author")
