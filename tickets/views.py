@@ -5,7 +5,12 @@ from rest_framework.response import Response
 from accounts.models import User
 from tickets.models import Ticket
 from tickets.permissions import IsCustomerOwnerOrReadOwn
-from tickets.serializers import CommentSerializer, TicketEventSerializer, TicketSerializer
+from tickets.serializers import (
+    AttachmentSerializer,
+    CommentSerializer,
+    TicketEventSerializer,
+    TicketSerializer,
+)
 
 
 class TicketViewSet(viewsets.ModelViewSet):
@@ -45,3 +50,16 @@ class TicketViewSet(viewsets.ModelViewSet):
             is_internal = False
         comment = serializer.save(ticket=ticket, author=request.user, is_internal=is_internal)
         return Response(CommentSerializer(comment).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get", "post"])
+    def attachments(self, request, pk=None):
+        ticket = self.get_object()
+
+        if request.method == "GET":
+            serializer = AttachmentSerializer(ticket.attachments.all(), many=True)
+            return Response(serializer.data)
+
+        serializer = AttachmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        attachment = serializer.save(ticket=ticket, uploaded_by=request.user)
+        return Response(AttachmentSerializer(attachment).data, status=status.HTTP_201_CREATED)

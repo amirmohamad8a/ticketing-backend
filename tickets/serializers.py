@@ -2,7 +2,7 @@ from django.db import transaction
 
 from rest_framework import serializers
 
-from tickets.models import Comment, Ticket, TicketEvent
+from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
 
 class TicketSerializer(serializers.ModelSerializer):
@@ -82,3 +82,42 @@ class CommentSerializer(serializers.ModelSerializer):
         model = Comment
         fields = ["id", "ticket", "author", "body", "is_internal", "created_at", "updated_at"]
         read_only_fields = ["id", "ticket", "author", "created_at", "updated_at"]
+
+
+class AttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Attachment
+        fields = [
+            "id",
+            "ticket",
+            "comment",
+            "file",
+            "uploaded_by",
+            "size",
+            "content_type",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "ticket",
+            "comment",
+            "uploaded_by",
+            "size",
+            "content_type",
+            "created_at",
+        ]
+
+    def validate_file(self, value):
+        if value.size > Attachment.MAX_SIZE_BYTES:
+            max_mb = Attachment.MAX_SIZE_BYTES // (1024 * 1024)
+            raise serializers.ValidationError(f"File too large. Max size is {max_mb}MB.")
+        content_type = getattr(value, "content_type", "") or ""
+        if content_type not in Attachment.ALLOWED_CONTENT_TYPES:
+            raise serializers.ValidationError(f"File type '{content_type}' is not allowed.")
+        return value
+
+    def create(self, validated_data):
+        file_obj = validated_data["file"]
+        validated_data["size"] = file_obj.size
+        validated_data["content_type"] = getattr(file_obj, "content_type", "") or ""
+        return super().create(validated_data)

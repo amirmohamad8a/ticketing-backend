@@ -94,6 +94,21 @@ class Comment(TimeStampedModel):
 
 
 class Attachment(TimeStampedModel):
+    MAX_SIZE_BYTES = 10 * 1024 * 1024
+
+    ALLOWED_CONTENT_TYPES = frozenset(
+        {
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "application/pdf",
+            "text/plain",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/zip",
+        }
+    )
+
     ticket = models.ForeignKey(
         Ticket,
         on_delete=models.CASCADE,
