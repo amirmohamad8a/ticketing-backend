@@ -59,6 +59,8 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {"default": env.db("DATABASE_URL", default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')}
 
+AUTH_USER_MODEL = "accounts.User"
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -87,6 +89,8 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 MAILERS = {
     "default": {
