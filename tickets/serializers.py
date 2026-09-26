@@ -2,7 +2,7 @@ from django.db import transaction
 
 from rest_framework import serializers
 
-from tickets.models import Ticket, TicketEvent
+from tickets.models import Comment, Ticket, TicketEvent
 
 
 class TicketSerializer(serializers.ModelSerializer):
@@ -75,3 +75,10 @@ class TicketEventSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class CommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = ["id", "ticket", "author", "body", "is_internal", "created_at", "updated_at"]
+        read_only_fields = ["id", "ticket", "author", "created_at", "updated_at"]
