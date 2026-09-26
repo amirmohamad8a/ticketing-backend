@@ -19,6 +19,14 @@ class Ticket(TimeStampedModel):
         HIGH = "high", "High"
         URGENT = "urgent", "Urgent"
 
+    STATUS_TRANSITIONS = {
+        Status.OPEN: {Status.IN_PROGRESS},
+        Status.IN_PROGRESS: {Status.WAITING_ON_CUSTOMER, Status.RESOLVED, Status.OPEN},
+        Status.WAITING_ON_CUSTOMER: {Status.IN_PROGRESS, Status.RESOLVED},
+        Status.RESOLVED: {Status.CLOSED, Status.IN_PROGRESS},
+        Status.CLOSED: {Status.IN_PROGRESS},
+    }
+
     title = models.CharField(max_length=255)
     description = models.TextField()
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.OPEN)
