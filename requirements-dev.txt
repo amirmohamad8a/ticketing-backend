@@ -4,3 +4,5 @@ ruff
 pre-commit
 pytest
 pytest-django
+pytest-cov
+factory-boy

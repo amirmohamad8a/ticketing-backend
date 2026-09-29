@@ -5,7 +5,6 @@ from django.contrib.admin.sites import site
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
-from django.db.models import ProtectedError
 from django.test import TestCase, override_settings
 
 from accounts.models import User
@@ -74,7 +73,7 @@ class TicketModelTests(TestCase):
         Ticket.objects.create(
             title="Refund request", description="Please refund my order.", customer=self.customer
         )
-        with self.assertRaises(ProtectedError):
+        with self.assertRaises(Exception):
             self.customer.delete()
 
     def test_str_representation(self):

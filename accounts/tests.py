@@ -1,6 +1,8 @@
 from django.contrib.admin.sites import site
 from django.test import TestCase
 
+from rest_framework.test import APIClient
+
 from accounts.models import User
 
 
@@ -48,3 +50,58 @@ class UserAdminRegistrationTests(TestCase):
     def test_admin_list_display_includes_role(self):
         admin_instance = site._registry[User]
         self.assertIn("role", admin_instance.list_display)
+
+
+class TokenAuthTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username="tokenuser", password="pass12345")
+
+    def test_obtain_token_pair(self):
+        response = self.client.post(
+            "/api/token/", {"username": "tokenuser", "password": "pass12345"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+
+    def test_obtain_token_pair_invalid_credentials(self):
+        response = self.client.post("/api/token/", {"username": "tokenuser", "password": "wrong"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_refresh_token_rotates_and_blacklists_old(self):
+        obtain = self.client.post("/api/token/", {"username": "tokenuser", "password": "pass12345"})
+        old_refresh = obtain.data["refresh"]
+
+        refresh_response = self.client.post("/api/token/refresh/", {"refresh": old_refresh})
+        self.assertEqual(refresh_response.status_code, 200)
+        self.assertIn("access", refresh_response.data)
+        self.assertIn("refresh", refresh_response.data)
+        self.assertNotEqual(old_refresh, refresh_response.data["refresh"])
+
+        reuse_response = self.client.post("/api/token/refresh/", {"refresh": old_refresh})
+        self.assertEqual(reuse_response.status_code, 401)
+
+    def test_logout_blacklists_refresh_token(self):
+        obtain = self.client.post("/api/token/", {"username": "tokenuser", "password": "pass12345"})
+        access = obtain.data["access"]
+        refresh = obtain.data["refresh"]
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+        logout_response = self.client.post("/api/auth/logout/", {"refresh": refresh})
+        self.assertEqual(logout_response.status_code, 205)
+
+        reuse_response = self.client.post("/api/token/refresh/", {"refresh": refresh})
+        self.assertEqual(reuse_response.status_code, 401)
+
+    def test_logout_requires_authentication(self):
+        self.client.credentials()
+        response = self.client.post("/api/auth/logout/", {"refresh": "sometoken"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_logout_missing_refresh_token(self):
+        obtain = self.client.post("/api/token/", {"username": "tokenuser", "password": "pass12345"})
+        access = obtain.data["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+        response = self.client.post("/api/auth/logout/", {})
+        self.assertEqual(response.status_code, 400)
