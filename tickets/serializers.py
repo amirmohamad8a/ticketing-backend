@@ -2,6 +2,7 @@ from django.db import transaction
 
 from rest_framework import serializers
 
+from tickets.events import record_event
 from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
 
@@ -34,11 +35,30 @@ class TicketSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def update(self, instance, validated_data):
+    def _get_actor(self):
         request = self.context.get("request")
         actor = getattr(request, "user", None)
         if actor is not None and not actor.is_authenticated:
-            actor = None
+            return None
+        return actor
+
+    def create(self, validated_data):
+        actor = self._get_actor()
+
+        with transaction.atomic():
+            ticket = super().create(validated_data)
+            record_event(
+                ticket=ticket,
+                actor=actor,
+                field_changed="created",
+                old_value="",
+                new_value=ticket.status,
+            )
+
+        return ticket
+
+    def update(self, instance, validated_data):
+        actor = self._get_actor()
 
         changes = []
         if "status" in validated_data and validated_data["status"] != instance.status:
@@ -51,7 +71,7 @@ class TicketSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             instance = super().update(instance, validated_data)
             for field_changed, old_value, new_value in changes:
-                TicketEvent.objects.create(
+                record_event(
                     ticket=instance,
                     actor=actor,
                     field_changed=field_changed,
