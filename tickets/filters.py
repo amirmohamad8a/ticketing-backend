@@ -1,4 +1,5 @@
 import django_filters
+from rest_framework.exceptions import ValidationError
 
 from tickets.models import Ticket
 
@@ -15,4 +16,6 @@ class TicketFilter(django_filters.FilterSet):
             if not self.request or not self.request.user.is_authenticated:
                 return queryset.none()
             return queryset.filter(assignee=self.request.user)
-        return queryset.filter(assignee_id=value)
+        if not (value.isascii() and value.isdigit()):
+            raise ValidationError({"assignee": "Must be 'me' or a numeric user id."})
+        return queryset.filter(assignee_id=int(value))
