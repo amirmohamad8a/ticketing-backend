@@ -1,4 +1,5 @@
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -16,16 +17,12 @@ class LogoutView(APIView):
     def post(self, request):
         refresh_token = request.data.get("refresh")
         if not refresh_token:
-            return Response(
-                {"detail": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            raise ValidationError({"refresh": "Refresh token is required."})
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()
         except TokenError:
-            return Response(
-                {"detail": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            raise ValidationError({"refresh": "Invalid or expired token."})
         return Response(status=status.HTTP_205_RESET_CONTENT)
 
 
