@@ -124,9 +124,19 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 MAILERS = {
     "default": {
-        "BACKEND": "django.core.mail.backends.console.EmailBackend",
+        "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+        "OPTIONS": {
+            "host": env("EMAIL_HOST", default="localhost"),
+            "port": env.int("EMAIL_PORT", default=587),
+            "username": env("EMAIL_HOST_USER", default=""),
+            "password": env("EMAIL_HOST_PASSWORD", default=""),
+            "use_tls": env.bool("EMAIL_USE_TLS", default=True),
+            "timeout": env.int("EMAIL_TIMEOUT", default=10),
+        },
     },
 }
+
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="support@example.com")
 
 
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
