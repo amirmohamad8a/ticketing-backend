@@ -1,10 +1,3 @@
-databases:
-  - name: ticketing-db
-    plan: free
-    region: frankfurt
-    databaseName: ticketing
-    user: ticketing
-
 services:
   - type: keyvalue
     name: ticketing-redis
@@ -24,9 +17,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
-        fromDatabase:
-          name: ticketing-db
-          property: connectionString
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
@@ -38,13 +29,13 @@ services:
         value: "true"
       - key: RUN_EMBEDDED_WORKER
         value: "true"
+      - key: EMAIL_HOST
+        value: smtp-relay.brevo.com
       - key: EMAIL_PORT
         value: "2525"
       - key: EMAIL_USE_TLS
         value: "true"
       - key: CORS_ALLOWED_ORIGINS
-        sync: false
-      - key: EMAIL_HOST
         sync: false
       - key: EMAIL_HOST_USER
         sync: false
