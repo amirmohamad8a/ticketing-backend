@@ -24,7 +24,7 @@ services:
           name: ticketing-redis
           property: connectionString
       - key: WEB_CONCURRENCY
-        value: "2"
+        value: "1"
       - key: RUN_MIGRATIONS_ON_START
         value: "true"
       - key: RUN_EMBEDDED_WORKER
