@@ -1,0 +1,54 @@
+databases:
+  - name: ticketing-db
+    plan: free
+    region: frankfurt
+    databaseName: ticketing
+    user: ticketing
+
+services:
+  - type: keyvalue
+    name: ticketing-redis
+    plan: free
+    region: frankfurt
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+  - type: web
+    name: ticketing-backend
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile.prod
+    dockerContext: .
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ticketing-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ticketing-redis
+          property: connectionString
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: RUN_MIGRATIONS_ON_START
+        value: "true"
+      - key: RUN_EMBEDDED_WORKER
+        value: "true"
+      - key: EMAIL_PORT
+        value: "2525"
+      - key: EMAIL_USE_TLS
+        value: "true"
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
