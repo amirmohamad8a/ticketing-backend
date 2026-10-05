@@ -13,6 +13,8 @@ services:
     region: frankfurt
     dockerfilePath: ./Dockerfile.prod
     dockerContext: .
+    branch: main
+    autoDeployTrigger: checksPass
     healthCheckPath: /health/
     envVars:
       - key: SECRET_KEY
