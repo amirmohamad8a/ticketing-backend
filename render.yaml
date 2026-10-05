@@ -13,6 +13,7 @@ services:
     region: frankfurt
     dockerfilePath: ./Dockerfile.prod
     dockerContext: .
+    healthCheckPath: /health/
     envVars:
       - key: SECRET_KEY
         generateValue: true
