@@ -1,4 +1,0 @@
-{% autoescape off %}Hi {{ recipient.first_name|default:recipient.username }},
-
-{{ actor_name }} changed the status of ticket #{{ ticket.id }} "{{ ticket.title }}" from {{ old_value }} to {{ new_value }}.
-{% endautoescape %}

@@ -1,1 +1,0 @@
-{% autoescape off %}[Ticket #{{ ticket.id }}] We received your request: {{ ticket.title }}{% endautoescape %}

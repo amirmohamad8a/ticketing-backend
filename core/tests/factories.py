@@ -1,8 +1,6 @@
 import factory
 
 from accounts.models import User
-from notifications.models import NotificationLog
-from notifications.tasks import build_idempotency_key
 from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
 
@@ -79,11 +77,3 @@ class AttachmentFactory(factory.django.DjangoModelFactory):
     uploaded_by = factory.SubFactory(UserFactory)
     size = factory.LazyAttribute(lambda attachment: attachment.file.size)
     content_type = "text/plain"
-
-
-class NotificationLogFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = NotificationLog
-
-    event = factory.SubFactory(TicketEventFactory)
-    idempotency_key = factory.LazyAttribute(lambda log: build_idempotency_key(log.event.id))

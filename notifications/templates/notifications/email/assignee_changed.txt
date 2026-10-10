@@ -1,4 +1,0 @@
-{% autoescape off %}Hi {{ recipient.first_name|default:recipient.username }},
-
-{% if not new_value %}Ticket #{{ ticket.id }} "{{ ticket.title }}" has been unassigned by {{ actor_name }}.{% elif is_new_assignee %}Ticket #{{ ticket.id }} "{{ ticket.title }}" has been assigned to you by {{ actor_name }}.{% else %}Ticket #{{ ticket.id }} "{{ ticket.title }}" has been assigned to {{ new_value }} by {{ actor_name }}.{% endif %}
-{% endautoescape %}

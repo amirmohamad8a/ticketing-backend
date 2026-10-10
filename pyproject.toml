@@ -26,7 +26,7 @@ DJANGO_SETTINGS_MODULE = "config.settings.dev"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
 
 [tool.coverage.run]
-source = ["accounts", "config", "core", "notifications", "tickets"]
+source = ["accounts", "config", "core", "tickets"]
 branch = true
 omit = [
     "*/migrations/*",

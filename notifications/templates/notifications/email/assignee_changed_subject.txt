@@ -1,1 +1,0 @@
-{% autoescape off %}[Ticket #{{ ticket.id }}] Assignee updated{% endautoescape %}

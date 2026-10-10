@@ -1,6 +1,5 @@
 from io import StringIO
 
-from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase
 
@@ -13,7 +12,6 @@ from core.management.commands.seed_demo import (
     DEMO_PASSWORD,
     TICKETS,
 )
-from notifications.models import NotificationLog
 from tickets.models import Comment, Ticket, TicketEvent
 
 
@@ -97,13 +95,6 @@ class SeedDemoTests(TestCase):
         _seed()
         user.refresh_from_db()
         self.assertTrue(user.check_password("changed-pass-1"))
-
-    def test_nothing_is_enqueued_or_mailed(self):
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            _seed()
-        self.assertEqual(callbacks, [])
-        self.assertEqual(len(mail.outbox), 0)
-        self.assertFalse(NotificationLog.objects.exists())
 
     def test_both_demo_users_can_sign_in(self):
         _seed()
