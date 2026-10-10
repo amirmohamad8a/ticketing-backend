@@ -2,7 +2,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from core.models import TimeStampedModel
+from core.models import AppendOnlyModel, TimeStampedModel
 
 
 class Ticket(TimeStampedModel):
@@ -51,7 +51,7 @@ class Ticket(TimeStampedModel):
         return f"#{self.pk} {self.title}"
 
 
-class TicketEvent(models.Model):
+class TicketEvent(AppendOnlyModel):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="events")
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
