@@ -7,8 +7,9 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Three roles (customer, agent, admin) on a custom user model
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout
 - Role-scoped querysets: a customer only ever sees their own tickets
+- Field-level permissions: customers can edit only the title and description of their own open tickets, and status, priority and assignee are staff-only
 - Ticket status state machine: illegal transitions return 400 and write nothing
-- Append-only audit trail of status and assignee changes, readable at `/api/tickets/{id}/events/`
+- Append-only audit trail of status and assignee changes, enforced in the model and readable at `/api/tickets/{id}/events/`
 - Comments with internal notes that customers never receive
 - Attachments with a 10 MB limit and a content-type allowlist (stored on local disk for now; persistent storage is planned)
 - Filtering by status, priority and assignee (including `assignee=me`) and cursor pagination

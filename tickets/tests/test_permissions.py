@@ -31,6 +31,31 @@ MATRIX = [
     ("admin", "create", 201),
     ("admin", "update", 200),
     ("admin", "delete", 204),
+    ("unauthenticated", "update_status", 401),
+    ("customer_owner", "update_status", 403),
+    ("customer_other", "update_status", 404),
+    ("agent", "update_status", 200),
+    ("admin", "update_status", 200),
+    ("unauthenticated", "update_priority", 401),
+    ("customer_owner", "update_priority", 403),
+    ("customer_other", "update_priority", 404),
+    ("agent", "update_priority", 200),
+    ("admin", "update_priority", 200),
+    ("unauthenticated", "update_assignee", 401),
+    ("customer_owner", "update_assignee", 403),
+    ("customer_other", "update_assignee", 404),
+    ("agent", "update_assignee", 200),
+    ("admin", "update_assignee", 200),
+    ("unauthenticated", "update_after_open", 401),
+    ("customer_owner", "update_after_open", 403),
+    ("customer_other", "update_after_open", 404),
+    ("agent", "update_after_open", 200),
+    ("admin", "update_after_open", 200),
+    ("unauthenticated", "create_with_priority", 401),
+    ("customer_owner", "create_with_priority", 403),
+    ("customer_other", "create_with_priority", 403),
+    ("agent", "create_with_priority", 201),
+    ("admin", "create_with_priority", 201),
 ]
 
 
@@ -50,6 +75,7 @@ def test_ticket_permission_matrix(role, action, expected_status):
         username="pm_admin", password="pass12345", role=User.Role.ADMIN
     )
     ticket = Ticket.objects.create(title="Matrix ticket", description="d", customer=customer_owner)
+    detail_url = f"/api/tickets/{ticket.id}/"
 
     client = APIClient()
     user_map = {
@@ -66,12 +92,26 @@ def test_ticket_permission_matrix(role, action, expected_status):
     if action == "list":
         response = client.get("/api/tickets/")
     elif action == "retrieve":
-        response = client.get(f"/api/tickets/{ticket.id}/")
+        response = client.get(detail_url)
     elif action == "create":
         response = client.post("/api/tickets/", {"title": "New ticket", "description": "d"})
     elif action == "update":
-        response = client.patch(f"/api/tickets/{ticket.id}/", {"title": "Updated title"})
+        response = client.patch(detail_url, {"title": "Updated title"})
     elif action == "delete":
-        response = client.delete(f"/api/tickets/{ticket.id}/")
+        response = client.delete(detail_url)
+    elif action == "update_status":
+        response = client.patch(detail_url, {"status": Ticket.Status.IN_PROGRESS})
+    elif action == "update_priority":
+        response = client.patch(detail_url, {"priority": Ticket.Priority.HIGH})
+    elif action == "update_assignee":
+        response = client.patch(detail_url, {"assignee": agent.id})
+    elif action == "update_after_open":
+        Ticket.objects.filter(pk=ticket.pk).update(status=Ticket.Status.IN_PROGRESS)
+        response = client.patch(detail_url, {"title": "Updated title"})
+    elif action == "create_with_priority":
+        response = client.post(
+            "/api/tickets/",
+            {"title": "New ticket", "description": "d", "priority": Ticket.Priority.HIGH},
+        )
 
     assert response.status_code == expected_status

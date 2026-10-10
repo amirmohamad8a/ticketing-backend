@@ -7,11 +7,12 @@ from accounts.models import User
 from tickets.filters import TicketFilter
 from tickets.models import Ticket
 from tickets.pagination import TicketCursorPagination
-from tickets.permissions import IsCustomerOwnerOrReadOwn
+from tickets.permissions import CustomerFieldRestrictions, IsCustomerOwnerOrReadOwn
 from tickets.schema import ticket_schema
 from tickets.serializers import (
     AttachmentSerializer,
     CommentSerializer,
+    CustomerTicketSerializer,
     TicketEventSerializer,
     TicketSerializer,
 )
@@ -20,7 +21,7 @@ from tickets.serializers import (
 @ticket_schema
 class TicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
-    permission_classes = [IsCustomerOwnerOrReadOwn]
+    permission_classes = [IsCustomerOwnerOrReadOwn, CustomerFieldRestrictions]
     filter_backends = [DjangoFilterBackend]
     filterset_class = TicketFilter
     pagination_class = TicketCursorPagination
@@ -30,6 +31,12 @@ class TicketViewSet(viewsets.ModelViewSet):
         if user.role == User.Role.CUSTOMER:
             return Ticket.objects.filter(customer=user)
         return Ticket.objects.all()
+
+    def get_serializer_class(self):
+        user = getattr(self.request, "user", None)
+        if getattr(user, "role", None) == User.Role.CUSTOMER:
+            return CustomerTicketSerializer
+        return TicketSerializer
 
     def perform_create(self, serializer):
         serializer.save(customer=self.request.user)

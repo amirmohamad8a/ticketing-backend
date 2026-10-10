@@ -82,6 +82,16 @@ class TicketSerializer(serializers.ModelSerializer):
         return instance
 
 
+class CustomerTicketSerializer(TicketSerializer):
+    class Meta(TicketSerializer.Meta):
+        read_only_fields = [
+            *TicketSerializer.Meta.read_only_fields,
+            "status",
+            "priority",
+            "assignee",
+        ]
+
+
 class TicketEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = TicketEvent
