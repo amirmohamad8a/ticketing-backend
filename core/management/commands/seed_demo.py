@@ -83,7 +83,7 @@ class Command(BaseCommand):
 
     def _seed_ticket(self, spec, customer, agent, authors):
         path = spec["path"]
-        ticket, created = Ticket.objects.get_or_create(
+        ticket, created = Ticket.all_objects.get_or_create(
             customer=customer,
             title=spec["title"],
             defaults={
@@ -95,6 +95,8 @@ class Command(BaseCommand):
         )
         if created:
             self._record_history(ticket, customer, agent, path)
+        elif ticket.is_deleted:
+            ticket.restore()
         for role, body, is_internal in spec["comments"]:
             Comment.objects.get_or_create(
                 ticket=ticket,

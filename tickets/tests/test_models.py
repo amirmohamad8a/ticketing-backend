@@ -147,7 +147,7 @@ class TicketEventModelTests(TestCase):
         events = list(self.ticket.events.all())
         self.assertEqual(events, [first, second])
 
-    def test_deleting_ticket_cascades_to_events(self):
+    def test_deleting_ticket_keeps_its_events(self):
         event = TicketEvent.objects.create(
             ticket=self.ticket,
             actor=self.agent,
@@ -155,9 +155,8 @@ class TicketEventModelTests(TestCase):
             old_value=Ticket.Status.OPEN,
             new_value=Ticket.Status.IN_PROGRESS,
         )
-        event_id = event.id
         self.ticket.delete()
-        self.assertFalse(TicketEvent.objects.filter(id=event_id).exists())
+        self.assertTrue(TicketEvent.objects.filter(id=event.id).exists())
 
     def test_deleting_actor_sets_null(self):
         event = TicketEvent.objects.create(
@@ -240,11 +239,10 @@ class CommentModelTests(TestCase):
         comment.refresh_from_db()
         self.assertIsNone(comment.author)
 
-    def test_deleting_ticket_cascades_to_comments(self):
+    def test_deleting_ticket_keeps_its_comments(self):
         comment = Comment.objects.create(ticket=self.ticket, author=self.customer, body="Thanks!")
-        comment_id = comment.id
         self.ticket.delete()
-        self.assertFalse(Comment.objects.filter(id=comment_id).exists())
+        self.assertTrue(Comment.objects.filter(id=comment.id).exists())
 
     def test_comments_ordered_chronologically(self):
         first = Comment.objects.create(
@@ -373,7 +371,7 @@ class AttachmentModelTests(TestCase):
         attachment.refresh_from_db()
         self.assertIsNone(attachment.uploaded_by)
 
-    def test_deleting_ticket_cascades_to_attachment(self):
+    def test_deleting_ticket_keeps_its_attachment(self):
         attachment = Attachment.objects.create(
             ticket=self.ticket,
             file=self._file(),
@@ -381,9 +379,8 @@ class AttachmentModelTests(TestCase):
             size=11,
             content_type="text/plain",
         )
-        attachment_id = attachment.id
         self.ticket.delete()
-        self.assertFalse(Attachment.objects.filter(id=attachment_id).exists())
+        self.assertTrue(Attachment.objects.filter(id=attachment.id).exists())
 
     def test_deleting_comment_cascades_to_attachment(self):
         attachment = Attachment.objects.create(

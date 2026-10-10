@@ -8,6 +8,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout
 - Role-scoped querysets: a customer only ever sees their own tickets
 - Field-level permissions: customers can edit only the title and description of their own open tickets, and status, priority and assignee are staff-only
+- Soft delete: only admins can delete a ticket, deletion hides it without removing its comments, attachments or audit rows, and admins can restore it at `/api/tickets/{id}/restore/`
 - Ticket status state machine: illegal transitions return 400 and write nothing
 - Append-only audit trail of status and assignee changes, enforced in the model and readable at `/api/tickets/{id}/events/`
 - Comments with internal notes that customers never receive

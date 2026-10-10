@@ -15,7 +15,7 @@ MATRIX = [
     ("customer_owner", "retrieve", 200),
     ("customer_owner", "create", 201),
     ("customer_owner", "update", 200),
-    ("customer_owner", "delete", 204),
+    ("customer_owner", "delete", 403),
     ("customer_other", "list", 200),
     ("customer_other", "retrieve", 404),
     ("customer_other", "create", 201),
@@ -25,7 +25,7 @@ MATRIX = [
     ("agent", "retrieve", 200),
     ("agent", "create", 201),
     ("agent", "update", 200),
-    ("agent", "delete", 204),
+    ("agent", "delete", 403),
     ("admin", "list", 200),
     ("admin", "retrieve", 200),
     ("admin", "create", 201),
@@ -56,6 +56,16 @@ MATRIX = [
     ("customer_other", "create_with_priority", 403),
     ("agent", "create_with_priority", 201),
     ("admin", "create_with_priority", 201),
+    ("unauthenticated", "retrieve_deleted", 401),
+    ("customer_owner", "retrieve_deleted", 404),
+    ("customer_other", "retrieve_deleted", 404),
+    ("agent", "retrieve_deleted", 404),
+    ("admin", "retrieve_deleted", 404),
+    ("unauthenticated", "restore", 401),
+    ("customer_owner", "restore", 403),
+    ("customer_other", "restore", 403),
+    ("agent", "restore", 403),
+    ("admin", "restore", 200),
 ]
 
 
@@ -113,5 +123,11 @@ def test_ticket_permission_matrix(role, action, expected_status):
             "/api/tickets/",
             {"title": "New ticket", "description": "d", "priority": Ticket.Priority.HIGH},
         )
+    elif action == "retrieve_deleted":
+        ticket.delete()
+        response = client.get(detail_url)
+    elif action == "restore":
+        ticket.delete()
+        response = client.post(f"{detail_url}restore/")
 
     assert response.status_code == expected_status

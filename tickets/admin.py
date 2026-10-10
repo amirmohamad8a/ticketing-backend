@@ -5,10 +5,29 @@ from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
 @admin.register(Ticket)
 class TicketAdmin(admin.ModelAdmin):
-    list_display = ("id", "title", "status", "priority", "customer", "assignee", "created_at")
-    list_filter = ("status", "priority")
+    list_display = (
+        "id",
+        "title",
+        "status",
+        "priority",
+        "customer",
+        "assignee",
+        "is_deleted",
+        "created_at",
+    )
+    list_filter = ("status", "priority", "is_deleted")
     search_fields = ("title", "description", "customer__username", "assignee__username")
     autocomplete_fields = ("customer", "assignee")
+    readonly_fields = ("is_deleted", "deleted_at")
+    actions = ["restore_selected"]
+
+    def get_queryset(self, request):
+        return Ticket.all_objects.all()
+
+    @admin.action(description="Restore selected tickets")
+    def restore_selected(self, request, queryset):
+        restored = queryset.restore()
+        self.message_user(request, f"Restored {restored} ticket(s).")
 
 
 @admin.register(TicketEvent)

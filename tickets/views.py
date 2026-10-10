@@ -7,7 +7,11 @@ from accounts.models import User
 from tickets.filters import TicketFilter
 from tickets.models import Ticket
 from tickets.pagination import TicketCursorPagination
-from tickets.permissions import CustomerFieldRestrictions, IsCustomerOwnerOrReadOwn
+from tickets.permissions import (
+    AdminOnlyDeleteAndRestore,
+    CustomerFieldRestrictions,
+    IsCustomerOwnerOrReadOwn,
+)
 from tickets.schema import ticket_schema
 from tickets.serializers import (
     AttachmentSerializer,
@@ -21,16 +25,24 @@ from tickets.serializers import (
 @ticket_schema
 class TicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
-    permission_classes = [IsCustomerOwnerOrReadOwn, CustomerFieldRestrictions]
+    permission_classes = [
+        IsCustomerOwnerOrReadOwn,
+        CustomerFieldRestrictions,
+        AdminOnlyDeleteAndRestore,
+    ]
     filter_backends = [DjangoFilterBackend]
     filterset_class = TicketFilter
     pagination_class = TicketCursorPagination
 
     def get_queryset(self):
         user = self.request.user
+        if self.action == "restore":
+            queryset = Ticket.all_objects.deleted()
+        else:
+            queryset = Ticket.objects.all()
         if user.role == User.Role.CUSTOMER:
-            return Ticket.objects.filter(customer=user)
-        return Ticket.objects.all()
+            return queryset.filter(customer=user)
+        return queryset
 
     def get_serializer_class(self):
         user = getattr(self.request, "user", None)
@@ -40,6 +52,12 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(customer=self.request.user)
+
+    @action(detail=True, methods=["post"])
+    def restore(self, request, pk=None):
+        ticket = self.get_object()
+        ticket.restore()
+        return Response(self.get_serializer(ticket).data)
 
     @action(detail=True, methods=["get"])
     def events(self, request, pk=None):

@@ -10,6 +10,10 @@ def _is_customer(user):
     return getattr(user, "role", None) == User.Role.CUSTOMER
 
 
+def _is_admin(user):
+    return getattr(user, "role", None) == User.Role.ADMIN
+
+
 def _staff_only_fields_in(data):
     if not hasattr(data, "keys"):
         return set()
@@ -60,4 +64,18 @@ class CustomerFieldRestrictions(BasePermission):
         if forbidden:
             self.message = f"Customers cannot set: {', '.join(sorted(forbidden))}."
             return False
+        return True
+
+
+class AdminOnlyDeleteAndRestore(BasePermission):
+    message = "Only admins can delete or restore tickets."
+
+    def has_permission(self, request, view):
+        if getattr(view, "action", None) == "restore":
+            return _is_admin(request.user)
+        return True
+
+    def has_object_permission(self, request, view, obj):
+        if getattr(view, "action", None) == "destroy":
+            return _is_admin(request.user)
         return True
