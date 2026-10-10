@@ -2,6 +2,7 @@ from django.db import transaction
 
 from rest_framework import serializers
 
+from accounts.models import User
 from tickets.events import record_event
 from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
@@ -33,6 +34,17 @@ class TicketSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 f"Cannot transition status from '{current_status}' to '{value}'."
             )
+        return value
+
+    def validate_assignee(self, value):
+        if value is None:
+            return value
+        if self.instance is not None and value == self.instance.assignee:
+            return value
+        if value.role == User.Role.CUSTOMER:
+            raise serializers.ValidationError("Tickets can only be assigned to an agent or admin.")
+        if not value.is_active:
+            raise serializers.ValidationError("Tickets cannot be assigned to an inactive user.")
         return value
 
     def _get_actor(self):
