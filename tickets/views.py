@@ -1,6 +1,9 @@
+from django.shortcuts import get_object_or_404
+
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from accounts.models import User
@@ -53,6 +56,15 @@ class TicketViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(customer=self.request.user)
 
+    def _attachments_response(self, request, queryset, **parent):
+        if request.method == "GET":
+            return Response(AttachmentSerializer(queryset, many=True).data)
+
+        serializer = AttachmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        attachment = serializer.save(uploaded_by=request.user, **parent)
+        return Response(AttachmentSerializer(attachment).data, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=["post"])
     def restore(self, request, pk=None):
         ticket = self.get_object()
@@ -87,12 +99,20 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get", "post"])
     def attachments(self, request, pk=None):
         ticket = self.get_object()
+        return self._attachments_response(request, ticket.attachments.all(), ticket=ticket)
 
-        if request.method == "GET":
-            serializer = AttachmentSerializer(ticket.attachments.all(), many=True)
-            return Response(serializer.data)
-
-        serializer = AttachmentSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        attachment = serializer.save(ticket=ticket, uploaded_by=request.user)
-        return Response(AttachmentSerializer(attachment).data, status=status.HTTP_201_CREATED)
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path=r"comments/(?P<comment_id>\d+)/attachments",
+        url_name="comment-attachments",
+    )
+    def comment_attachments(self, request, pk=None, comment_id=None):
+        ticket = self.get_object()
+        comments = ticket.comments.all()
+        if request.user.role == User.Role.CUSTOMER:
+            comments = comments.filter(is_internal=False)
+        comment = get_object_or_404(comments, pk=comment_id)
+        if request.method == "POST" and comment.author_id != request.user.id:
+            raise PermissionDenied("Only the author of a comment can attach files to it.")
+        return self._attachments_response(request, comment.attachments.all(), comment=comment)

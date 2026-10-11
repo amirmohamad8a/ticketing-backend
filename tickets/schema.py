@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 
 from tickets.serializers import TicketSerializer
 
@@ -13,4 +13,8 @@ ticket_schema = extend_schema_view(
     events=extend_schema(tags=["Tickets"]),
     comments=extend_schema(tags=["Tickets"]),
     attachments=extend_schema(tags=["Tickets"]),
+    comment_attachments=extend_schema(
+        tags=["Tickets"],
+        parameters=[OpenApiParameter("comment_id", int, OpenApiParameter.PATH)],
+    ),
 )

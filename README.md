@@ -13,7 +13,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Assignee validation: a ticket can only be assigned to an active agent or admin
 - Append-only audit trail of status and assignee changes, enforced in the model and readable at `/api/tickets/{id}/events/`
 - Comments with internal notes that customers never receive
-- Attachments with a 10 MB limit and a content-type allowlist (stored on local disk for now; persistent storage is planned)
+- Attachments on tickets and on comments, with a 10 MB limit and a content-type allowlist (stored on local disk for now; persistent storage is planned). Customers cannot see or reach the attachments of internal comments, and only a comment's author can attach files to it
 - Filtering by status, priority and assignee (including `assignee=me`) and cursor pagination
 - One error format for every failure: `{"error": {"code", "message", "details"}}`
 - OpenAPI schema and Swagger UI
