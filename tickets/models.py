@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from core.models import AppendOnlyModel, SoftDeleteModel, TimeStampedModel
 
@@ -148,7 +149,7 @@ class Attachment(TimeStampedModel):
 
     def clean(self):
         if bool(self.ticket_id) == bool(self.comment_id):
-            raise ValidationError("Attachment must belong to exactly one of ticket or comment.")
+            raise ValidationError(_("Attachment must belong to exactly one of ticket or comment."))
 
     def __str__(self):
         return f"Attachment #{self.pk} ({self.file.name})"

@@ -5,6 +5,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 ## Features
 
 - Three roles (customer, agent, admin) on a custom user model
+- Self-service registration at `POST /api/auth/register/`: it always creates a customer (a role can never be chosen), checks the password with Django's validators and accepts an optional unique Iranian mobile number, which is normalized to `09XXXXXXXXX`
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout
 - Role-scoped querysets: a customer only ever sees their own tickets
 - Field-level permissions: customers can edit only the title and description of their own open tickets, and status, priority and assignee are staff-only
@@ -16,6 +17,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Attachments on tickets and on comments, with a 10 MB limit and a content-type allowlist (stored on local disk for now; persistent storage is planned). Customers cannot see or reach the attachments of internal comments, and only a comment's author can attach files to it
 - Filtering by status, priority and assignee (including `assignee=me`) and cursor pagination
 - One error format for every failure: `{"error": {"code", "message", "details"}}`
+- Persian (`fa`) language and the Asia/Tehran time zone: timestamps are stored in UTC and returned with the Tehran offset, and custom error messages are marked for translation
 - OpenAPI schema and Swagger UI
 - Database-free `/health/` endpoint for uptime checks
 - Automated tests with an 85% coverage threshold, GitHub Actions CI, and Render deploys that wait for CI to pass

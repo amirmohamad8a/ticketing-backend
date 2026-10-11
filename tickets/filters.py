@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 import django_filters
 from rest_framework.exceptions import ValidationError
 
@@ -17,5 +19,5 @@ class TicketFilter(django_filters.FilterSet):
                 return queryset.none()
             return queryset.filter(assignee=self.request.user)
         if not (value.isascii() and value.isdigit()):
-            raise ValidationError({"assignee": "Must be 'me' or a numeric user id."})
+            raise ValidationError({"assignee": _("Must be 'me' or a numeric user id.")})
         return queryset.filter(assignee_id=int(value))

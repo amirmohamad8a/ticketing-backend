@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext_lazy as _
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
@@ -114,5 +115,5 @@ class TicketViewSet(viewsets.ModelViewSet):
             comments = comments.filter(is_internal=False)
         comment = get_object_or_404(comments, pk=comment_id)
         if request.method == "POST" and comment.author_id != request.user.id:
-            raise PermissionDenied("Only the author of a comment can attach files to it.")
+            raise PermissionDenied(_("Only the author of a comment can attach files to it."))
         return self._attachments_response(request, comment.attachments.all(), comment=comment)

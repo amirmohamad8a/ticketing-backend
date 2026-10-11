@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.utils.translation import gettext_lazy as _
 
 from rest_framework import serializers
 
@@ -31,9 +32,8 @@ class TicketSerializer(serializers.ModelSerializer):
             return value
         allowed = Ticket.STATUS_TRANSITIONS.get(current_status, set())
         if value not in allowed:
-            raise serializers.ValidationError(
-                f"Cannot transition status from '{current_status}' to '{value}'."
-            )
+            message = _("Cannot transition status from '%(current)s' to '%(new)s'.")
+            raise serializers.ValidationError(message % {"current": current_status, "new": value})
         return value
 
     def validate_assignee(self, value):
@@ -42,9 +42,11 @@ class TicketSerializer(serializers.ModelSerializer):
         if self.instance is not None and value == self.instance.assignee:
             return value
         if value.role == User.Role.CUSTOMER:
-            raise serializers.ValidationError("Tickets can only be assigned to an agent or admin.")
+            raise serializers.ValidationError(
+                _("Tickets can only be assigned to an agent or admin.")
+            )
         if not value.is_active:
-            raise serializers.ValidationError("Tickets cannot be assigned to an inactive user.")
+            raise serializers.ValidationError(_("Tickets cannot be assigned to an inactive user."))
         return value
 
     def _get_actor(self):
@@ -152,10 +154,12 @@ class AttachmentSerializer(serializers.ModelSerializer):
     def validate_file(self, value):
         if value.size > Attachment.MAX_SIZE_BYTES:
             max_mb = Attachment.MAX_SIZE_BYTES // (1024 * 1024)
-            raise serializers.ValidationError(f"File too large. Max size is {max_mb}MB.")
+            message = _("File too large. Max size is %(max_mb)sMB.")
+            raise serializers.ValidationError(message % {"max_mb": max_mb})
         content_type = getattr(value, "content_type", "") or ""
         if content_type not in Attachment.ALLOWED_CONTENT_TYPES:
-            raise serializers.ValidationError(f"File type '{content_type}' is not allowed.")
+            message = _("File type '%(content_type)s' is not allowed.")
+            raise serializers.ValidationError(message % {"content_type": content_type})
         return value
 
     def create(self, validated_data):

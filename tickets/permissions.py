@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from rest_framework.permissions import BasePermission
 
 from accounts.models import User
@@ -55,20 +57,21 @@ class CustomerFieldRestrictions(BasePermission):
         if not self._allows_fields(request):
             return False
         if obj.status != Ticket.Status.OPEN:
-            self.message = "Customers can only edit a ticket while it is open."
+            self.message = _("Customers can only edit a ticket while it is open.")
             return False
         return True
 
     def _allows_fields(self, request):
         forbidden = _staff_only_fields_in(request.data)
         if forbidden:
-            self.message = f"Customers cannot set: {', '.join(sorted(forbidden))}."
+            fields = ", ".join(sorted(forbidden))
+            self.message = _("Customers cannot set: %(fields)s.") % {"fields": fields}
             return False
         return True
 
 
 class AdminOnlyDeleteAndRestore(BasePermission):
-    message = "Only admins can delete or restore tickets."
+    message = _("Only admins can delete or restore tickets.")
 
     def has_permission(self, request, view):
         if getattr(view, "action", None) == "restore":

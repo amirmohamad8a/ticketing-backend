@@ -5,10 +5,11 @@ from accounts.models import User
 
 
 class UserAdmin(DjangoUserAdmin):
-    fieldsets = DjangoUserAdmin.fieldsets + ((None, {"fields": ("role",)}),)
-    add_fieldsets = DjangoUserAdmin.add_fieldsets + ((None, {"fields": ("role",)}),)
-    list_display = DjangoUserAdmin.list_display + ("role",)
+    fieldsets = DjangoUserAdmin.fieldsets + ((None, {"fields": ("role", "phone")}),)
+    add_fieldsets = DjangoUserAdmin.add_fieldsets + ((None, {"fields": ("role", "phone")}),)
+    list_display = DjangoUserAdmin.list_display + ("role", "phone")
     list_filter = DjangoUserAdmin.list_filter + ("role",)
+    search_fields = DjangoUserAdmin.search_fields + ("phone",)
 
 
 admin.site.register(User, UserAdmin)
