@@ -52,3 +52,11 @@ jobs:
 
       - name: Test
         run: pytest --cov
+
+      - name: Check deployment settings
+        run: python manage.py check --deploy --fail-level WARNING
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.prod
+          SECRET_KEY: ci-deploy-check-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz
+          JWT_SIGNING_KEY: ci-deploy-check-jwt-signing-key-9876543210-zyxwvutsrqponmlk
+          ALLOWED_HOSTS: support.example.com

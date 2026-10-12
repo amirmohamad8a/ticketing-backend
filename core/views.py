@@ -7,6 +7,7 @@ from django.views.decorators.http import require_http_methods
 
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import AllowAny
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from core.downloads import read_download_token
@@ -22,6 +23,8 @@ def health(request):
 class SignedDownloadView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "download"
 
     def get(self, request, token):
         payload = read_download_token(token)

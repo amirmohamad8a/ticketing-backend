@@ -20,9 +20,11 @@ ignore = ["E501"]
 [tool.ruff.lint.per-file-ignores]
 "config/settings/dev.py" = ["F403"]
 "config/settings/prod.py" = ["F403", "F405"]
+"config/settings/test.py" = ["F403", "F405"]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "config.settings.dev"
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+addopts = "--ds=config.settings.test"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
 
 [tool.coverage.run]

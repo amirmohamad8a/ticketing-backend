@@ -10,7 +10,10 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Password change at `POST /api/auth/password/change/`: it needs the current password, applies Django's validators, revokes every refresh token of the user and returns a fresh token pair for the session that made the change
 - User management for admins at `/api/users/`: list with `role` and `is_active` filters, create users (agents by default), change roles, deactivate and reactivate accounts and reset passwords. Every change writes a row to an append-only `UserEvent` log, deactivation and password resets revoke the user's sessions, and an admin cannot demote or deactivate themselves or reset their own password there
 - Agents list for assignment dropdowns at `GET /api/agents/`: the id, display name and role of every active agent and admin, readable by agents and admins only. It is not paginated and exposes no usernames, phone numbers or other account details
-- JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout
+- JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout. Tokens are signed with their own `JWT_SIGNING_KEY`, so a leaked `SECRET_KEY` cannot be used to forge them
+- Immediate token revocation: a password change or reset invalidates the user's access tokens at once instead of at the end of their 15-minute lifetime, and deactivation does the same
+- Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management and signed downloads. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
+- Production hardening: HTTPS redirect, HSTS with subdomains and preload, secure cookies, `nosniff` and a strict referrer policy, checked by `manage.py check --deploy`
 - Role-scoped querysets: a customer only ever sees their own tickets
 - Field-level permissions: customers can edit only the title and description of their own open tickets, and status, priority and assignee are staff-only
 - Soft delete: only admins can delete a ticket, deletion hides it without removing its comments, attachments or audit rows, and admins can restore it at `/api/tickets/{id}/restore/`
@@ -37,7 +40,7 @@ There is no password reset by email. Outbound email is out of scope for this pro
 
 ## Tech stack
 
-Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Celery and Redis are configured for background jobs and have no tasks yet.
+Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Redis is Django's cache, which holds the throttle counters, and it is also the Celery broker. Celery has no tasks yet.
 
 ## Run locally
 
@@ -64,7 +67,7 @@ docker compose exec web python manage.py seed_demo
 
 `createsuperuser` creates a user with the customer role. To act as an agent or admin in the API, change the role in the admin site.
 
-Run the tests (they always use local storage, whatever `.env` says):
+Run the tests (they always use local storage, an in-memory cache and relaxed throttle limits, whatever `.env` says):
 
 ```bash
 docker compose exec -e STORAGE_BACKEND=local web pytest --cov
@@ -80,6 +83,37 @@ docker compose --profile s3 up --build
 
 This starts MinIO and creates a private bucket named after `S3_BUCKET_NAME`. The MinIO console is at http://localhost:9001 and signed download URLs are generated against `S3_PUBLIC_ENDPOINT_URL` (`http://localhost:9000`), so your browser can reach them. The containers talk to MinIO at `http://minio:9000`.
 
+## Rate limits
+
+Throttling needs Redis, because the counters are kept in Django's cache. A throttled request returns `429` with the usual error envelope (`error.code` is `throttled`) and a `Retry-After` header.
+
+| Scope | Applies to | Counted per | Limit |
+| --- | --- | --- | --- |
+| `anon` | Every route, signed out | IP address | 60/min |
+| `user` | Every route, signed in | User | 300/min |
+| `login` | `POST /api/token/` | IP address | 10/min |
+| `register` | `POST /api/auth/register/` | IP address | 10/hour |
+| `password_change` | `POST /api/auth/password/change/` | User | 5/hour |
+| `user_management` | `/api/users/` | User | 60/min |
+| `download` | `/api/downloads/{token}/` | IP address | 300/min |
+
+The limits live in `REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]` in `config/settings/base.py`. Behind a reverse proxy, set `NUM_PROXIES` to the number of proxies in front of the app, so the real client address is read from `X-Forwarded-For`. With the default `0` the header is ignored, which stops clients from spoofing it to dodge the limits. To reset the counters while testing by hand, run `docker compose exec redis redis-cli FLUSHDB`.
+
+## Checking the production settings
+
+`manage.py check --deploy` must report no issues with the production settings. The command below runs it inside the dev container with throwaway keys:
+
+```bash
+docker compose exec \
+  -e DJANGO_SETTINGS_MODULE=config.settings.prod \
+  -e SECRET_KEY=local-deploy-check-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz \
+  -e JWT_SIGNING_KEY=local-deploy-check-jwt-key-9876543210-zyxwvutsrqponmlkjihgfedcba \
+  -e ALLOWED_HOSTS=localhost \
+  web python manage.py check --deploy --fail-level WARNING
+```
+
+CI runs the same check on every push.
+
 ## Configuration
 
 Settings are read from environment variables. Copy `.env.example` to `.env` for local development and `.env.prod.example` to `.env.prod` for the production image.
@@ -87,13 +121,17 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `SECRET_KEY` | Yes | none | Django secret key |
+| `JWT_SIGNING_KEY` | Production | `SECRET_KEY` | Key that signs JWTs. Production refuses to start without one that differs from `SECRET_KEY` |
 | `DEBUG` | No | `False` | Debug mode. Development settings force it on |
 | `ALLOWED_HOSTS` | No | empty | Comma-separated host names |
 | `DATABASE_URL` | No | SQLite file | Database connection URL |
 | `DJANGO_SETTINGS_MODULE` | No | `config.settings.dev` | `config.settings.prod` in the production image |
-| `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend |
+| `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend, and Django's cache (throttle counters) |
+| `NUM_PROXIES` | No | `0` | Number of reverse proxies in front of the app, used to read the client IP for throttling |
 | `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated origins allowed to call the API |
 | `CSRF_TRUSTED_ORIGINS` | No | empty | Production only. Comma-separated trusted origins |
+| `SECURE_SSL_REDIRECT` | No | `true` | Production only. Redirect HTTP to HTTPS (`/health/` is exempt). Set `false` when you reach the container over plain HTTP without a proxy |
+| `SECURE_HSTS_SECONDS` | No | `31536000` | Production only. Lifetime of the HSTS header. Once a browser has seen it over HTTPS it insists on HTTPS for that host for this long |
 | `RUN_MIGRATIONS_ON_START` | No | `false` | Run migrations when the production container starts |
 | `WEB_CONCURRENCY` | No | gunicorn default | Number of gunicorn workers |
 | `PORT` | No | `8000` | Port gunicorn listens on |
@@ -108,9 +146,9 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 
 ## Production image
 
-Every push and pull request runs linting and the test suite on GitHub Actions. The project is run locally with Docker Compose and is not deployed anywhere.
+Every push and pull request runs linting, the test suite and `check --deploy` on GitHub Actions. The project is run locally with Docker Compose and is not deployed anywhere.
 
-`Dockerfile.prod` builds the production image, which runs gunicorn with `config.settings.prod` as a non-root user. `.env.prod.example` lists everything that image needs: a PostgreSQL `DATABASE_URL`, `REDIS_URL`, `STORAGE_BACKEND=s3` with the MinIO settings, and the host and origin lists. Migrations run when the container starts if `RUN_MIGRATIONS_ON_START=true`.
+`Dockerfile.prod` builds the production image, which runs gunicorn with `config.settings.prod` as a non-root user. `.env.prod.example` lists everything that image needs: a PostgreSQL `DATABASE_URL`, `REDIS_URL`, a `JWT_SIGNING_KEY` that differs from `SECRET_KEY`, `STORAGE_BACKEND=s3` with the MinIO settings, and the host and origin lists. Migrations run when the container starts if `RUN_MIGRATIONS_ON_START=true`.
 
 ## License
 

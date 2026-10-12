@@ -40,7 +40,7 @@ RUN mkdir -p /app/media /app/staticfiles \
 
 USER app
 
-RUN SECRET_KEY=build-only python manage.py collectstatic --noinput
+RUN SECRET_KEY=build-only JWT_SIGNING_KEY=build-only-jwt python manage.py collectstatic --noinput
 
 EXPOSE 8000
 

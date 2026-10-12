@@ -11,6 +11,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -50,6 +51,8 @@ class RegisterView(CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "register"
 
 
 @profile_schema
@@ -64,6 +67,8 @@ class MeView(RetrieveUpdateAPIView):
 @password_change_schema
 class PasswordChangeView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_change"
 
     def post(self, request):
         serializer = PasswordChangeSerializer(data=request.data, context={"request": request})
@@ -93,7 +98,8 @@ class LogoutView(APIView):
 
 @auth_schema
 class TaggedTokenObtainPairView(TokenObtainPairView):
-    pass
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
 
 @auth_schema
@@ -116,6 +122,8 @@ class UserViewSet(
     filterset_fields = ["role", "is_active"]
     pagination_class = UserCursorPagination
     http_method_names = ["get", "post", "patch", "head", "options"]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "user_management"
 
     def get_serializer_class(self):
         if self.action == "create":
