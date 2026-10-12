@@ -29,7 +29,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Persian (`fa`) language and the Asia/Tehran time zone: timestamps are stored in UTC and returned with the Tehran offset, and custom error messages are marked for translation
 - OpenAPI schema and Swagger UI
 - Database-free `/health/` endpoint for uptime checks
-- Automated tests with an 85% coverage threshold, GitHub Actions CI, and Render deploys that wait for CI to pass
+- Automated tests with an 85% coverage threshold and GitHub Actions CI
 
 ## Forgotten passwords
 
@@ -37,7 +37,7 @@ There is no password reset by email. Outbound email is out of scope for this pro
 
 ## Tech stack
 
-Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Celery and Redis are configured for background jobs and have no tasks yet. Production runs on Render (web service and Key Value) and Neon (PostgreSQL).
+Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Celery and Redis are configured for background jobs and have no tasks yet.
 
 ## Run locally
 
@@ -82,7 +82,7 @@ This starts MinIO and creates a private bucket named after `S3_BUCKET_NAME`. The
 
 ## Configuration
 
-Settings are read from environment variables. Copy `.env.example` to `.env` for local use.
+Settings are read from environment variables. Copy `.env.example` to `.env` for local development and `.env.prod.example` to `.env.prod` for the production image.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
@@ -94,10 +94,9 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend |
 | `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated origins allowed to call the API |
 | `CSRF_TRUSTED_ORIGINS` | No | empty | Production only. Comma-separated trusted origins |
-| `RENDER_EXTERNAL_HOSTNAME` | No | empty | Production only. Set by Render and added to allowed hosts |
 | `RUN_MIGRATIONS_ON_START` | No | `false` | Run migrations when the production container starts |
 | `WEB_CONCURRENCY` | No | gunicorn default | Number of gunicorn workers |
-| `PORT` | No | `8000` | Port gunicorn listens on. Set by Render |
+| `PORT` | No | `8000` | Port gunicorn listens on |
 | `STORAGE_BACKEND` | No | `local` | `local` for disk or `s3` for an S3-compatible bucket |
 | `DOWNLOAD_URL_TTL_SECONDS` | No | `300` | Lifetime of signed download URLs |
 | `S3_BUCKET_NAME` | With `s3` | none | Bucket that holds attachments and avatars |
@@ -107,9 +106,11 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `S3_PUBLIC_ENDPOINT_URL` | No | `S3_ENDPOINT_URL` | Endpoint embedded in signed URLs when clients reach the bucket on another address |
 | `S3_REGION_NAME` | No | `us-east-1` | Bucket region |
 
-## Deployment
+## Production image
 
-Every push and pull request runs linting and the test suite on GitHub Actions. Render redeploys the `main` branch only after those checks pass, and migrations run when the container starts. The service configuration lives in `render.yaml`.
+Every push and pull request runs linting and the test suite on GitHub Actions. The project is run locally with Docker Compose and is not deployed anywhere.
+
+`Dockerfile.prod` builds the production image, which runs gunicorn with `config.settings.prod` as a non-root user. `.env.prod.example` lists everything that image needs: a PostgreSQL `DATABASE_URL`, `REDIS_URL`, `STORAGE_BACKEND=s3` with the MinIO settings, and the host and origin lists. Migrations run when the container starts if `RUN_MIGRATIONS_ON_START=true`.
 
 ## License
 
