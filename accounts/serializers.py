@@ -1,11 +1,14 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
+from accounts.events import record_user_event
 from accounts.models import User
+from accounts.tokens import blacklist_user_tokens
 from accounts.validators import normalize_phone, validate_iranian_mobile
 
 
@@ -28,6 +31,19 @@ def build_phone_field():
             ),
         ],
     )
+
+
+def _flag(value):
+    return "true" if value else "false"
+
+
+class ActorMixin:
+    def _get_actor(self):
+        request = self.context.get("request")
+        actor = getattr(request, "user", None)
+        if actor is not None and not actor.is_authenticated:
+            return None
+        return actor
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -146,3 +162,118 @@ class PasswordChangeSerializer(serializers.Serializer):
 class TokenPairSerializer(serializers.Serializer):
     access = serializers.CharField(read_only=True)
     refresh = serializers.CharField(read_only=True)
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "phone",
+            "role",
+            "is_active",
+            "date_joined",
+        ]
+        read_only_fields = fields
+
+
+class UserCreateSerializer(ActorMixin, RegisterSerializer):
+    role = serializers.ChoiceField(choices=User.Role.choices, default=User.Role.AGENT)
+
+    class Meta(RegisterSerializer.Meta):
+        fields = ["id", "username", "password", "first_name", "last_name", "phone", "role"]
+        read_only_fields = ["id"]
+
+    def create(self, validated_data):
+        actor = self._get_actor()
+
+        with transaction.atomic():
+            user = User.objects.create_user(**validated_data)
+            record_user_event(
+                user=user,
+                actor=actor,
+                field_changed="created",
+                old_value="",
+                new_value=user.role,
+            )
+
+        return user
+
+    def to_representation(self, instance):
+        return UserSerializer(instance, context=self.context).data
+
+
+class UserUpdateSerializer(ActorMixin, serializers.ModelSerializer):
+    password = serializers.CharField(
+        write_only=True,
+        max_length=128,
+        trim_whitespace=False,
+        style={"input_type": "password"},
+    )
+
+    class Meta:
+        model = User
+        fields = ["role", "is_active", "password"]
+
+    def validate(self, attrs):
+        user = self.instance
+        actor = self._get_actor()
+
+        if actor is not None and actor.pk == user.pk:
+            errors = {}
+            if "role" in attrs and attrs["role"] != user.role:
+                errors["role"] = _("You cannot change your own role.")
+            if "is_active" in attrs and not attrs["is_active"]:
+                errors["is_active"] = _("You cannot deactivate your own account.")
+            if "password" in attrs:
+                errors["password"] = _(
+                    "Use the password change endpoint to change your own password."
+                )
+            if errors:
+                raise serializers.ValidationError(errors)
+
+        if "password" in attrs:
+            try:
+                validate_password(attrs["password"], user)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError({"password": list(exc.messages)})
+        return attrs
+
+    def update(self, instance, validated_data):
+        actor = self._get_actor()
+        password = validated_data.pop("password", None)
+
+        events = []
+        deactivated = False
+        if "role" in validated_data and validated_data["role"] != instance.role:
+            events.append(("role", instance.role, validated_data["role"]))
+        if "is_active" in validated_data and validated_data["is_active"] != instance.is_active:
+            new_state = validated_data["is_active"]
+            events.append(("is_active", _flag(instance.is_active), _flag(new_state)))
+            deactivated = not new_state
+        if password is not None:
+            events.append(("password", "", ""))
+
+        with transaction.atomic():
+            instance = super().update(instance, validated_data)
+            if password is not None:
+                instance.set_password(password)
+                instance.save(update_fields=["password"])
+            if password is not None or deactivated:
+                blacklist_user_tokens(instance)
+            for field_changed, old_value, new_value in events:
+                record_user_event(
+                    user=instance,
+                    actor=actor,
+                    field_changed=field_changed,
+                    old_value=old_value,
+                    new_value=new_value,
+                )
+
+        return instance
+
+    def to_representation(self, instance):
+        return UserSerializer(instance, context=self.context).data

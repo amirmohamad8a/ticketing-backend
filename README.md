@@ -8,6 +8,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Self-service registration at `POST /api/auth/register/`: it always creates a customer (a role can never be chosen), checks the password with Django's validators and accepts an optional unique Iranian mobile number, which is normalized to `09XXXXXXXXX`
 - Profile at `GET/PATCH /api/auth/me/`: first and last name, an optional phone number and an optional avatar (PNG, JPEG or WebP up to 2 MB, verified as a real image and stored under a random name). The username and role cannot be changed there
 - Password change at `POST /api/auth/password/change/`: it needs the current password, applies Django's validators, revokes every refresh token of the user and returns a fresh token pair for the session that made the change
+- User management for admins at `/api/users/`: list with `role` and `is_active` filters, create users (agents by default), change roles, deactivate and reactivate accounts and reset passwords. Every change writes a row to an append-only `UserEvent` log, deactivation and password resets revoke the user's sessions, and an admin cannot demote or deactivate themselves or reset their own password there
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout
 - Role-scoped querysets: a customer only ever sees their own tickets
 - Field-level permissions: customers can edit only the title and description of their own open tickets, and status, priority and assignee are staff-only
@@ -26,7 +27,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 
 ## Forgotten passwords
 
-There is no password reset by email. Outbound email is out of scope for this project, so a user who forgets their password asks an admin, who sets a new one in the Django admin site. Signed-in users change their own password with `POST /api/auth/password/change/`.
+There is no password reset by email. Outbound email is out of scope for this project, so a user who forgets their password asks an admin, who sets a new one with `PATCH /api/users/{id}/` and a `password` field. That also signs the user out of every session. Signed-in users change their own password with `POST /api/auth/password/change/`.
 
 ## Tech stack
 

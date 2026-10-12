@@ -1,10 +1,12 @@
 import os
 import uuid
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 from accounts.validators import validate_iranian_mobile
+from core.models import AppendOnlyModel
 
 AVATAR_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 
@@ -41,3 +43,28 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+
+class UserEvent(AppendOnlyModel):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="audit_events",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="user_events_made",
+    )
+    field_changed = models.CharField(max_length=50)
+    old_value = models.CharField(max_length=255, blank=True, default="")
+    new_value = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self):
+        return f"User #{self.user_id} {self.field_changed}: {self.old_value} -> {self.new_value}"
