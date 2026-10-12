@@ -120,6 +120,8 @@ SIMPLE_JWT = {
     "CHECK_REVOKE_TOKEN": True,
 }
 
+VISITOR_TOKEN_LIFETIME_DAYS = env.int("VISITOR_TOKEN_LIFETIME_DAYS", default=30)
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Ticketing API",
     "DESCRIPTION": "Support ticketing system API — tickets, comments, attachments, audit history.",
