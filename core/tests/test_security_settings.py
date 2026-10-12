@@ -71,6 +71,7 @@ class ProductionSettingsTests(SimpleTestCase):
             "register",
             "password_change",
             "user_management",
+            "site_management",
             "download",
         }
         self.assertEqual(scopes, set(rest_framework["DEFAULT_THROTTLE_RATES"]))

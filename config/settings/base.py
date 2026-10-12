@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "accounts",
     "tickets",
+    "chat",
     "core",
 ]
 
@@ -103,6 +104,7 @@ REST_FRAMEWORK = {
         "register": "10/hour",
         "password_change": "5/hour",
         "user_management": "60/min",
+        "site_management": "60/min",
         "download": "300/min",
     },
     "NUM_PROXIES": env.int("NUM_PROXIES", default=0),

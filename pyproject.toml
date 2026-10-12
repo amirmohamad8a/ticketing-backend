@@ -28,7 +28,7 @@ addopts = "--ds=config.settings.test"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
 
 [tool.coverage.run]
-source = ["accounts", "config", "core", "tickets"]
+source = ["accounts", "chat", "config", "core", "tickets"]
 branch = true
 omit = [
     "*/migrations/*",

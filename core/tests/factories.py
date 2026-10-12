@@ -1,6 +1,7 @@
 import factory
 
 from accounts.models import User
+from chat.models import Site
 from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
 
@@ -26,6 +27,14 @@ class AgentFactory(UserFactory):
 class AdminFactory(UserFactory):
     username = factory.Sequence(lambda n: f"admin{n}")
     role = User.Role.ADMIN
+
+
+class SiteFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Site
+
+    name = factory.Sequence(lambda n: f"Site {n}")
+    allowed_origins = factory.LazyFunction(lambda: ["https://example.com"])
 
 
 class TicketFactory(factory.django.DjangoModelFactory):

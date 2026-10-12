@@ -10,9 +10,10 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Password change at `POST /api/auth/password/change/`: it needs the current password, applies Django's validators, revokes every refresh token of the user and returns a fresh token pair for the session that made the change
 - User management for admins at `/api/users/`: list with `role` and `is_active` filters, create users (agents by default), change roles, deactivate and reactivate accounts and reset passwords. Every change writes a row to an append-only `UserEvent` log, deactivation and password resets revoke the user's sessions, and an admin cannot demote or deactivate themselves or reset their own password there
 - Agents list for assignment dropdowns at `GET /api/agents/`: the id, display name and role of every active agent and admin, readable by agents and admins only. It is not paginated and exposes no usernames, phone numbers or other account details
+- Chat sites for admins at `/api/sites/`: a `Site` is a website that will host the chat widget. It has a name, an auto-generated public key, a list of allowed origins, an active flag and the widget settings (greeting, primary color, position, offline timeout, whether a name or a contact is required). Allowed origins are validated, normalized to the form browsers send in the `Origin` header and deduplicated. Sites can be listed (filterable by `key` and `is_active`), created, read and updated, and the key can be rotated at `POST /api/sites/{id}/rotate-key/`. A site is deactivated rather than deleted
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout. Tokens are signed with their own `JWT_SIGNING_KEY`, so a leaked `SECRET_KEY` cannot be used to forge them
 - Immediate token revocation: a password change or reset invalidates the user's access tokens at once instead of at the end of their 15-minute lifetime, and deactivation does the same
-- Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management and signed downloads. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
+- Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management, site management and signed downloads. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
 - Production hardening: HTTPS redirect, HSTS with subdomains and preload, secure cookies, `nosniff` and a strict referrer policy, checked by `manage.py check --deploy`
 - Structured logging: every log line is one JSON object with a timestamp, level, logger, message, `request_id` and `user_id`. A request ID middleware keeps a valid incoming `X-Request-ID` or generates one, stamps it on every log line of that request and returns it in the `X-Request-ID` response header (exposed to browsers through CORS), so a bug report that quotes the ID can be traced end to end. Each request writes one access line with the method, path, status, duration and client IP. Passwords, tokens, signed download URLs and query strings never reach the logs
 - Role-scoped querysets: a customer only ever sees their own tickets
@@ -34,6 +35,26 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - OpenAPI schema and Swagger UI
 - Database-free `/health/` endpoint for uptime checks
 - Automated tests with an 85% coverage threshold and GitHub Actions CI
+
+## Chat sites
+
+Admins manage the sites that will host the chat widget at `/api/sites/`. Every request needs an admin token.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/sites/` | List sites, cursor-paginated. Filters: `key` (exact) and `is_active` |
+| `POST` | `/api/sites/` | Create a site. Only `name` is required |
+| `GET` | `/api/sites/{id}/` | Read a site |
+| `PATCH` | `/api/sites/{id}/` | Update a site |
+| `POST` | `/api/sites/{id}/rotate-key/` | Replace the public key with a new random one |
+
+- `key`: generated on creation and read-only. It is a public identifier that goes into the embed snippet, not a secret. Rotating it makes the old key stop resolving at once
+- `allowed_origins`: up to 20 origins in the form `scheme://host[:port]` with `http` or `https` only. Paths, queries, fragments, credentials and wildcards are rejected. Values are lowercased, default ports (`:80` and `:443`) are dropped and duplicates are removed, so what is stored matches what a browser sends in the `Origin` header
+- `primary_color`: a color in the form `#rrggbb`
+- `position`: `bottom_right` or `bottom_left`
+- `offline_timeout_minutes`: from 1 to 1440
+- `greeting`, `require_name` and `require_contact` are plain widget settings
+- Sites cannot be deleted. Set `is_active` to `false` instead
 
 ## Forgotten passwords
 
@@ -120,6 +141,7 @@ Throttling needs Redis, because the counters are kept in Django's cache. A throt
 | `register` | `POST /api/auth/register/` | IP address | 10/hour |
 | `password_change` | `POST /api/auth/password/change/` | User | 5/hour |
 | `user_management` | `/api/users/` | User | 60/min |
+| `site_management` | `/api/sites/` | User | 60/min |
 | `download` | `/api/downloads/{token}/` | IP address | 300/min |
 
 The limits live in `REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]` in `config/settings/base.py`. Behind a reverse proxy, set `NUM_PROXIES` to the number of proxies in front of the app, so the real client address is read from `X-Forwarded-For`. With the default `0` the header is ignored, which stops clients from spoofing it to dodge the limits. To reset the counters while testing by hand, run `docker compose exec redis redis-cli FLUSHDB`.
