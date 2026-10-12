@@ -24,6 +24,7 @@ from accounts.schema import (
     agent_schema,
     auth_schema,
     avatar_download_schema,
+    logout_schema,
     password_change_schema,
     profile_schema,
     user_schema,
@@ -80,7 +81,7 @@ class PasswordChangeView(APIView):
         return Response({"refresh": str(refresh), "access": str(refresh.access_token)})
 
 
-@auth_schema
+@logout_schema
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 

@@ -14,6 +14,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Immediate token revocation: a password change or reset invalidates the user's access tokens at once instead of at the end of their 15-minute lifetime, and deactivation does the same
 - Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management and signed downloads. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
 - Production hardening: HTTPS redirect, HSTS with subdomains and preload, secure cookies, `nosniff` and a strict referrer policy, checked by `manage.py check --deploy`
+- Structured logging: every log line is one JSON object with a timestamp, level, logger, message, `request_id` and `user_id`. A request ID middleware keeps a valid incoming `X-Request-ID` or generates one, stamps it on every log line of that request and returns it in the `X-Request-ID` response header (exposed to browsers through CORS), so a bug report that quotes the ID can be traced end to end. Each request writes one access line with the method, path, status, duration and client IP. Passwords, tokens, signed download URLs and query strings never reach the logs
 - Role-scoped querysets: a customer only ever sees their own tickets
 - Field-level permissions: customers can edit only the title and description of their own open tickets, and status, priority and assignee are staff-only
 - Soft delete: only admins can delete a ticket, deletion hides it without removing its comments, attachments or audit rows, and admins can restore it at `/api/tickets/{id}/restore/`
@@ -83,6 +84,30 @@ docker compose --profile s3 up --build
 
 This starts MinIO and creates a private bucket named after `S3_BUCKET_NAME`. The MinIO console is at http://localhost:9001 and signed download URLs are generated against `S3_PUBLIC_ENDPOINT_URL` (`http://localhost:9000`), so your browser can reach them. The containers talk to MinIO at `http://minio:9000`.
 
+## Logging
+
+Every log line, from the web process and from the Celery worker, is a single JSON object written to stdout:
+
+```json
+{"timestamp":"2026-10-12T09:41:07.532+00:00","level":"INFO","logger":"core.access","message":"request completed","request_id":"3f2b8c1e9a4d4f6f8e1b7c2d5a9e0f13","user_id":7,"method":"GET","path":"/api/tickets/","status":200,"duration_ms":18.4,"client_ip":"172.18.0.1"}
+```
+
+- `request_id`: taken from an incoming `X-Request-ID` header when it is 8 to 64 characters of letters, digits, `.`, `_` or `-`, otherwise generated. Every response carries it in `X-Request-ID`, including errors, throttled requests and CORS preflights, and the header is exposed to browsers through CORS so the frontend can show it in an error message.
+- `user_id`: the id of the user authenticated by the JWT, `null` for anonymous requests and for the login, refresh and registration routes.
+- Every request writes one `core.access` line. `/health/` is written at `DEBUG` level only, so uptime checks do not flood the log, and responses with a 5xx status are written at `ERROR`. `duration_ms` is the time taken to produce the response, so for streamed downloads it does not include the transfer.
+- Unhandled exceptions are logged by `django.request` at `ERROR` with the traceback in `exception` and the same `request_id`. Client errors (4xx) are covered by the access line only.
+
+To follow one request, quote its ID from the `X-Request-ID` header:
+
+```bash
+docker compose logs web --no-log-prefix | grep 3f2b8c1e9a4d4f6f8e1b7c2d5a9e0f13
+docker compose logs web --no-log-prefix | jq -R -c 'fromjson? | select(.request_id == "3f2b8c1e9a4d4f6f8e1b7c2d5a9e0f13")'
+```
+
+Secrets are kept out of the logs in two ways. The code never logs request headers, request bodies or query strings, and the access line records the path only. On top of that, the formatter scrubs every message and traceback, replacing the token in `/api/downloads/<token>/` paths, bearer tokens, JWTs and secret-looking query parameters, and it masks extra fields whose names look sensitive (`password`, `token`, `authorization`, `cookie`, `signature` and similar).
+
+`LOG_LEVEL` sets the verbosity (`INFO` by default).
+
 ## Rate limits
 
 Throttling needs Redis, because the counters are kept in Django's cache. A throttled request returns `429` with the usual error envelope (`error.code` is `throttled`) and a `Retry-After` header.
@@ -127,7 +152,8 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `DATABASE_URL` | No | SQLite file | Database connection URL |
 | `DJANGO_SETTINGS_MODULE` | No | `config.settings.dev` | `config.settings.prod` in the production image |
 | `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend, and Django's cache (throttle counters) |
-| `NUM_PROXIES` | No | `0` | Number of reverse proxies in front of the app, used to read the client IP for throttling |
+| `NUM_PROXIES` | No | `0` | Number of reverse proxies in front of the app, used to read the client IP for throttling and logging |
+| `LOG_LEVEL` | No | `INFO` | Verbosity of the JSON logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated origins allowed to call the API |
 | `CSRF_TRUSTED_ORIGINS` | No | empty | Production only. Comma-separated trusted origins |
 | `SECURE_SSL_REDIRECT` | No | `true` | Production only. Redirect HTTP to HTTPS (`/health/` is exempt). Set `false` when you reach the container over plain HTTP without a proxy |
@@ -148,7 +174,7 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 
 Every push and pull request runs linting, the test suite and `check --deploy` on GitHub Actions. The project is run locally with Docker Compose and is not deployed anywhere.
 
-`Dockerfile.prod` builds the production image, which runs gunicorn with `config.settings.prod` as a non-root user. `.env.prod.example` lists everything that image needs: a PostgreSQL `DATABASE_URL`, `REDIS_URL`, a `JWT_SIGNING_KEY` that differs from `SECRET_KEY`, `STORAGE_BACKEND=s3` with the MinIO settings, and the host and origin lists. Migrations run when the container starts if `RUN_MIGRATIONS_ON_START=true`.
+`Dockerfile.prod` builds the production image, which runs gunicorn with `config.settings.prod` as a non-root user. Gunicorn's own access log is switched off, because the app writes a JSON access line with the request ID for every request (see Logging). `.env.prod.example` lists everything that image needs: a PostgreSQL `DATABASE_URL`, `REDIS_URL`, a `JWT_SIGNING_KEY` that differs from `SECRET_KEY`, `STORAGE_BACKEND=s3` with the MinIO settings, and the host and origin lists. Migrations run when the container starts if `RUN_MIGRATIONS_ON_START=true`.
 
 ## License
 

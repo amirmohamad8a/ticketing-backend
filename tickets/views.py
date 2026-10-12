@@ -43,6 +43,8 @@ class TicketViewSet(viewsets.ModelViewSet):
     pagination_class = TicketCursorPagination
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Ticket.objects.none()
         user = self.request.user
         if self.action == "restore":
             queryset = Ticket.all_objects.deleted()

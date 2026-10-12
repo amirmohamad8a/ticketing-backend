@@ -1,6 +1,7 @@
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 
 from accounts.serializers import (
+    LogoutSerializer,
     PasswordChangeSerializer,
     TokenPairSerializer,
     UserCreateSerializer,
@@ -10,6 +11,14 @@ from accounts.serializers import (
 from core.serializers import DownloadLinkSerializer
 
 auth_schema = extend_schema_view(post=extend_schema(tags=["Auth"]))
+
+logout_schema = extend_schema_view(
+    post=extend_schema(
+        tags=["Auth"],
+        request=LogoutSerializer,
+        responses={205: None},
+    )
+)
 
 profile_schema = extend_schema_view(
     get=extend_schema(tags=["Auth"]),

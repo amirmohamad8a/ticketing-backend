@@ -186,6 +186,10 @@ class TokenPairSerializer(serializers.Serializer):
     refresh = serializers.CharField(read_only=True)
 
 
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField(write_only=True)
+
+
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
