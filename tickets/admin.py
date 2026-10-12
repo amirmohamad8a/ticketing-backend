@@ -62,10 +62,10 @@ class TicketEventAdmin(admin.ModelAdmin):
 
 @admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):
-    list_display = ("id", "ticket", "author", "is_internal", "created_at")
-    list_filter = ("is_internal",)
-    search_fields = ("body", "ticket__title", "author__username")
-    autocomplete_fields = ("ticket", "author")
+    list_display = ("id", "ticket", "kind", "author", "visitor", "is_internal", "created_at")
+    list_filter = ("kind", "is_internal")
+    search_fields = ("body", "ticket__title", "author__username", "visitor__name")
+    autocomplete_fields = ("ticket", "author", "visitor")
 
 
 @admin.register(Attachment)

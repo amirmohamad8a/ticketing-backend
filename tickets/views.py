@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from accounts.models import User
 from core.downloads import build_download_link
 from tickets.filters import TicketFilter
+from tickets.messages import post_message
 from tickets.models import Attachment, Ticket
 from tickets.pagination import TicketCursorPagination
 from tickets.permissions import (
@@ -93,7 +94,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket = self.get_object()
 
         if request.method == "GET":
-            queryset = ticket.comments.all()
+            queryset = ticket.comments.select_related("author")
             if request.user.role == User.Role.CUSTOMER:
                 queryset = queryset.filter(is_internal=False)
             serializer = CommentSerializer(queryset, many=True)
@@ -101,11 +102,19 @@ class TicketViewSet(viewsets.ModelViewSet):
 
         serializer = CommentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        is_internal = serializer.validated_data.get("is_internal", False)
+        data = serializer.validated_data
+        is_internal = data.get("is_internal", False)
         if request.user.role == User.Role.CUSTOMER:
             is_internal = False
-        comment = serializer.save(ticket=ticket, author=request.user, is_internal=is_internal)
-        return Response(CommentSerializer(comment).data, status=status.HTTP_201_CREATED)
+        comment, created = post_message(
+            ticket,
+            data["body"],
+            author=request.user,
+            is_internal=is_internal,
+            client_msg_id=data.get("client_msg_id"),
+        )
+        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(CommentSerializer(comment).data, status=status_code)
 
     @action(detail=True, methods=["get", "post"])
     def attachments(self, request, pk=None):

@@ -119,6 +119,10 @@ class TicketEvent(AppendOnlyModel):
 
 
 class Comment(TimeStampedModel):
+    class Kind(models.TextChoices):
+        MESSAGE = "message", "Message"
+        SYSTEM = "system", "System"
+
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="comments")
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -127,11 +131,38 @@ class Comment(TimeStampedModel):
         blank=True,
         related_name="comments",
     )
+    visitor = models.ForeignKey(
+        "chat.Visitor",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="comments",
+    )
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.MESSAGE)
+    client_msg_id = models.CharField(max_length=64, null=True, blank=True)
     body = models.TextField()
     is_internal = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ticket", "client_msg_id"],
+                name="comment_unique_client_msg_id_per_ticket",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(kind="system")
+                    | models.Q(author__isnull=False, visitor__isnull=True)
+                    | models.Q(author__isnull=True, visitor__isnull=False)
+                ),
+                name="comment_message_exactly_one_sender",
+            ),
+        ]
+
+    def clean(self):
+        if self.kind != self.Kind.SYSTEM and bool(self.author_id) == bool(self.visitor_id):
+            raise ValidationError(_("A message must have exactly one of author or visitor."))
 
     def __str__(self):
         return f"Comment #{self.pk} on Ticket #{self.ticket_id}"

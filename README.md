@@ -12,6 +12,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Agents list for assignment dropdowns at `GET /api/agents/`: the id, display name and role of every active agent and admin, readable by agents and admins only. It is not paginated and exposes no usernames, phone numbers or other account details
 - Chat sites for admins at `/api/sites/`: a `Site` is a website that will host the chat widget. It has a name, an auto-generated public key, a list of allowed origins, an active flag and the widget settings (greeting, primary color, position, offline timeout, whether a name or a contact is required). Allowed origins are validated, normalized to the form browsers send in the `Origin` header and deduplicated. Sites can be listed (filterable by `key` and `is_active`), created, read and updated, and the key can be rotated at `POST /api/sites/{id}/rotate-key/`. A site is deactivated rather than deleted
 - Chat visitors and ticket ownership: a `Visitor` belongs to a site and has an optional name, phone and email, a `last_seen_at` and a `created_at`. Every ticket has a `channel` (`portal`, `chat` or `offline_form`, `portal` by default) and an optional `site`. A ticket belongs to exactly one owner, either a `customer` or a `visitor`, enforced by a database check constraint and by `Ticket.clean()`. Customers and visitors with tickets cannot be deleted, and neither can sites that have visitors or tickets
+- Messages as comments: a chat message is a `Comment` with a `kind` (`message` or `system`), an optional `visitor` and an optional `client_msg_id`. Every message has exactly one sender, an `author` or a `visitor`, enforced by a database check constraint and by `Comment.clean()`, and system messages have neither. Sending again with the same `client_msg_id` returns the stored comment instead of creating a second row. Comment responses carry a `sender_type` (`customer`, `agent`, `visitor` or `system`), and internal notes stay hidden from customers
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout. Tokens are signed with their own `JWT_SIGNING_KEY`, so a leaked `SECRET_KEY` cannot be used to forge them
 - Immediate token revocation: a password change or reset invalidates the user's access tokens at once instead of at the end of their 15-minute lifetime, and deactivation does the same
 - Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management, site management and signed downloads. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
@@ -69,6 +70,21 @@ Admins manage the sites that will host the chat widget at `/api/sites/`. Every r
 - Exactly one of `customer` and `visitor` is set on every ticket (`ticket_exactly_one_owner`). A ticket with both or neither is rejected by the database
 - Visitor tickets have `customer: null` in ticket responses. Customers never see them, and staff see them in the same list as portal tickets
 - `Visitor.phone` uses the same canonical Iranian mobile format as user phones
+
+## Messages
+
+`POST /api/tickets/{id}/comments/` accepts `body`, `is_internal` (staff only) and an optional `client_msg_id`.
+
+| Field | Meaning |
+| --- | --- |
+| `kind` | `message` for a person's message, `system` for a notice written by the system. Read-only |
+| `author` | The registered user who wrote it. Empty for visitor and system messages |
+| `visitor` | The widget visitor who wrote it. Empty for staff, customer and system messages |
+| `sender_type` | `customer`, `agent` (agents and admins), `visitor` or `system` |
+| `client_msg_id` | Optional ID of up to 64 characters chosen by the client, unique per ticket |
+
+- A retry with the same `client_msg_id` from the same sender returns the stored comment with `200` instead of `201`, so a message that was sent twice is stored once. The same ID from a different sender in the same ticket is rejected with `400`
+- Visitor messages are always public
 
 ## Forgotten passwords
 

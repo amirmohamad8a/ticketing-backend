@@ -1,0 +1,60 @@
+from django.db import IntegrityError, transaction
+from django.utils.translation import gettext_lazy as _
+
+from rest_framework.exceptions import ValidationError
+
+from tickets.models import Comment
+
+
+def _find_existing(ticket, client_msg_id, author, visitor):
+    return Comment.objects.filter(
+        ticket=ticket,
+        client_msg_id=client_msg_id,
+        author=author,
+        visitor=visitor,
+    ).first()
+
+
+def post_message(
+    ticket,
+    body,
+    author=None,
+    visitor=None,
+    is_internal=False,
+    client_msg_id=None,
+    kind=Comment.Kind.MESSAGE,
+):
+    if kind != Comment.Kind.SYSTEM and (author is None) == (visitor is None):
+        raise ValueError("A message needs exactly one of author or visitor.")
+    if visitor is not None:
+        is_internal = False
+    client_msg_id = client_msg_id or None
+
+    if client_msg_id:
+        existing = _find_existing(ticket, client_msg_id, author, visitor)
+        if existing is not None:
+            return existing, False
+
+    try:
+        with transaction.atomic():
+            comment = Comment.objects.create(
+                ticket=ticket,
+                author=author,
+                visitor=visitor,
+                kind=kind,
+                client_msg_id=client_msg_id,
+                body=body,
+                is_internal=is_internal,
+            )
+    except IntegrityError:
+        if not client_msg_id:
+            raise
+        existing = _find_existing(ticket, client_msg_id, author, visitor)
+        if existing is not None:
+            return existing, False
+        if Comment.objects.filter(ticket=ticket, client_msg_id=client_msg_id).exists():
+            raise ValidationError(
+                {"client_msg_id": _("This client message ID is already used in this conversation.")}
+            )
+        raise
+    return comment, True

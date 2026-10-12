@@ -124,10 +124,47 @@ class TicketEventSerializer(serializers.ModelSerializer):
 
 
 class CommentSerializer(serializers.ModelSerializer):
+    client_msg_id = serializers.CharField(
+        max_length=64, required=False, allow_null=True, allow_blank=True
+    )
+    sender_type = serializers.SerializerMethodField()
+
     class Meta:
         model = Comment
-        fields = ["id", "ticket", "author", "body", "is_internal", "created_at", "updated_at"]
-        read_only_fields = ["id", "ticket", "author", "created_at", "updated_at"]
+        fields = [
+            "id",
+            "ticket",
+            "author",
+            "visitor",
+            "sender_type",
+            "kind",
+            "client_msg_id",
+            "body",
+            "is_internal",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "ticket",
+            "author",
+            "visitor",
+            "kind",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_sender_type(self, obj) -> str:
+        if obj.kind == Comment.Kind.SYSTEM:
+            return "system"
+        if obj.visitor_id:
+            return "visitor"
+        if obj.author_id and obj.author.role == User.Role.CUSTOMER:
+            return "customer"
+        return "agent"
+
+    def validate_client_msg_id(self, value):
+        return value or None
 
 
 class AttachmentSerializer(serializers.ModelSerializer):
