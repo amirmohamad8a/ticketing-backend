@@ -4,6 +4,7 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 
 import environ
+from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -106,6 +107,10 @@ REST_FRAMEWORK = {
         "user_management": "60/min",
         "site_management": "60/min",
         "download": "300/min",
+        "widget_ip": "120/min",
+        "widget_visitor": "90/min",
+        "widget_start": "20/hour",
+        "widget_upload": "30/hour",
     },
     "NUM_PROXIES": env.int("NUM_PROXIES", default=0),
 }
@@ -131,6 +136,7 @@ SPECTACULAR_SETTINGS = {
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_EXPOSE_HEADERS = ["X-Request-ID"]
+CORS_ALLOW_HEADERS = (*default_headers, "x-visitor-token")
 
 
 LANGUAGE_CODE = "fa"
