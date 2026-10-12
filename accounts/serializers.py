@@ -180,6 +180,18 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class AgentSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "name", "role"]
+        read_only_fields = fields
+
+    def get_name(self, obj) -> str:
+        return obj.get_full_name() or obj.username
+
+
 class UserCreateSerializer(ActorMixin, RegisterSerializer):
     role = serializers.ChoiceField(choices=User.Role.choices, default=User.Role.AGENT)
 

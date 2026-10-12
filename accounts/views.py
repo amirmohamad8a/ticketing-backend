@@ -4,7 +4,7 @@ from django.utils.translation import gettext_lazy as _
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, status, viewsets
 from rest_framework.exceptions import ValidationError
-from rest_framework.generics import CreateAPIView, RetrieveUpdateAPIView
+from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,8 +15,15 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from accounts.models import User
 from accounts.pagination import UserCursorPagination
 from accounts.permissions import IsAdmin
-from accounts.schema import auth_schema, password_change_schema, profile_schema, user_schema
+from accounts.schema import (
+    agent_schema,
+    auth_schema,
+    password_change_schema,
+    profile_schema,
+    user_schema,
+)
 from accounts.serializers import (
+    AgentSerializer,
     PasswordChangeSerializer,
     ProfileSerializer,
     RegisterSerializer,
@@ -25,6 +32,7 @@ from accounts.serializers import (
     UserUpdateSerializer,
 )
 from accounts.tokens import blacklist_user_tokens
+from tickets.permissions import IsAgentOrAdmin
 
 
 @auth_schema
@@ -105,3 +113,13 @@ class UserViewSet(
         if self.action == "partial_update":
             return UserUpdateSerializer
         return UserSerializer
+
+
+@agent_schema
+class AgentListView(ListAPIView):
+    serializer_class = AgentSerializer
+    permission_classes = [IsAgentOrAdmin]
+    pagination_class = None
+    queryset = User.objects.filter(
+        is_active=True, role__in=[User.Role.AGENT, User.Role.ADMIN]
+    ).order_by("first_name", "last_name", "username", "id")

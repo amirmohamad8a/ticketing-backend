@@ -9,6 +9,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Profile at `GET/PATCH /api/auth/me/`: first and last name, an optional phone number and an optional avatar (PNG, JPEG or WebP up to 2 MB, verified as a real image and stored under a random name). The username and role cannot be changed there
 - Password change at `POST /api/auth/password/change/`: it needs the current password, applies Django's validators, revokes every refresh token of the user and returns a fresh token pair for the session that made the change
 - User management for admins at `/api/users/`: list with `role` and `is_active` filters, create users (agents by default), change roles, deactivate and reactivate accounts and reset passwords. Every change writes a row to an append-only `UserEvent` log, deactivation and password resets revoke the user's sessions, and an admin cannot demote or deactivate themselves or reset their own password there
+- Agents list for assignment dropdowns at `GET /api/agents/`: the id, display name and role of every active agent and admin, readable by agents and admins only. It is not paginated and exposes no usernames, phone numbers or other account details
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout
 - Role-scoped querysets: a customer only ever sees their own tickets
 - Field-level permissions: customers can edit only the title and description of their own open tickets, and status, priority and assignee are staff-only

@@ -37,3 +37,5 @@ user_schema = extend_schema_view(
         responses=UserSerializer,
     ),
 )
+
+agent_schema = extend_schema_view(get=extend_schema(tags=["Agents"]))
