@@ -1,4 +1,8 @@
+import os
+
 from django.db import transaction
+from django.http import Http404
+from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 
 from django_filters.rest_framework import DjangoFilterBackend
@@ -14,10 +18,11 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from accounts.models import User
 from accounts.pagination import UserCursorPagination
-from accounts.permissions import IsAdmin
+from accounts.permissions import IsAdmin, can_view_avatar
 from accounts.schema import (
     agent_schema,
     auth_schema,
+    avatar_download_schema,
     password_change_schema,
     profile_schema,
     user_schema,
@@ -32,7 +37,12 @@ from accounts.serializers import (
     UserUpdateSerializer,
 )
 from accounts.tokens import blacklist_user_tokens
+from core.downloads import build_download_link
 from tickets.permissions import IsAgentOrAdmin
+
+AVATAR_MIME_TYPES = {
+    extension: content_type for content_type, extension in User.AVATAR_CONTENT_TYPES.items()
+}
 
 
 @auth_schema
@@ -123,3 +133,16 @@ class AgentListView(ListAPIView):
     queryset = User.objects.filter(
         is_active=True, role__in=[User.Role.AGENT, User.Role.ADMIN]
     ).order_by("first_name", "last_name", "username", "id")
+
+
+@avatar_download_schema
+class AvatarDownloadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        owner = get_object_or_404(User, pk=pk)
+        if not owner.avatar or not can_view_avatar(request.user, owner):
+            raise Http404
+        extension = os.path.splitext(owner.avatar.name)[1].lower()
+        content_type = AVATAR_MIME_TYPES.get(extension, "application/octet-stream")
+        return Response(build_download_link(request, owner.avatar, content_type))

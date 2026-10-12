@@ -7,7 +7,15 @@ from accounts.models import User
 from core.tests.factories import AdminFactory, AgentFactory, UserFactory
 
 URL = "/api/auth/me/"
-PROFILE_KEYS = {"id", "username", "first_name", "last_name", "phone", "avatar", "role"}
+PROFILE_KEYS = {
+    "id",
+    "username",
+    "first_name",
+    "last_name",
+    "phone",
+    "avatar_download_url",
+    "role",
+}
 
 
 def _client_for(user):
@@ -37,7 +45,7 @@ class ProfileReadTests(TestCase):
                 "first_name": "Sara",
                 "last_name": "Ahmadi",
                 "phone": "09123456789",
-                "avatar": None,
+                "avatar_download_url": None,
                 "role": User.Role.CUSTOMER,
             },
         )

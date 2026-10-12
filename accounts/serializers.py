@@ -1,6 +1,7 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from rest_framework import serializers
@@ -87,11 +88,29 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class ProfileSerializer(serializers.ModelSerializer):
     phone = build_phone_field()
+    avatar_download_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "first_name", "last_name", "phone", "avatar", "role"]
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "phone",
+            "avatar",
+            "avatar_download_url",
+            "role",
+        ]
         read_only_fields = ["id", "username", "role"]
+        extra_kwargs = {"avatar": {"write_only": True}}
+
+    def get_avatar_download_url(self, obj) -> str | None:
+        if not obj.avatar:
+            return None
+        path = reverse("avatar-download", args=[obj.pk])
+        request = self.context.get("request")
+        return request.build_absolute_uri(path) if request else path
 
     def validate_phone(self, value):
         return value or None

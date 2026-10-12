@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from rest_framework import serializers
@@ -129,6 +130,8 @@ class CommentSerializer(serializers.ModelSerializer):
 
 
 class AttachmentSerializer(serializers.ModelSerializer):
+    download_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Attachment
         fields = [
@@ -136,6 +139,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "ticket",
             "comment",
             "file",
+            "download_url",
             "uploaded_by",
             "size",
             "content_type",
@@ -150,6 +154,12 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "content_type",
             "created_at",
         ]
+        extra_kwargs = {"file": {"write_only": True}}
+
+    def get_download_url(self, obj) -> str:
+        path = reverse("attachment-download", args=[obj.pk])
+        request = self.context.get("request")
+        return request.build_absolute_uri(path) if request else path
 
     def validate_file(self, value):
         if value.size > Attachment.MAX_SIZE_BYTES:

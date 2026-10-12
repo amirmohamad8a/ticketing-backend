@@ -49,13 +49,15 @@ class AvatarTests(TestCase):
         self.assertEqual(response.data["error"]["code"], "validation_error")
         self.assertIn("avatar", response.data["error"]["details"])
 
-    def test_png_upload_sets_the_avatar_and_returns_its_url(self):
+    def test_png_upload_sets_the_avatar_and_returns_its_download_url(self):
         response = self._upload(_image())
         self.assertEqual(response.status_code, 200)
-        self.assertIn("/media/avatars/", response.data["avatar"])
+        expected = f"http://testserver/api/avatars/{self.user.id}/download/"
+        self.assertEqual(response.data["avatar_download_url"], expected)
+        self.assertNotIn("avatar", response.data)
         name = self._avatar_name()
         self.assertTrue(default_storage.exists(name))
-        self.assertIn("/media/avatars/", self.client.get(URL).data["avatar"])
+        self.assertEqual(self.client.get(URL).data["avatar_download_url"], expected)
 
     def test_jpeg_upload_is_accepted(self):
         response = self._upload(_image("photo.JPG", "JPEG", "image/jpeg"))
@@ -129,7 +131,7 @@ class AvatarTests(TestCase):
         old_name = self._avatar_name()
         response = self.client.patch(URL, {"avatar": ""})
         self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.data["avatar"])
+        self.assertIsNone(response.data["avatar_download_url"])
         self.assertEqual(self._avatar_name(), "")
         self.assertFalse(default_storage.exists(old_name))
 
@@ -138,10 +140,10 @@ class AvatarTests(TestCase):
         old_name = self._avatar_name()
         response = self.client.patch(URL, {"avatar": None}, format="json")
         self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.data["avatar"])
+        self.assertIsNone(response.data["avatar_download_url"])
         self.assertFalse(default_storage.exists(old_name))
 
     def test_clearing_when_there_is_no_avatar_is_harmless(self):
         response = self.client.patch(URL, {"avatar": None}, format="json")
         self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.data["avatar"])
+        self.assertIsNone(response.data["avatar_download_url"])

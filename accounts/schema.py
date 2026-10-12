@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 
 from accounts.serializers import (
     PasswordChangeSerializer,
@@ -7,6 +7,7 @@ from accounts.serializers import (
     UserSerializer,
     UserUpdateSerializer,
 )
+from core.serializers import DownloadLinkSerializer
 
 auth_schema = extend_schema_view(post=extend_schema(tags=["Auth"]))
 
@@ -39,3 +40,11 @@ user_schema = extend_schema_view(
 )
 
 agent_schema = extend_schema_view(get=extend_schema(tags=["Agents"]))
+
+avatar_download_schema = extend_schema_view(
+    get=extend_schema(
+        tags=["Avatars"],
+        parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH)],
+        responses=DownloadLinkSerializer,
+    )
+)

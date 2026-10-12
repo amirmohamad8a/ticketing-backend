@@ -1,5 +1,6 @@
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 
+from core.serializers import DownloadLinkSerializer
 from tickets.serializers import TicketSerializer
 
 ticket_schema = extend_schema_view(
@@ -17,4 +18,12 @@ ticket_schema = extend_schema_view(
         tags=["Tickets"],
         parameters=[OpenApiParameter("comment_id", int, OpenApiParameter.PATH)],
     ),
+)
+
+attachment_download_schema = extend_schema_view(
+    get=extend_schema(
+        tags=["Attachments"],
+        parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH)],
+        responses=DownloadLinkSerializer,
+    )
 )
