@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from tickets.models import Attachment, Comment, Ticket, TicketEvent
+from tickets.models import Attachment, Comment, ConversationRead, Ticket, TicketEvent
 
 
 @admin.register(Ticket)
@@ -66,6 +66,13 @@ class CommentAdmin(admin.ModelAdmin):
     list_filter = ("kind", "is_internal")
     search_fields = ("body", "ticket__title", "author__username", "visitor__name")
     autocomplete_fields = ("ticket", "author", "visitor")
+
+
+@admin.register(ConversationRead)
+class ConversationReadAdmin(admin.ModelAdmin):
+    list_display = ("id", "ticket", "user", "visitor", "last_read_comment_id", "updated_at")
+    search_fields = ("ticket__title", "user__username", "visitor__name")
+    autocomplete_fields = ("ticket", "user", "visitor")
 
 
 @admin.register(Attachment)

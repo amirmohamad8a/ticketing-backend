@@ -21,11 +21,14 @@ from tickets.permissions import (
     CustomerFieldRestrictions,
     IsCustomerOwnerOrReadOwn,
 )
+from tickets.reads import annotate_unread, mark_conversation_read
 from tickets.schema import attachment_download_schema, ticket_schema
 from tickets.serializers import (
     AttachmentSerializer,
     CommentSerializer,
     CustomerTicketSerializer,
+    ReadMarkSerializer,
+    ReadStateSerializer,
     TicketEventSerializer,
     TicketSerializer,
 )
@@ -52,8 +55,8 @@ class TicketViewSet(viewsets.ModelViewSet):
         else:
             queryset = Ticket.objects.all()
         if user.role == User.Role.CUSTOMER:
-            return queryset.filter(customer=user)
-        return queryset
+            queryset = queryset.filter(customer=user)
+        return annotate_unread(queryset, user)
 
     def get_serializer_class(self):
         user = getattr(self.request, "user", None)
@@ -82,6 +85,18 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket = self.get_object()
         ticket.restore()
         return Response(self.get_serializer(ticket).data)
+
+    @action(detail=True, methods=["post"], url_path="read", url_name="read")
+    def mark_read(self, request, pk=None):
+        ticket = self.get_object()
+        serializer = ReadMarkSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        state = mark_conversation_read(
+            ticket,
+            comment_id=serializer.validated_data.get("last_read_comment_id"),
+            user=request.user,
+        )
+        return Response(ReadStateSerializer(state).data)
 
     @action(detail=True, methods=["get"])
     def events(self, request, pk=None):

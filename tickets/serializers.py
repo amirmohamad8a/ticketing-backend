@@ -11,6 +11,8 @@ from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
 
 class TicketSerializer(serializers.ModelSerializer):
+    unread_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Ticket
         fields = [
@@ -21,10 +23,14 @@ class TicketSerializer(serializers.ModelSerializer):
             "priority",
             "customer",
             "assignee",
+            "unread_count",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "customer", "created_at", "updated_at"]
+
+    def get_unread_count(self, obj) -> int:
+        return getattr(obj, "unread_count", 0)
 
     def validate_status(self, value):
         if self.instance is None:
@@ -165,6 +171,17 @@ class CommentSerializer(serializers.ModelSerializer):
 
     def validate_client_msg_id(self, value):
         return value or None
+
+
+class ReadMarkSerializer(serializers.Serializer):
+    last_read_comment_id = serializers.IntegerField(
+        required=False, min_value=1, max_value=2**63 - 1
+    )
+
+
+class ReadStateSerializer(serializers.Serializer):
+    last_read_comment_id = serializers.IntegerField(read_only=True)
+    unread_count = serializers.IntegerField(read_only=True)
 
 
 class AttachmentSerializer(serializers.ModelSerializer):

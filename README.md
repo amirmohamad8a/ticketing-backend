@@ -14,6 +14,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Chat visitors and ticket ownership: a `Visitor` belongs to a site and has an optional name, phone and email, a `last_seen_at` and a `created_at`. Every ticket has a `channel` (`portal`, `chat` or `offline_form`, `portal` by default) and an optional `site`. A ticket belongs to exactly one owner, either a `customer` or a `visitor`, enforced by a database check constraint and by `Ticket.clean()`. Customers and visitors with tickets cannot be deleted, and neither can sites that have visitors or tickets
 - Messages as comments: a chat message is a `Comment` with a `kind` (`message` or `system`), an optional `visitor` and an optional `client_msg_id`. Every message has exactly one sender, an `author` or a `visitor`, enforced by a database check constraint and by `Comment.clean()`, and system messages have neither. Sending again with the same `client_msg_id` returns the stored comment instead of creating a second row. Comment responses carry a `sender_type` (`customer`, `agent`, `visitor` or `system`), and internal notes stay hidden from customers
 - Public widget API under `/api/widget/`: the public config of a site, starting or resuming a conversation, reading and sending messages, uploading files and getting signed download URLs. Visitors authenticate with the `X-Visitor-Token` header and can only ever reach their own conversation. Every request must come from an origin listed in the site's `allowed_origins` (anything else gets 403), and every route is throttled per IP address and per visitor. Uploads go through the same content checks as every other upload
+- Read state and unread counts: a `ConversationRead` row stores, for each participant (a user or a visitor) and ticket, the id of the last message they have read. Every ticket response carries an `unread_count` for the signed-in user: the messages from other people after that point, without internal notes for customers. Participants mark a conversation read at `POST /api/tickets/{id}/read/` (visitors at `POST /api/widget/conversations/{id}/read/`), and the marker only ever moves forward
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout. Tokens are signed with their own `JWT_SIGNING_KEY`, so a leaked `SECRET_KEY` cannot be used to forge them
 - Immediate token revocation: a password change or reset invalidates the user's access tokens at once instead of at the end of their 15-minute lifetime, and deactivation does the same
 - Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management, site management and signed downloads. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
@@ -87,6 +88,17 @@ Admins manage the sites that will host the chat widget at `/api/sites/`. Every r
 - A retry with the same `client_msg_id` from the same sender returns the stored comment with `200` instead of `201`, so a message that was sent twice is stored once. The same ID from a different sender in the same ticket is rejected with `400`
 - Visitor messages are always public
 
+## Read state
+
+`POST /api/tickets/{id}/read/` marks a conversation as read for the signed-in user. The body is optional: `last_read_comment_id` is the id of the last message the client has shown. Without it, everything the user can see up to now is marked as read. The response is `{last_read_comment_id, unread_count}`.
+
+- A message counts as unread for a participant when it comes after their marker, they are allowed to see it and someone else wrote it. Their own messages never count, internal notes never count for customers or visitors, and system messages count for everyone
+- The marker only moves forward, so a late or repeated request can never make messages unread again
+- `last_read_comment_id` must be a message the participant can see. Anything else, including the id of an internal note sent by a customer, is `400`
+- Read state is kept per person: two agents on the same ticket have separate markers and separate counts, and internal notes written by one agent are unread for the other
+- Before a participant has marked a conversation read, every message from other people counts as unread
+- `unread_count` is on every ticket response (list, detail and updates), for customers and staff alike
+
 ## Widget API
 
 The embeddable widget talks to these routes. They need no staff account.
@@ -97,6 +109,7 @@ The embeddable widget talks to these routes. They need no staff account.
 | `POST` | `/api/widget/conversations/` | optional token | Start a conversation, or send into the current one. Returns the visitor token |
 | `GET` | `/api/widget/conversations/{id}/messages/?after=<id>` | token | Public messages with an id greater than `after`, oldest first |
 | `POST` | `/api/widget/conversations/{id}/messages/` | token | Send a message |
+| `POST` | `/api/widget/conversations/{id}/read/` | token | Mark messages as read. Optional `last_read_comment_id`. Returns `{last_read_comment_id, unread_count}` |
 | `POST` | `/api/widget/conversations/{id}/attachments/` | token | Send a file as a message (multipart: `file`, optional `body` and `client_msg_id`) |
 | `GET` | `/api/widget/attachments/{id}/download/` | token | Short-lived signed download URL as `{url, expires_in}` |
 
@@ -104,7 +117,7 @@ The embeddable widget talks to these routes. They need no staff account.
 - Origin: the `Origin` header must be one of the site's `allowed_origins`. A missing header, an unlisted origin or a site with no origins gets `403`, so add the host page's origin to the site before embedding the widget. The routes send CORS headers to any origin so the browser can read that `403`, and the origin check is what enforces access
 - Starting a conversation: `body` is the first message and is always required. Without a token, `site_key` is required, a visitor is created and `name`, `phone` and `email` are stored (the site's `require_name` and `require_contact` are enforced). With a token, the token is replaced by a fresh one, and the message goes into the visitor's current conversation (one that is not resolved or closed) or opens a new one. The response is `201` when a conversation was created and `200` otherwise, and carries `token`, `conversation`, `message` and `agents_available`
 - A conversation is a ticket with `channel` `chat`. Its title is the start of the first message and its description is empty, because the messages are the content
-- Messages: responses never contain internal notes. `GET` returns at most 100 messages as `{results, has_more, agents_available}`, so a client that reconnects calls it with the last id it saw until `has_more` is `false`. Each message has `id`, `sender_type`, `sender_name`, `kind`, `client_msg_id`, `body` and `attachments`. Sending again with the same `client_msg_id` returns the stored message with `200`. Sending into a resolved or closed conversation returns `409` with the code `conversation_closed`
+- Messages: responses never contain internal notes. `GET` returns at most 100 messages as `{results, has_more, agents_available, unread_count}`, so a client that reconnects calls it with the last id it saw until `has_more` is `false`. `unread_count` is the number of staff messages the visitor has not marked as read.
 - Attachments: the file becomes a message of its own, so it appears in order in the thread. It must pass the same size, type and magic-byte checks as every other upload
 - Downloads: a visitor can only get a URL for a file on a public message of their own conversation. Everything else is `404`
 - Another visitor's conversation, message or file is always `404`

@@ -11,6 +11,7 @@ from chat.widget.serializers import (
     WidgetUploadSerializer,
 )
 from core.serializers import DownloadLinkSerializer
+from tickets.serializers import ReadMarkSerializer, ReadStateSerializer
 
 TAGS = ["Widget"]
 PK = OpenApiParameter("pk", int, OpenApiParameter.PATH)
@@ -52,6 +53,15 @@ message_schema = extend_schema_view(
         request=WidgetMessageInputSerializer,
         responses={200: WidgetMessageSerializer, 201: WidgetMessageSerializer},
     ),
+)
+
+conversation_read_schema = extend_schema_view(
+    post=extend_schema(
+        tags=TAGS,
+        parameters=[PK],
+        request=ReadMarkSerializer,
+        responses=ReadStateSerializer,
+    )
 )
 
 attachment_upload_schema = extend_schema_view(

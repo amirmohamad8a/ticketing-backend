@@ -1,7 +1,7 @@
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 
 from core.serializers import DownloadLinkSerializer
-from tickets.serializers import TicketSerializer
+from tickets.serializers import ReadMarkSerializer, ReadStateSerializer, TicketSerializer
 
 ticket_schema = extend_schema_view(
     list=extend_schema(tags=["Tickets"]),
@@ -11,6 +11,11 @@ ticket_schema = extend_schema_view(
     partial_update=extend_schema(tags=["Tickets"]),
     destroy=extend_schema(tags=["Tickets"]),
     restore=extend_schema(tags=["Tickets"], request=None, responses=TicketSerializer),
+    mark_read=extend_schema(
+        tags=["Tickets"],
+        request=ReadMarkSerializer,
+        responses=ReadStateSerializer,
+    ),
     events=extend_schema(tags=["Tickets"]),
     comments=extend_schema(tags=["Tickets"]),
     attachments=extend_schema(tags=["Tickets"]),

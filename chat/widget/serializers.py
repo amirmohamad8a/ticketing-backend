@@ -101,6 +101,7 @@ class WidgetMessageListSerializer(serializers.Serializer):
     results = WidgetMessageSerializer(many=True, read_only=True)
     has_more = serializers.BooleanField(read_only=True)
     agents_available = serializers.BooleanField(read_only=True)
+    unread_count = serializers.IntegerField(read_only=True)
 
 
 class ConversationCreateSerializer(serializers.Serializer):

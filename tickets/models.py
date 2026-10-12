@@ -168,6 +168,51 @@ class Comment(TimeStampedModel):
         return f"Comment #{self.pk} on Ticket #{self.ticket_id}"
 
 
+class ConversationRead(TimeStampedModel):
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="reads")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="conversation_reads",
+    )
+    visitor = models.ForeignKey(
+        "chat.Visitor",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="conversation_reads",
+    )
+    last_read_comment_id = models.PositiveBigIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ticket", "user"],
+                name="conversationread_unique_ticket_user",
+            ),
+            models.UniqueConstraint(
+                fields=["ticket", "visitor"],
+                name="conversationread_unique_ticket_visitor",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(user__isnull=False, visitor__isnull=True)
+                    | models.Q(user__isnull=True, visitor__isnull=False)
+                ),
+                name="conversationread_exactly_one_reader",
+            ),
+        ]
+
+    def clean(self):
+        if bool(self.user_id) == bool(self.visitor_id):
+            raise ValidationError(_("A read state must belong to exactly one of user or visitor."))
+
+    def __str__(self):
+        return f"Read state of Ticket #{self.ticket_id} up to Comment #{self.last_read_comment_id}"
+
+
 class Attachment(TimeStampedModel):
     MAX_SIZE_BYTES = 10 * 1024 * 1024
 

@@ -18,19 +18,20 @@ from chat.conversations import (
 )
 from chat.models import Site, Visitor
 from chat.tokens import issue_visitor_token
-from core.downloads import build_download_link
-from tickets.messages import post_message
-from tickets.models import Attachment
-
-from .auth import IsVisitorFromAllowedOrigin, VisitorTokenAuthentication, ensure_origin_allowed
-from .schema import (
+from chat.widget.auth import (
+    IsVisitorFromAllowedOrigin,
+    VisitorTokenAuthentication,
+    ensure_origin_allowed,
+)
+from chat.widget.schema import (
     attachment_upload_schema,
     conversation_create_schema,
+    conversation_read_schema,
     message_schema,
     widget_config_schema,
     widget_download_schema,
 )
-from .serializers import (
+from chat.widget.serializers import (
     ConversationCreateSerializer,
     WidgetAttachmentSerializer,
     WidgetConfigSerializer,
@@ -41,12 +42,17 @@ from .serializers import (
     WidgetMessageSerializer,
     WidgetUploadSerializer,
 )
-from .throttles import (
+from chat.widget.throttles import (
     WidgetIPThrottle,
     WidgetStartThrottle,
     WidgetUploadThrottle,
     WidgetVisitorThrottle,
 )
+from core.downloads import build_download_link
+from tickets.messages import post_message
+from tickets.models import Attachment
+from tickets.reads import mark_conversation_read, unread_count
+from tickets.serializers import ReadMarkSerializer, ReadStateSerializer
 
 MESSAGES_PAGE_SIZE = 100
 
@@ -165,6 +171,7 @@ class MessageListCreateView(WidgetAPIView):
             "results": rows[:MESSAGES_PAGE_SIZE],
             "has_more": len(rows) > MESSAGES_PAGE_SIZE,
             "agents_available": agents_available(visitor.site),
+            "unread_count": unread_count(ticket, visitor=visitor),
         }
         return Response(WidgetMessageListSerializer(payload, context={"request": request}).data)
 
@@ -183,6 +190,21 @@ class MessageListCreateView(WidgetAPIView):
         )
         body = WidgetMessageSerializer(comment, context={"request": request}).data
         return Response(body, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@conversation_read_schema
+class ConversationReadView(WidgetAPIView):
+    def post(self, request, pk):
+        visitor = request.auth
+        ticket = _get_conversation(visitor, pk)
+        serializer = ReadMarkSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        state = mark_conversation_read(
+            ticket,
+            comment_id=serializer.validated_data.get("last_read_comment_id"),
+            visitor=visitor,
+        )
+        return Response(ReadStateSerializer(state).data)
 
 
 @attachment_upload_schema

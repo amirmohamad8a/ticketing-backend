@@ -3,6 +3,7 @@ from django.urls import path
 from chat.widget.views import (
     AttachmentCreateView,
     ConversationCreateView,
+    ConversationReadView,
     MessageListCreateView,
     WidgetAttachmentDownloadView,
     WidgetConfigView,
@@ -19,6 +20,11 @@ urlpatterns = [
         "widget/conversations/<int:pk>/messages/",
         MessageListCreateView.as_view(),
         name="widget-messages",
+    ),
+    path(
+        "widget/conversations/<int:pk>/read/",
+        ConversationReadView.as_view(),
+        name="widget-conversation-read",
     ),
     path(
         "widget/conversations/<int:pk>/attachments/",
