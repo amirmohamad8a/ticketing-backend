@@ -1,7 +1,7 @@
 import factory
 
 from accounts.models import User
-from chat.models import Site
+from chat.models import Site, Visitor
 from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
 
@@ -37,15 +37,34 @@ class SiteFactory(factory.django.DjangoModelFactory):
     allowed_origins = factory.LazyFunction(lambda: ["https://example.com"])
 
 
+class VisitorFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Visitor
+
+    site = factory.SubFactory(SiteFactory)
+    name = factory.Sequence(lambda n: f"Visitor {n}")
+
+
 class TicketFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Ticket
+
+    class Params:
+        from_visitor = factory.Trait(
+            customer=None,
+            visitor=factory.SubFactory(VisitorFactory),
+            site=factory.SelfAttribute("visitor.site"),
+            channel=Ticket.Channel.CHAT,
+        )
 
     title = factory.Sequence(lambda n: f"Ticket {n}")
     description = "Ticket description"
     status = Ticket.Status.OPEN
     priority = Ticket.Priority.MEDIUM
+    channel = Ticket.Channel.PORTAL
     customer = factory.SubFactory(UserFactory)
+    visitor = None
+    site = None
     assignee = None
 
 

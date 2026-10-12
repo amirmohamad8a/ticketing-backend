@@ -5,4 +5,4 @@ class CoreConfig(AppConfig):
     name = "core"
 
     def ready(self):
-        pass
+        from core import schema  # noqa: F401

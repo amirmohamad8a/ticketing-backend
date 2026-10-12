@@ -28,6 +28,11 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
         HIGH = "high", "High"
         URGENT = "urgent", "Urgent"
 
+    class Channel(models.TextChoices):
+        PORTAL = "portal", "Portal"
+        CHAT = "chat", "Chat"
+        OFFLINE_FORM = "offline_form", "Offline form"
+
     STATUS_TRANSITIONS = {
         Status.OPEN: {Status.IN_PROGRESS},
         Status.IN_PROGRESS: {Status.WAITING_ON_CUSTOMER, Status.RESOLVED, Status.OPEN},
@@ -40,9 +45,26 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
     description = models.TextField()
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.OPEN)
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
+    channel = models.CharField(max_length=20, choices=Channel.choices, default=Channel.PORTAL)
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="tickets",
+    )
+    visitor = models.ForeignKey(
+        "chat.Visitor",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="tickets",
+    )
+    site = models.ForeignKey(
+        "chat.Site",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name="tickets",
     )
     assignee = models.ForeignKey(
@@ -55,6 +77,19 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(customer__isnull=False, visitor__isnull=True)
+                    | models.Q(customer__isnull=True, visitor__isnull=False)
+                ),
+                name="ticket_exactly_one_owner",
+            )
+        ]
+
+    def clean(self):
+        if bool(self.customer_id) == bool(self.visitor_id):
+            raise ValidationError(_("Ticket must belong to exactly one of customer or visitor."))
 
     def __str__(self):
         return f"#{self.pk} {self.title}"

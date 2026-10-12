@@ -10,14 +10,22 @@ class TicketAdmin(admin.ModelAdmin):
         "title",
         "status",
         "priority",
+        "channel",
         "customer",
+        "visitor",
         "assignee",
         "is_deleted",
         "created_at",
     )
-    list_filter = ("status", "priority", "is_deleted")
-    search_fields = ("title", "description", "customer__username", "assignee__username")
-    autocomplete_fields = ("customer", "assignee")
+    list_filter = ("status", "priority", "channel", "is_deleted")
+    search_fields = (
+        "title",
+        "description",
+        "customer__username",
+        "visitor__name",
+        "assignee__username",
+    )
+    autocomplete_fields = ("customer", "visitor", "site", "assignee")
     readonly_fields = ("is_deleted", "deleted_at")
     actions = ["restore_selected"]
 

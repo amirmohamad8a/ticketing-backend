@@ -11,6 +11,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - User management for admins at `/api/users/`: list with `role` and `is_active` filters, create users (agents by default), change roles, deactivate and reactivate accounts and reset passwords. Every change writes a row to an append-only `UserEvent` log, deactivation and password resets revoke the user's sessions, and an admin cannot demote or deactivate themselves or reset their own password there
 - Agents list for assignment dropdowns at `GET /api/agents/`: the id, display name and role of every active agent and admin, readable by agents and admins only. It is not paginated and exposes no usernames, phone numbers or other account details
 - Chat sites for admins at `/api/sites/`: a `Site` is a website that will host the chat widget. It has a name, an auto-generated public key, a list of allowed origins, an active flag and the widget settings (greeting, primary color, position, offline timeout, whether a name or a contact is required). Allowed origins are validated, normalized to the form browsers send in the `Origin` header and deduplicated. Sites can be listed (filterable by `key` and `is_active`), created, read and updated, and the key can be rotated at `POST /api/sites/{id}/rotate-key/`. A site is deactivated rather than deleted
+- Chat visitors and ticket ownership: a `Visitor` belongs to a site and has an optional name, phone and email, a `last_seen_at` and a `created_at`. Every ticket has a `channel` (`portal`, `chat` or `offline_form`, `portal` by default) and an optional `site`. A ticket belongs to exactly one owner, either a `customer` or a `visitor`, enforced by a database check constraint and by `Ticket.clean()`. Customers and visitors with tickets cannot be deleted, and neither can sites that have visitors or tickets
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout. Tokens are signed with their own `JWT_SIGNING_KEY`, so a leaked `SECRET_KEY` cannot be used to forge them
 - Immediate token revocation: a password change or reset invalidates the user's access tokens at once instead of at the end of their 15-minute lifetime, and deactivation does the same
 - Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management, site management and signed downloads. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
@@ -55,6 +56,19 @@ Admins manage the sites that will host the chat widget at `/api/sites/`. Every r
 - `offline_timeout_minutes`: from 1 to 1440
 - `greeting`, `require_name` and `require_contact` are plain widget settings
 - Sites cannot be deleted. Set `is_active` to `false` instead
+
+## Ticket owners and channels
+
+| Field | Meaning |
+| --- | --- |
+| `channel` | Where the ticket came from: `portal`, `chat` or `offline_form`. Defaults to `portal` |
+| `customer` | The registered user who owns the ticket. Empty for visitor tickets |
+| `visitor` | The anonymous widget visitor who owns the ticket. Empty for portal tickets |
+| `site` | The site that hosted the widget. Empty for portal tickets |
+
+- Exactly one of `customer` and `visitor` is set on every ticket (`ticket_exactly_one_owner`). A ticket with both or neither is rejected by the database
+- Visitor tickets have `customer: null` in ticket responses. Customers never see them, and staff see them in the same list as portal tickets
+- `Visitor.phone` uses the same canonical Iranian mobile format as user phones
 
 ## Forgotten passwords
 

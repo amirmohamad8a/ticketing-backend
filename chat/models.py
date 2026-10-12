@@ -2,7 +2,9 @@ import secrets
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 
+from accounts.validators import validate_iranian_mobile
 from chat.validators import validate_hex_color, validate_origin_list
 from core.models import TimeStampedModel
 
@@ -42,3 +44,20 @@ class Site(TimeStampedModel):
     def rotate_key(self):
         self.key = generate_site_key()
         self.save(update_fields=["key", "updated_at"])
+
+
+class Visitor(models.Model):
+    site = models.ForeignKey(Site, on_delete=models.PROTECT, related_name="visitors")
+    name = models.CharField(max_length=100, blank=True, default="")
+    phone = models.CharField(
+        max_length=11, blank=True, default="", validators=[validate_iranian_mobile]
+    )
+    email = models.EmailField(blank=True, default="")
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return self.name or f"Visitor #{self.pk}"
