@@ -19,8 +19,10 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Append-only audit trail of status and assignee changes, enforced in the model and readable at `/api/tickets/{id}/events/`
 - Comments with internal notes that customers never receive
 - Attachments on tickets and on comments, with a 10 MB limit and a content-type allowlist. Customers cannot see or reach the attachments of internal comments, and only a comment's author can attach files to it
+- File safety: the real content type of every upload is read from its magic bytes with a pure-Python library (`filetype`), so the Docker image needs no system packages. The detected type must be on the allowlist and must match the declared `content_type`, so a script renamed to `.png` or a PNG labelled as a PDF is rejected. DOCX and plain ZIP files, both ZIP containers, are told apart by reading the archive's file list, and archives are never extracted. Attachments are stored under random names with the extension taken from the verified type, and the original name is kept in `original_name` for display. Avatars go through the same check
 - Pluggable file storage: local disk by default, or any S3-compatible bucket (MinIO for local testing) selected with `STORAGE_BACKEND`
 - Protected downloads: `/media/` is never served. Attachments and avatars are reached only through `GET /api/attachments/{id}/download/` and `GET /api/avatars/{id}/download/`, which check access first and return a short-lived signed URL as `{url, expires_in}`. With local storage the URL points to an API route that verifies the signature and streams the file, with S3 it is a presigned URL, and the bucket is never public. Attachment responses carry a `download_url` pointing at that endpoint instead of a file URL
+- Forced downloads: every file is served with `Content-Disposition: attachment` and its original name. Local downloads also carry `X-Content-Type-Options: nosniff`, and S3 presigned URLs override the response content type and disposition
 - Avatar visibility: users can get their own avatar, staff can get any avatar, everyone signed in can get a staff member's avatar, and a customer's avatar is visible only to that customer and to staff
 - Filtering by status, priority and assignee (including `assignee=me`) and cursor pagination
 - One error format for every failure: `{"error": {"code", "message", "details"}}`
@@ -35,7 +37,7 @@ There is no password reset by email. Outbound email is out of scope for this pro
 
 ## Tech stack
 
-Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, django-storages with boto3, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Celery and Redis are configured for background jobs and have no tasks yet. Production runs on Render (web service and Key Value) and Neon (PostgreSQL).
+Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Celery and Redis are configured for background jobs and have no tasks yet. Production runs on Render (web service and Key Value) and Neon (PostgreSQL).
 
 ## Run locally
 

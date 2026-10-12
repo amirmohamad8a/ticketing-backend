@@ -11,6 +11,7 @@ from accounts.events import record_user_event
 from accounts.models import User
 from accounts.tokens import blacklist_user_tokens
 from accounts.validators import normalize_phone, validate_iranian_mobile
+from core.uploads import ensure_content_matches
 
 
 class PhoneField(serializers.CharField):
@@ -122,9 +123,11 @@ class ProfileSerializer(serializers.ModelSerializer):
             max_mb = User.AVATAR_MAX_SIZE_BYTES // (1024 * 1024)
             message = _("Avatar too large. Max size is %(max_mb)sMB.")
             raise serializers.ValidationError(message % {"max_mb": max_mb})
-        extension = User.AVATAR_CONTENT_TYPES.get(getattr(value, "content_type", ""))
+        content_type = getattr(value, "content_type", "")
+        extension = User.AVATAR_CONTENT_TYPES.get(content_type)
         if extension is None:
             raise serializers.ValidationError(_("Avatar must be a PNG, JPEG or WebP image."))
+        ensure_content_matches(value, content_type)
         value.name = f"avatar{extension}"
         return value
 

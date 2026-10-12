@@ -5,6 +5,7 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from accounts.models import User
+from core.uploads import clean_file_name, ensure_content_matches
 from tickets.events import record_event
 from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
@@ -139,6 +140,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "ticket",
             "comment",
             "file",
+            "original_name",
             "download_url",
             "uploaded_by",
             "size",
@@ -149,6 +151,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "id",
             "ticket",
             "comment",
+            "original_name",
             "uploaded_by",
             "size",
             "content_type",
@@ -170,10 +173,12 @@ class AttachmentSerializer(serializers.ModelSerializer):
         if content_type not in Attachment.ALLOWED_CONTENT_TYPES:
             message = _("File type '%(content_type)s' is not allowed.")
             raise serializers.ValidationError(message % {"content_type": content_type})
+        ensure_content_matches(value, content_type)
         return value
 
     def create(self, validated_data):
         file_obj = validated_data["file"]
         validated_data["size"] = file_obj.size
         validated_data["content_type"] = getattr(file_obj, "content_type", "") or ""
+        validated_data["original_name"] = clean_file_name(file_obj.name)
         return super().create(validated_data)

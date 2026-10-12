@@ -1,3 +1,5 @@
+import os
+
 from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, JsonResponse
 from django.views.decorators.cache import never_cache
@@ -27,6 +29,13 @@ class SignedDownloadView(APIView):
             handle = default_storage.open(payload["name"], "rb")
         except FileNotFoundError:
             raise Http404
-        response = FileResponse(handle, content_type=payload["content_type"])
+        filename = payload.get("filename") or os.path.basename(payload["name"])
+        response = FileResponse(
+            handle,
+            content_type=payload["content_type"],
+            as_attachment=True,
+            filename=filename,
+        )
         response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
         return response

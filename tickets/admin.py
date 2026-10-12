@@ -66,11 +66,12 @@ class AttachmentAdmin(admin.ModelAdmin):
         "id",
         "ticket",
         "comment",
+        "original_name",
         "uploaded_by",
         "content_type",
         "size",
         "created_at",
     )
     list_filter = ("content_type",)
-    search_fields = ("file", "ticket__title", "uploaded_by__username")
+    search_fields = ("file", "original_name", "ticket__title", "uploaded_by__username")
     autocomplete_fields = ("ticket", "comment", "uploaded_by")

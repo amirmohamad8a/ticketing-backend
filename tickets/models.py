@@ -1,9 +1,17 @@
+import uuid
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import AppendOnlyModel, SoftDeleteModel, TimeStampedModel
+
+
+def attachment_upload_path(instance, filename):
+    extension = Attachment.CONTENT_TYPE_EXTENSIONS.get(instance.content_type, "")
+    return f"attachments/{timezone.localdate():%Y/%m/%d}/{uuid.uuid4().hex}{extension}"
 
 
 class Ticket(SoftDeleteModel, TimeStampedModel):
@@ -97,18 +105,17 @@ class Comment(TimeStampedModel):
 class Attachment(TimeStampedModel):
     MAX_SIZE_BYTES = 10 * 1024 * 1024
 
-    ALLOWED_CONTENT_TYPES = frozenset(
-        {
-            "image/png",
-            "image/jpeg",
-            "image/gif",
-            "application/pdf",
-            "text/plain",
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/zip",
-        }
-    )
+    CONTENT_TYPE_EXTENSIONS = {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/gif": ".gif",
+        "application/pdf": ".pdf",
+        "text/plain": ".txt",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+        "application/zip": ".zip",
+    }
+    ALLOWED_CONTENT_TYPES = frozenset(CONTENT_TYPE_EXTENSIONS)
 
     ticket = models.ForeignKey(
         Ticket,
@@ -124,7 +131,8 @@ class Attachment(TimeStampedModel):
         blank=True,
         related_name="attachments",
     )
-    file = models.FileField(upload_to="attachments/%Y/%m/%d/")
+    file = models.FileField(upload_to=attachment_upload_path)
+    original_name = models.CharField(max_length=255, blank=True, default="")
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

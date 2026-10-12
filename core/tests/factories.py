@@ -74,6 +74,7 @@ class AttachmentFactory(factory.django.DjangoModelFactory):
     ticket = factory.SubFactory(TicketFactory)
     comment = None
     file = factory.django.FileField(filename="attachment.txt", data=b"hello world")
+    original_name = "attachment.txt"
     uploaded_by = factory.SubFactory(UserFactory)
     size = factory.LazyAttribute(lambda attachment: attachment.file.size)
     content_type = "text/plain"

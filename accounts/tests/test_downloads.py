@@ -1,3 +1,4 @@
+import os
 import shutil
 import tempfile
 from types import SimpleNamespace
@@ -27,8 +28,8 @@ class SignedDownloadTests(TestCase):
         self.name = default_storage.save("downloads/sample.txt", ContentFile(b"hello world"))
         self.file = SimpleNamespace(name=self.name, storage=default_storage)
 
-    def _link(self, content_type="text/plain"):
-        return build_download_link(RequestFactory().get("/"), self.file, content_type)
+    def _link(self, content_type="text/plain", filename=None):
+        return build_download_link(RequestFactory().get("/"), self.file, content_type, filename)
 
     def _token_url(self, **payload):
         data = {"name": self.name, "content_type": "text/plain", **payload}
@@ -46,6 +47,25 @@ class SignedDownloadTests(TestCase):
         self.assertEqual(b"".join(response.streaming_content), b"hello world")
         self.assertEqual(response["Content-Type"], "text/plain")
         self.assertIn("no-store", response["Cache-Control"])
+
+    def test_response_is_forced_to_download_and_never_sniffed(self):
+        response = APIClient().get(self._link()["url"])
+        self.assertEqual(response.status_code, 200)
+        stored_name = os.path.basename(self.name)
+        self.assertEqual(response["Content-Disposition"], f'attachment; filename="{stored_name}"')
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        b"".join(response.streaming_content)
+
+    def test_link_carries_the_given_file_name(self):
+        response = APIClient().get(self._link(filename="report 2026.txt")["url"])
+        self.assertEqual(response["Content-Disposition"], 'attachment; filename="report 2026.txt"')
+        b"".join(response.streaming_content)
+
+    def test_links_signed_without_a_file_name_fall_back_to_the_stored_name(self):
+        response = APIClient().get(self._token_url())
+        stored_name = os.path.basename(self.name)
+        self.assertEqual(response["Content-Disposition"], f'attachment; filename="{stored_name}"')
+        b"".join(response.streaming_content)
 
     def test_the_signature_is_the_only_credential_needed(self):
         url = self._link()["url"]
@@ -93,16 +113,44 @@ class SignedDownloadTests(TestCase):
 
 
 class S3DownloadLinkTests(SimpleTestCase):
-    @override_settings(STORAGE_BACKEND="s3", DOWNLOAD_URL_TTL_SECONDS=120)
-    def test_s3_backend_returns_the_presigned_url_of_the_storage(self):
+    def _link(self, filename=None):
         storage = Mock()
         storage.url.return_value = "https://bucket.example/attachments/a.txt?signature=1"
         file = SimpleNamespace(name="attachments/a.txt", storage=storage)
+        link = build_download_link(RequestFactory().get("/"), file, "text/plain", filename)
+        return storage, link
 
-        link = build_download_link(RequestFactory().get("/"), file, "text/plain")
+    @override_settings(STORAGE_BACKEND="s3", DOWNLOAD_URL_TTL_SECONDS=120)
+    def test_s3_backend_returns_the_presigned_url_of_the_storage(self):
+        storage, link = self._link()
 
         self.assertEqual(
             link,
             {"url": "https://bucket.example/attachments/a.txt?signature=1", "expires_in": 120},
         )
-        storage.url.assert_called_once_with("attachments/a.txt", expire=120)
+        storage.url.assert_called_once_with(
+            "attachments/a.txt",
+            parameters={
+                "ResponseContentType": "text/plain",
+                "ResponseContentDisposition": 'attachment; filename="a.txt"',
+            },
+            expire=120,
+        )
+
+    @override_settings(STORAGE_BACKEND="s3", DOWNLOAD_URL_TTL_SECONDS=120)
+    def test_s3_url_forces_a_download_under_the_given_file_name(self):
+        storage, _ = self._link(filename="invoice.txt")
+
+        parameters = storage.url.call_args.kwargs["parameters"]
+        self.assertEqual(
+            parameters["ResponseContentDisposition"], 'attachment; filename="invoice.txt"'
+        )
+
+    @override_settings(STORAGE_BACKEND="s3", DOWNLOAD_URL_TTL_SECONDS=120)
+    def test_s3_url_encodes_a_persian_file_name(self):
+        storage, _ = self._link(filename="گزارش.txt")
+
+        disposition = storage.url.call_args.kwargs["parameters"]["ResponseContentDisposition"]
+        self.assertTrue(disposition.startswith("attachment; filename*=utf-8''"))
+        self.assertTrue(disposition.isascii())
+        self.assertTrue(disposition.endswith(".txt"))

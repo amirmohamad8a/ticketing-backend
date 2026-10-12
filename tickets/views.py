@@ -133,7 +133,10 @@ class AttachmentDownloadView(APIView):
 
     def get(self, request, pk):
         attachment = get_object_or_404(self._visible_attachments(request.user), pk=pk)
-        return Response(build_download_link(request, attachment.file, attachment.content_type))
+        link = build_download_link(
+            request, attachment.file, attachment.content_type, attachment.original_name
+        )
+        return Response(link)
 
     @staticmethod
     def _visible_attachments(user):
