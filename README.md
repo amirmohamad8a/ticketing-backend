@@ -6,6 +6,8 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 
 - Three roles (customer, agent, admin) on a custom user model
 - Self-service registration at `POST /api/auth/register/`: it always creates a customer (a role can never be chosen), checks the password with Django's validators and accepts an optional unique Iranian mobile number, which is normalized to `09XXXXXXXXX`
+- Profile at `GET/PATCH /api/auth/me/`: first and last name, an optional phone number and an optional avatar (PNG, JPEG or WebP up to 2 MB, verified as a real image and stored under a random name). The username and role cannot be changed there
+- Password change at `POST /api/auth/password/change/`: it needs the current password, applies Django's validators, revokes every refresh token of the user and returns a fresh token pair for the session that made the change
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout
 - Role-scoped querysets: a customer only ever sees their own tickets
 - Field-level permissions: customers can edit only the title and description of their own open tickets, and status, priority and assignee are staff-only
@@ -22,9 +24,13 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Database-free `/health/` endpoint for uptime checks
 - Automated tests with an 85% coverage threshold, GitHub Actions CI, and Render deploys that wait for CI to pass
 
+## Forgotten passwords
+
+There is no password reset by email. Outbound email is out of scope for this project, so a user who forgets their password asks an admin, who sets a new one in the Django admin site. Signed-in users change their own password with `POST /api/auth/password/change/`.
+
 ## Tech stack
 
-Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Celery, Redis, PostgreSQL, Docker, pytest. Celery and Redis are configured for background jobs and have no tasks yet. Production runs on Render (web service and Key Value) and Neon (PostgreSQL).
+Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, Celery, Redis, PostgreSQL, Docker, pytest. Celery and Redis are configured for background jobs and have no tasks yet. Production runs on Render (web service and Key Value) and Neon (PostgreSQL).
 
 ## Run locally
 

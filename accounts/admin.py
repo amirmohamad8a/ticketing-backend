@@ -5,7 +5,7 @@ from accounts.models import User
 
 
 class UserAdmin(DjangoUserAdmin):
-    fieldsets = DjangoUserAdmin.fieldsets + ((None, {"fields": ("role", "phone")}),)
+    fieldsets = DjangoUserAdmin.fieldsets + ((None, {"fields": ("role", "phone", "avatar")}),)
     add_fieldsets = DjangoUserAdmin.add_fieldsets + ((None, {"fields": ("role", "phone")}),)
     list_display = DjangoUserAdmin.list_display + ("role", "phone")
     list_filter = DjangoUserAdmin.list_filter + ("role",)
