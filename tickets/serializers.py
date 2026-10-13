@@ -7,6 +7,7 @@ from rest_framework import serializers
 from accounts.models import User
 from core.uploads import clean_file_name, ensure_content_matches
 from tickets.events import record_event
+from tickets.messages import comment_sender_type
 from tickets.models import Attachment, Comment, Ticket, TicketEvent
 
 
@@ -161,13 +162,7 @@ class CommentSerializer(serializers.ModelSerializer):
         ]
 
     def get_sender_type(self, obj) -> str:
-        if obj.kind == Comment.Kind.SYSTEM:
-            return "system"
-        if obj.visitor_id:
-            return "visitor"
-        if obj.author_id and obj.author.role == User.Role.CUSTOMER:
-            return "customer"
-        return "agent"
+        return comment_sender_type(obj)
 
     def validate_client_msg_id(self, value):
         return value or None

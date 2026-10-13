@@ -3,7 +3,21 @@ from django.utils.translation import gettext_lazy as _
 
 from rest_framework.exceptions import ValidationError
 
+from accounts.models import User
+from realtime.events import publish
 from tickets.models import Comment
+
+MESSAGE_EVENT_TYPE = "message.created"
+
+
+def comment_sender_type(comment):
+    if comment.kind == Comment.Kind.SYSTEM:
+        return "system"
+    if comment.visitor_id:
+        return "visitor"
+    if comment.author_id and comment.author.role == User.Role.CUSTOMER:
+        return "customer"
+    return "agent"
 
 
 def _find_existing(ticket, client_msg_id, author, visitor):
@@ -13,6 +27,21 @@ def _find_existing(ticket, client_msg_id, author, visitor):
         author=author,
         visitor=visitor,
     ).first()
+
+
+def _publish_created(comment):
+    publish(
+        MESSAGE_EVENT_TYPE,
+        comment.pk,
+        comment.ticket_id,
+        {
+            "kind": comment.kind,
+            "sender_type": comment_sender_type(comment),
+            "is_internal": comment.is_internal,
+            "client_msg_id": comment.client_msg_id,
+        },
+        staff_only=comment.is_internal,
+    )
 
 
 def post_message(
@@ -46,6 +75,7 @@ def post_message(
                 body=body,
                 is_internal=is_internal,
             )
+            _publish_created(comment)
     except IntegrityError:
         if not client_msg_id:
             raise

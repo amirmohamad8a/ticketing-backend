@@ -1,7 +1,3 @@
-from django.urls import path
+from realtime.routing import websocket_urlpatterns
 
-from core.consumers import EchoConsumer
-
-websocket_urlpatterns = [
-    path("ws/echo/", EchoConsumer.as_asgi()),
-]
+__all__ = ("websocket_urlpatterns",)

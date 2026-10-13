@@ -4,8 +4,9 @@ from django.conf import settings
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 
+from accounts.permissions import STAFF_ROLES
 from realtime.access import can_join_ticket
-from realtime.groups import ticket_group
+from realtime.groups import AGENTS_QUEUE_GROUP, ticket_group
 from realtime.limits import MessageRateLimiter
 
 CLOSE_UNSUPPORTED_DATA = 1003
@@ -25,6 +26,7 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         super().__init__(*args, **kwargs)
         self.user = None
         self.visitor = None
+        self.is_staff = False
         self.limiter = None
         self.ticket_ids = set()
 
@@ -37,15 +39,21 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
             return
         self.user = user if authenticated else None
         self.visitor = visitor
+        self.is_staff = self.user is not None and self.user.role in STAFF_ROLES
         self.limiter = MessageRateLimiter(
             settings.WS_RATE_LIMIT_MESSAGES, settings.WS_RATE_LIMIT_WINDOW_SECONDS
         )
+        if self.is_staff:
+            await self.channel_layer.group_add(AGENTS_QUEUE_GROUP, self.channel_name)
         await self.accept()
 
     async def disconnect(self, code):
         for ticket_id in self.ticket_ids:
             await self.channel_layer.group_discard(ticket_group(ticket_id), self.channel_name)
         self.ticket_ids.clear()
+        if self.is_staff:
+            await self.channel_layer.group_discard(AGENTS_QUEUE_GROUP, self.channel_name)
+            self.is_staff = False
 
     async def receive(self, text_data=None, bytes_data=None):
         if text_data is None:
@@ -76,6 +84,11 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
             await self._send_error("unknown_type")
 
     async def realtime_event(self, event):
+        if self.is_staff:
+            if event["group"] != AGENTS_QUEUE_GROUP:
+                return
+        elif event["staff_only"]:
+            return
         await self._send(event["payload"])
 
     async def _join(self, ticket_id):
