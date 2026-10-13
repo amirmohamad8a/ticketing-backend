@@ -137,6 +137,10 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Support ticketing system API — tickets, comments, attachments, audit history.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        "TicketStatusEnum": "tickets.models.Ticket.Status",
+        "PresenceStatusEnum": "realtime.presence.STATUSES",
+    },
 }
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])

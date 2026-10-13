@@ -21,6 +21,22 @@ paths:
                 items:
                   $ref: '#/components/schemas/Agent'
           description: ''
+  /api/agents/online/:
+    get:
+      operationId: agents_online_list
+      tags:
+      - Agents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OnlineAgent'
+          description: ''
   /api/attachments/{id}/download/:
     get:
       operationId: attachments_download_retrieve
@@ -182,6 +198,133 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DownloadLink'
+          description: ''
+  /api/sites/:
+    get:
+      operationId: sites_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: مقدار نشانگر صفحه‌بندی.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - in: query
+        name: key
+        schema:
+          type: string
+      tags:
+      - Sites
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSiteList'
+          description: ''
+    post:
+      operationId: sites_create
+      tags:
+      - Sites
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Site'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Site'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Site'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+          description: ''
+  /api/sites/{id}/:
+    get:
+      operationId: sites_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این site را شناسایی میکند.
+        required: true
+      tags:
+      - Sites
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+          description: ''
+    patch:
+      operationId: sites_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این site را شناسایی میکند.
+        required: true
+      tags:
+      - Sites
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSite'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+          description: ''
+  /api/sites/{id}/rotate-key/:
+    post:
+      operationId: sites_rotate_key_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این site را شناسایی میکند.
+        required: true
+      tags:
+      - Sites
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
           description: ''
   /api/tickets/:
     get:
@@ -416,6 +559,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/Ticket'
           description: ''
+  /api/tickets/{id}/claim/:
+    post:
+      operationId: tickets_claim_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+          description: ''
   /api/tickets/{id}/comments/:
     get:
       operationId: tickets_comments_retrieve
@@ -552,6 +716,63 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Ticket'
+          description: ''
+  /api/tickets/{id}/messages/:
+    get:
+      operationId: tickets_messages_retrieve
+      parameters:
+      - in: query
+        name: after
+        schema:
+          type: integer
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+          description: ''
+  /api/tickets/{id}/read/:
+    post:
+      operationId: tickets_read_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadMark'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReadMark'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReadMark'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadState'
           description: ''
   /api/tickets/{id}/restore/:
     post:
@@ -742,6 +963,256 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+  /api/widget/attachments/{id}/download/:
+    get:
+      operationId: widget_attachments_download_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Widget
+      security:
+      - visitorToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadLink'
+          description: ''
+  /api/widget/config/:
+    get:
+      operationId: widget_config_retrieve
+      parameters:
+      - in: query
+        name: key
+        schema:
+          type: string
+        required: true
+      tags:
+      - Widget
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetConfig'
+          description: ''
+  /api/widget/conversations/:
+    post:
+      operationId: widget_conversations_create
+      tags:
+      - Widget
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConversationCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConversationCreate'
+        required: true
+      security:
+      - visitorToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetConversationStart'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetConversationStart'
+          description: ''
+  /api/widget/conversations/{id}/attachments/:
+    post:
+      operationId: widget_conversations_attachments_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Widget
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WidgetUpload'
+        required: true
+      security:
+      - visitorToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetMessage'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetMessage'
+          description: ''
+  /api/widget/conversations/{id}/messages/:
+    get:
+      operationId: widget_conversations_messages_retrieve
+      parameters:
+      - in: query
+        name: after
+        schema:
+          type: integer
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Widget
+      security:
+      - visitorToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetMessageList'
+          description: ''
+    post:
+      operationId: widget_conversations_messages_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Widget
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WidgetMessageInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WidgetMessageInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WidgetMessageInput'
+        required: true
+      security:
+      - visitorToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetMessage'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetMessage'
+          description: ''
+  /api/widget/conversations/{id}/read/:
+    post:
+      operationId: widget_conversations_read_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Widget
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadMark'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReadMark'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReadMark'
+      security:
+      - visitorToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadState'
+          description: ''
+  /api/widget/ws/ticket/:
+    post:
+      operationId: widget_ws_ticket_create
+      tags:
+      - Widget
+      security:
+      - visitorToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketTicket'
+          description: ''
+  /api/ws/ticket/:
+    post:
+      operationId: ws_ticket_create
+      tags:
+      - Realtime
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketTicket'
+          description: ''
 components:
   schemas:
     Agent:
@@ -761,6 +1232,95 @@ components:
       - id
       - name
       - role
+    ChannelEnum:
+      enum:
+      - portal
+      - chat
+      - offline_form
+      type: string
+      description: |-
+        * `portal` - Portal
+        * `chat` - Chat
+        * `offline_form` - Offline form
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        ticket:
+          type: integer
+          readOnly: true
+        author:
+          type: integer
+          readOnly: true
+          nullable: true
+        visitor:
+          type: integer
+          readOnly: true
+          nullable: true
+        sender_type:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/KindEnum'
+          readOnly: true
+        client_msg_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        body:
+          type: string
+        is_internal:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - author
+      - body
+      - created_at
+      - id
+      - kind
+      - sender_type
+      - ticket
+      - updated_at
+      - visitor
+    ConversationCreate:
+      type: object
+      properties:
+        site_key:
+          type: string
+          maxLength: 64
+        body:
+          type: string
+          maxLength: 4000
+        client_msg_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        name:
+          type: string
+          maxLength: 100
+        phone:
+          type: string
+          nullable: true
+          maxLength: 32
+        email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+      required:
+      - body
     DownloadLink:
       type: object
       properties:
@@ -774,6 +1334,14 @@ components:
       required:
       - expires_in
       - url
+    KindEnum:
+      enum:
+      - message
+      - system
+      type: string
+      description: |-
+        * `message` - Message
+        * `system` - System
     Logout:
       type: object
       properties:
@@ -782,6 +1350,77 @@ components:
           writeOnly: true
       required:
       - refresh
+    MessageList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+          readOnly: true
+        has_more:
+          type: boolean
+          readOnly: true
+        unread_count:
+          type: integer
+          readOnly: true
+      required:
+      - has_more
+      - results
+      - unread_count
+    OnlineAgent:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PresenceStatusEnum'
+          readOnly: true
+        max_concurrent_chats:
+          type: integer
+          readOnly: true
+        open_chats:
+          type: integer
+          readOnly: true
+        accepting_chats:
+          type: boolean
+          readOnly: true
+      required:
+      - accepting_chats
+      - id
+      - max_concurrent_chats
+      - name
+      - open_chats
+      - role
+      - status
+    PaginatedSiteList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Site'
     PaginatedTicketList:
       type: object
       required:
@@ -871,6 +1510,50 @@ components:
           allOf:
           - $ref: '#/components/schemas/RoleEnum'
           readOnly: true
+    PatchedSite:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        key:
+          type: string
+          readOnly: true
+        allowed_origins:
+          type: array
+          items:
+            type: string
+            maxLength: 255
+          maxItems: 20
+        is_active:
+          type: boolean
+        greeting:
+          type: string
+          maxLength: 500
+        primary_color:
+          type: string
+          maxLength: 7
+        position:
+          $ref: '#/components/schemas/PositionEnum'
+        offline_timeout_minutes:
+          type: integer
+          maximum: 1440
+          minimum: 1
+        require_name:
+          type: boolean
+        require_contact:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedTicket:
       type: object
       properties:
@@ -883,15 +1566,19 @@ components:
         description:
           type: string
         status:
-          $ref: '#/components/schemas/StatusEnum'
+          $ref: '#/components/schemas/TicketStatusEnum'
         priority:
           $ref: '#/components/schemas/PriorityEnum'
         customer:
           type: integer
           readOnly: true
+          nullable: true
         assignee:
           type: integer
           nullable: true
+        unread_count:
+          type: integer
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -914,6 +1601,22 @@ components:
           type: string
           writeOnly: true
           maxLength: 128
+    PositionEnum:
+      enum:
+      - bottom_right
+      - bottom_left
+      type: string
+      description: |-
+        * `bottom_right` - Bottom right
+        * `bottom_left` - Bottom left
+    PresenceStatusEnum:
+      enum:
+      - available
+      - away
+      type: string
+      description: |-
+        * `available` - available
+        * `away` - away
     PriorityEnum:
       enum:
       - low
@@ -968,6 +1671,26 @@ components:
       - id
       - role
       - username
+    ReadMark:
+      type: object
+      properties:
+        last_read_comment_id:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 1
+          format: int64
+    ReadState:
+      type: object
+      properties:
+        last_read_comment_id:
+          type: integer
+          readOnly: true
+        unread_count:
+          type: integer
+          readOnly: true
+      required:
+      - last_read_comment_id
+      - unread_count
     Register:
       type: object
       properties:
@@ -1016,20 +1739,68 @@ components:
         * `customer` - Customer
         * `agent` - Agent
         * `admin` - Admin
-    StatusEnum:
-      enum:
-      - open
-      - in_progress
-      - waiting_on_customer
-      - resolved
-      - closed
-      type: string
-      description: |-
-        * `open` - Open
-        * `in_progress` - In Progress
-        * `waiting_on_customer` - Waiting on Customer
-        * `resolved` - Resolved
-        * `closed` - Closed
+    Site:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        key:
+          type: string
+          readOnly: true
+        allowed_origins:
+          type: array
+          items:
+            type: string
+            maxLength: 255
+          maxItems: 20
+        is_active:
+          type: boolean
+        greeting:
+          type: string
+          maxLength: 500
+        primary_color:
+          type: string
+          maxLength: 7
+        position:
+          $ref: '#/components/schemas/PositionEnum'
+        offline_timeout_minutes:
+          type: integer
+          maximum: 1440
+          minimum: 1
+        require_name:
+          type: boolean
+        require_contact:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - key
+      - name
+      - updated_at
+    SocketTicket:
+      type: object
+      properties:
+        ticket:
+          type: string
+          readOnly: true
+        expires_in:
+          type: integer
+          readOnly: true
+      required:
+      - expires_in
+      - ticket
     Ticket:
       type: object
       properties:
@@ -1042,15 +1813,19 @@ components:
         description:
           type: string
         status:
-          $ref: '#/components/schemas/StatusEnum'
+          $ref: '#/components/schemas/TicketStatusEnum'
         priority:
           $ref: '#/components/schemas/PriorityEnum'
         customer:
           type: integer
           readOnly: true
+          nullable: true
         assignee:
           type: integer
           nullable: true
+        unread_count:
+          type: integer
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -1065,7 +1840,22 @@ components:
       - description
       - id
       - title
+      - unread_count
       - updated_at
+    TicketStatusEnum:
+      enum:
+      - open
+      - in_progress
+      - waiting_on_customer
+      - resolved
+      - closed
+      type: string
+      description: |-
+        * `open` - Open
+        * `in_progress` - In Progress
+        * `waiting_on_customer` - Waiting on Customer
+        * `resolved` - Resolved
+        * `closed` - Closed
     TokenObtainPair:
       type: object
       properties:
@@ -1194,8 +1984,218 @@ components:
       - id
       - password
       - username
+    WidgetAttachment:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        file:
+          type: string
+          format: uri
+          writeOnly: true
+        original_name:
+          type: string
+          readOnly: true
+        download_url:
+          type: string
+          readOnly: true
+        size:
+          type: integer
+          readOnly: true
+        content_type:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - content_type
+      - created_at
+      - download_url
+      - file
+      - id
+      - original_name
+      - size
+    WidgetConfig:
+      type: object
+      properties:
+        name:
+          type: string
+          readOnly: true
+        greeting:
+          type: string
+          readOnly: true
+        primary_color:
+          type: string
+          readOnly: true
+        position:
+          allOf:
+          - $ref: '#/components/schemas/PositionEnum'
+          readOnly: true
+        offline_timeout_minutes:
+          type: integer
+          readOnly: true
+        require_name:
+          type: boolean
+          readOnly: true
+        require_contact:
+          type: boolean
+          readOnly: true
+        agents_available:
+          type: boolean
+          readOnly: true
+      required:
+      - agents_available
+      - greeting
+      - name
+      - offline_timeout_minutes
+      - position
+      - primary_color
+      - require_contact
+      - require_name
+    WidgetConversation:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TicketStatusEnum'
+          readOnly: true
+        channel:
+          allOf:
+          - $ref: '#/components/schemas/ChannelEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - channel
+      - created_at
+      - id
+      - status
+    WidgetConversationStart:
+      type: object
+      properties:
+        token:
+          type: string
+          readOnly: true
+        conversation:
+          allOf:
+          - $ref: '#/components/schemas/WidgetConversation'
+          readOnly: true
+        message:
+          allOf:
+          - $ref: '#/components/schemas/WidgetMessage'
+          readOnly: true
+        agents_available:
+          type: boolean
+          readOnly: true
+      required:
+      - agents_available
+      - conversation
+      - message
+      - token
+    WidgetMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        sender_type:
+          type: string
+          readOnly: true
+        sender_name:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/KindEnum'
+          readOnly: true
+        client_msg_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        body:
+          type: string
+          readOnly: true
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/WidgetAttachment'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attachments
+      - body
+      - created_at
+      - id
+      - kind
+      - sender_name
+      - sender_type
+    WidgetMessageInput:
+      type: object
+      properties:
+        body:
+          type: string
+          maxLength: 4000
+        client_msg_id:
+          type: string
+          nullable: true
+          maxLength: 64
+      required:
+      - body
+    WidgetMessageList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/WidgetMessage'
+          readOnly: true
+        has_more:
+          type: boolean
+          readOnly: true
+        agents_available:
+          type: boolean
+          readOnly: true
+        unread_count:
+          type: integer
+          readOnly: true
+      required:
+      - agents_available
+      - has_more
+      - results
+      - unread_count
+    WidgetUpload:
+      type: object
+      properties:
+        file:
+          type: string
+          format: uri
+        body:
+          type: string
+          default: ''
+          maxLength: 4000
+        client_msg_id:
+          type: string
+          nullable: true
+          maxLength: 64
+      required:
+      - file
   securitySchemes:
     jwtAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    visitorToken:
+      type: apiKey
+      in: header
+      name: X-Visitor-Token
