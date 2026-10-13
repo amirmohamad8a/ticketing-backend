@@ -6,8 +6,9 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 
 from accounts.permissions import STAFF_ROLES
 from realtime.access import can_join_ticket
+from realtime.events import publish_typing
 from realtime.groups import AGENTS_QUEUE_GROUP, ticket_group
-from realtime.limits import MessageRateLimiter
+from realtime.limits import MessageRateLimiter, TypingThrottle
 
 CLOSE_UNSUPPORTED_DATA = 1003
 CLOSE_MESSAGE_TOO_BIG = 1009
@@ -28,6 +29,10 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         self.visitor = None
         self.is_staff = False
         self.limiter = None
+        self.typing = None
+        self.identity = None
+        self.sender_type = None
+        self.sender_name = ""
         self.ticket_ids = set()
 
     async def connect(self):
@@ -40,14 +45,26 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         self.user = user if authenticated else None
         self.visitor = visitor
         self.is_staff = self.user is not None and self.user.role in STAFF_ROLES
+        if self.user is not None:
+            self.identity = f"user:{self.user.pk}"
+            self.sender_type = "agent" if self.is_staff else "customer"
+            self.sender_name = self.user.get_full_name() or self.user.username
+        else:
+            self.identity = f"visitor:{self.visitor.pk}"
+            self.sender_type = "visitor"
+            self.sender_name = self.visitor.name
         self.limiter = MessageRateLimiter(
             settings.WS_RATE_LIMIT_MESSAGES, settings.WS_RATE_LIMIT_WINDOW_SECONDS
         )
+        self.typing = TypingThrottle(settings.WS_TYPING_THROTTLE_SECONDS)
         if self.is_staff:
             await self.channel_layer.group_add(AGENTS_QUEUE_GROUP, self.channel_name)
         await self.accept()
 
     async def disconnect(self, code):
+        if self.typing is not None:
+            for ticket_id in self.typing.active_tickets():
+                await self._relay_typing(ticket_id, False)
         for ticket_id in self.ticket_ids:
             await self.channel_layer.group_discard(ticket_group(ticket_id), self.channel_name)
         self.ticket_ids.clear()
@@ -80,6 +97,8 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
             await self._join(content.get("ticket_id"))
         elif message_type == "leave":
             await self._leave(content.get("ticket_id"))
+        elif message_type == "typing":
+            await self._typing(content.get("ticket_id"), content.get("is_typing"))
         else:
             await self._send_error("unknown_type")
 
@@ -88,6 +107,11 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
             if event["group"] != AGENTS_QUEUE_GROUP:
                 return
         elif event["staff_only"]:
+            return
+        await self._send(event["payload"])
+
+    async def realtime_typing(self, event):
+        if event["sender"] == self.identity:
             return
         await self._send(event["payload"])
 
@@ -113,9 +137,30 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
             await self._send_error("invalid_ticket_id")
             return
         if ticket_id in self.ticket_ids:
+            if self.typing.is_typing(ticket_id):
+                await self._relay_typing(ticket_id, False)
+            self.typing.clear(ticket_id)
             await self.channel_layer.group_discard(ticket_group(ticket_id), self.channel_name)
             self.ticket_ids.discard(ticket_id)
         await self._send({"type": "left", "ticket_id": ticket_id})
+
+    async def _typing(self, ticket_id, is_typing):
+        if not _is_valid_id(ticket_id):
+            await self._send_error("invalid_ticket_id")
+            return
+        if not isinstance(is_typing, bool):
+            await self._send_error("invalid_message", ticket_id)
+            return
+        if ticket_id not in self.ticket_ids:
+            await self._send_error("not_joined", ticket_id)
+            return
+        if self.typing.allow(ticket_id, is_typing):
+            await self._relay_typing(ticket_id, is_typing)
+
+    async def _relay_typing(self, ticket_id, is_typing):
+        await publish_typing(
+            ticket_id, is_typing, self.identity, self.sender_type, self.sender_name
+        )
 
     async def _send(self, payload):
         await self.send(text_data=json.dumps(payload, ensure_ascii=False, separators=(",", ":")))

@@ -10,6 +10,8 @@ from realtime.groups import AGENTS_QUEUE_GROUP, ticket_group
 logger = logging.getLogger(__name__)
 
 CHANNEL_EVENT_TYPE = "realtime.event"
+CHANNEL_TYPING_TYPE = "realtime.typing"
+TYPING_EVENT_TYPE = "typing"
 
 
 async def _send_to_groups(layer, payload, staff_only, public_payload=None):
@@ -47,3 +49,27 @@ def publish(event_type, event_id, ticket_id, data, staff_only=False, public_data
     if public_data is not None:
         public_payload = _build_payload(event_type, event_id, ticket_id, public_data)
     transaction.on_commit(lambda: _deliver(payload, staff_only, public_payload), robust=True)
+
+
+async def publish_typing(ticket_id, is_typing, sender_key, sender_type, sender_name):
+    layer = get_channel_layer()
+    if layer is None:
+        return
+    message = {
+        "type": CHANNEL_TYPING_TYPE,
+        "sender": sender_key,
+        "payload": {
+            "type": TYPING_EVENT_TYPE,
+            "ticket_id": ticket_id,
+            "is_typing": is_typing,
+            "sender_type": sender_type,
+            "sender_name": sender_name,
+        },
+    }
+    try:
+        await layer.group_send(ticket_group(ticket_id), message)
+    except Exception:
+        logger.exception(
+            "Failed to publish a typing event",
+            extra={"ticket_id": ticket_id, "event_type": TYPING_EVENT_TYPE},
+        )
