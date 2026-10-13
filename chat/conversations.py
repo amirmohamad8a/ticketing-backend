@@ -3,6 +3,8 @@ from django.utils.text import Truncator
 
 from chat.assignment import route_new_chat
 from chat.models import Visitor
+from chat.offline import fallback_countdown
+from chat.tasks import convert_to_offline
 from chat.visitors import start_visitor_session
 from tickets.events import record_event
 from tickets.messages import post_message
@@ -22,6 +24,14 @@ def active_conversation(visitor):
         .exclude(status__in=FINISHED_STATUSES)
         .order_by("-created_at", "-id")
         .first()
+    )
+
+
+def _schedule_offline_fallback(ticket):
+    countdown = fallback_countdown(ticket.site)
+    transaction.on_commit(
+        lambda: convert_to_offline.apply_async(args=[ticket.pk], countdown=countdown),
+        robust=True,
     )
 
 
@@ -48,6 +58,7 @@ def open_conversation(visitor, body, client_msg_id=None):
         comment, _posted = post_message(ticket, body, visitor=visitor, client_msg_id=client_msg_id)
         if created:
             route_new_chat(ticket)
+            _schedule_offline_fallback(ticket)
     return ticket, comment, created
 
 

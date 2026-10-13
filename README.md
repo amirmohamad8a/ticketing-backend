@@ -23,6 +23,7 @@ A support-ticketing REST API built with Django and Django REST Framework, with a
 - Agent presence: agents and admins keep a presence socket open at `/ws/presence/`. Presence lives in Redis with a time-to-live that a heartbeat refreshes, so a closed tab goes offline by itself. Each staff member is `available` or `away`, and `GET /api/agents/online/` lists who is online with their open chat count and capacity
 - Chat routing: a new chat is assigned right away to the available agent with the fewest open chats (the one who was assigned a chat longest ago breaks ties), never above `max_concurrent_chats`. The assignment goes through the normal ticket serializer, so the audit event is written and the assignee rules apply, and concurrent new chats are serialized with row locks so one agent is not overloaded. With nobody available the chat stays unassigned in the queue
 - Claiming: an agent or admin can take an unassigned ticket with `POST /api/tickets/{id}/claim/`, and two agents claiming at once cannot both win
+- Offline fallback: when a new chat is started, a Celery task is scheduled with a `countdown`. If no agent is online it runs at once, otherwise after the site's `offline_timeout_minutes`. Unless an agent has replied by then, the conversation becomes an `offline_form` ticket, with an audit event, a system message and a push to the widget asking for optional contact details. The task is idempotent
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout. Tokens are signed with their own `JWT_SIGNING_KEY`, so a leaked `SECRET_KEY` cannot be used to forge them
 - Immediate token revocation: a password change or reset invalidates the user's access tokens at once instead of at the end of their 15-minute lifetime, and deactivation does the same
 - Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management, site management, signed downloads and WebSocket tickets. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
@@ -33,7 +34,7 @@ A support-ticketing REST API built with Django and Django REST Framework, with a
 - Soft delete: only admins can delete a ticket, deletion hides it without removing its comments, attachments or audit rows, and admins can restore it at `/api/tickets/{id}/restore/`
 - Ticket status state machine: illegal transitions return 400 and write nothing
 - Assignee validation: a ticket can only be assigned to an active agent or admin
-- Append-only audit trail of status and assignee changes, enforced in the model and readable at `/api/tickets/{id}/events/`
+- Append-only audit trail of status, assignee and channel changes, enforced in the model and readable at `/api/tickets/{id}/events/`
 - Comments with internal notes that customers never receive
 - Attachments on tickets and on comments, with a 10 MB limit and a content-type allowlist. Customers cannot see or reach the attachments of internal comments, and only a comment's author can attach files to it
 - File safety: the real content type of every upload is read from its magic bytes with a pure-Python library (`filetype`), so the Docker image needs no system packages. The detected type must be on the allowlist and must match the declared `content_type`, so a script renamed to `.png` or a PNG labelled as a PDF is rejected. DOCX and plain ZIP files, both ZIP containers, are told apart by reading the archive's file list, and archives are never extracted. Attachments are stored under random names with the extension taken from the verified type, and the original name is kept in `original_name` for display. Avatars go through the same check
@@ -54,7 +55,7 @@ A support-ticketing REST API built with Django and Django REST Framework, with a
 | --- | --- |
 | `accounts` | The user model, registration, profile, password change, user management, avatars and the `UserEvent` audit log |
 | `tickets` | Tickets, comments (which are also chat messages), attachments, read state, the `TicketEvent` audit log, assignment and claiming |
-| `chat` | Sites, visitors, visitor tokens, the public widget API, conversations and chat routing |
+| `chat` | Sites, visitors, visitor tokens, the public widget API, conversations, chat routing and the offline fallback task |
 | `realtime` | The WebSocket consumers, single-use socket tickets, event publishing, agent presence and the online agents endpoint |
 | `core` | Shared infrastructure: the error envelope, logging, the request ID middleware, upload checks, signed downloads, storage and the append-only and soft-delete base models |
 | `config` | Settings (`base`, `dev`, `prod`, `test`), URLs, ASGI routing and Celery |
@@ -107,7 +108,7 @@ Admins manage the sites that will host the chat widget at `/api/sites/`. Every r
 - `allowed_origins`: up to 20 origins in the form `scheme://host[:port]` with `http` or `https` only. Paths, queries, fragments, credentials and wildcards are rejected. Values are lowercased, default ports (`:80` and `:443`) are dropped and duplicates are removed, so what is stored matches what a browser sends in the `Origin` header
 - `primary_color`: a color in the form `#rrggbb`
 - `position`: `bottom_right` or `bottom_left`
-- `offline_timeout_minutes`: from 1 to 1440
+- `offline_timeout_minutes`: from 1 to 1440. It is how long a new chat may stay unanswered before it becomes an offline ticket (see Offline fallback)
 - `greeting`, `require_name` and `require_contact` are plain widget settings
 - Sites cannot be deleted. Set `is_active` to `false` instead
 
@@ -123,6 +124,7 @@ Admins manage the sites that will host the chat widget at `/api/sites/`. Every r
 - Exactly one of `customer` and `visitor` is set on every ticket (`ticket_exactly_one_owner`). A ticket with both or neither is rejected by the database
 - Visitor tickets have `customer: null` in ticket responses. Customers never see them, and staff see them in the same list as portal tickets
 - `Visitor.phone` uses the same canonical Iranian mobile format as user phones
+- A `chat` ticket becomes an `offline_form` ticket when nobody answers it (see Offline fallback). The change is written to the audit trail as a `channel` event
 
 ## Messages
 
@@ -190,13 +192,13 @@ The embeddable widget talks to these routes. They need no staff account.
 - Authentication: send the token from the first `POST /api/widget/conversations/` in an `X-Visitor-Token` header. A missing, tampered or expired token, and the token of a deactivated site, get `401`. A token is valid for `VISITOR_TOKEN_LIFETIME_DAYS` days
 - Origin: the `Origin` header must be one of the site's `allowed_origins`. A missing header, an unlisted origin or a site with no origins gets `403`, so add the host page's origin to the site before embedding the widget. The routes send CORS headers to any origin so the browser can read that `403`, and the origin check is what enforces access
 - Starting a conversation: `body` (up to 4000 characters) is the first message and is always required. Without a token, `site_key` is required, a visitor is created and `name`, `phone` and `email` are stored (the site's `require_name` and `require_contact` are enforced). With a token, the token is replaced by a fresh one, and the message goes into the visitor's current conversation (one that is not resolved or closed) or opens a new one. The response is `201` when a conversation was created and `200` otherwise, and carries `token`, `conversation`, `message` and `agents_available`
-- A conversation is a ticket with `channel` `chat`. Its title is the start of the first message and its description is empty, because the messages are the content. A new conversation is routed to an available agent when it is created (see Chat routing)
+- A conversation is a ticket with `channel` `chat`. Its title is the start of the first message and its description is empty, because the messages are the content. A new conversation is routed to an available agent when it is created (see Chat routing), and an offline fallback is scheduled for it (see Offline fallback)
 - Messages: responses never contain internal notes. `GET` returns at most 100 messages as `{results, has_more, agents_available, unread_count}`, so a client that reconnects calls it with the last id it saw until `has_more` is `false` (see Missed-message recovery). `unread_count` is the number of staff messages the visitor has not marked as read
 - Closed conversations: sending a message or a file into a resolved or closed conversation gets `409` with the code `conversation_closed`. Start a new conversation with `POST /api/widget/conversations/` instead
 - Attachments: the file becomes a message of its own, so it appears in order in the thread. It must pass the same size, type and magic-byte checks as every other upload
 - Downloads: a visitor can only get a URL for a file on a public message of their own conversation. Everything else is `404`
 - Another visitor's conversation, message or file is always `404`
-- `agents_available` is `true` while at least one active agent or admin exists. It does not use presence yet
+- `agents_available` is `true` while at least one active agent or admin has a live presence entry with the status `available`
 
 ## Forgotten passwords
 
@@ -250,9 +252,12 @@ Changes are pushed to sockets as events with the shape `{"type", "id", "ticket_i
 | --- | --- | --- | --- |
 | `message.created` | The message id | `message_id`, `kind`, `sender_type`, `is_internal`, `client_msg_id` | Everyone in the ticket. Internal notes reach staff only |
 | `ticket.event` | The audit event id | `field_changed`, `old_value`, `new_value` | Everyone in the ticket. Assignee changes reach staff only |
+| `conversation.offline` | The audit event id of the channel change | `has_contact` | Everyone in the ticket and the agents queue |
 
 - Agents and admins receive the events of every ticket through the agents queue. Customers and visitors receive the events of the tickets they have joined
-- `data.message_id` of a `message.created` event is the id to use as the `after` cursor. The `id` of a `ticket.event` is an audit row id from another sequence and must never be used as a cursor
+- `data.message_id` of a `message.created` event is the id to use as the `after` cursor. The `id` of a `ticket.event` or a `conversation.offline` event is an audit row id from another sequence and must never be used as a cursor
+- `conversation.offline` tells the widget that the chat became an offline ticket. `has_contact` is `true` when the visitor already left a phone number or an email, so the widget can skip asking for them
+- A conversion also produces a `ticket.event` with `field_changed` set to `channel` and a `message.created` event for the system message
 - Events do not carry the message text. Clients fetch messages as described in Missed-message recovery
 
 ### Typing indicators
@@ -325,7 +330,7 @@ Agents and admins connect to `ws://localhost:8000/ws/presence/?ticket=<ticket>` 
 ]
 ```
 
-- `open_chats` counts the chat tickets assigned to the agent that are not deleted, resolved or closed
+- `open_chats` counts the chat tickets assigned to the agent that are not deleted, resolved or closed. A chat that was converted to an offline ticket no longer counts
 - `accepting_chats` is `true` when the status is `available` and `open_chats` is below `max_concurrent_chats`
 - Staff set their own `max_concurrent_chats` (1 to 50, default 5) at `PATCH /api/auth/me/`
 
@@ -339,7 +344,7 @@ When a visitor starts a new conversation, the backend tries to assign it to an a
 4. Pick the agent with the fewest open chats. On a tie, pick the one who was assigned a chat longest ago (agents never assigned one go first), and then the lowest id
 5. Assign through the normal ticket serializer, so the assignee rules apply (an active agent or admin) and an `assignee` audit event is written with no actor
 
-- With no available agent the conversation stays unassigned in the queue. Later messages in the same conversation do not trigger routing again
+- With no available agent the conversation stays unassigned in the queue. Later messages in the same conversation do not trigger routing again. The offline fallback decides what happens to a chat that stays unanswered (see Offline fallback)
 - `last_chat_assigned_at` on the user is updated whenever routing or a claim assigns a chat, and it drives the round-robin tie-break
 - The assignee audit event reaches staff sockets only, never customers or visitors
 
@@ -353,9 +358,37 @@ When a visitor starts a new conversation, the backend tries to assign it to an a
 - The ticket row is locked while it is checked, so two agents claiming at once cannot both succeed
 - A deleted ticket is `404`. A manual claim does not check the caller's `max_concurrent_chats`
 
+## Offline fallback
+
+A chat that nobody answers becomes an offline ticket, so the visitor can leave contact details and be answered later. The Celery worker must be running (`docker compose up` starts it).
+
+When a visitor starts a new conversation, `chat.convert_to_offline` is scheduled with a `countdown`, after the transaction commits:
+
+- Nobody online (no active agent or admin with the presence status `available`): countdown `0`
+- Someone online: the site's `offline_timeout_minutes`, counted from the start of the conversation
+
+The task changes nothing, and returns `false`, when:
+
+- the ticket does not exist or is deleted
+- the ticket is no longer a `chat` ticket, which makes every repeated run a no-op
+- the ticket is resolved or closed
+- an agent or admin has already written a public message in it (internal notes do not count)
+
+Otherwise it does this in one transaction, with the ticket row locked:
+
+1. Sets `channel` to `offline_form`
+2. Writes a `channel` audit event (`chat` to `offline_form`, no actor)
+3. Adds a `system` message telling the visitor to leave contact details
+4. Pushes a `conversation.offline` event with `has_contact`, which is `true` when the visitor already gave a phone or an email
+
+- The assignee is kept, and the conversation continues in the same ticket. A converted ticket no longer counts towards an agent's open chats
+- The `channel` audit event reaches everyone in the ticket, like any non-assignee event
+- A broker outage when scheduling is logged and does not fail the visitor's request
+- The widget has no route yet for sending contact details after a conversation has started. The event only tells it to ask
+
 ## Tech stack
 
-Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Channels with Daphne, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Redis is Django's cache, which holds the throttle counters, the WebSocket tickets and the presence entries, the Channels layer that fans WebSocket events out between processes, and the Celery broker. Celery has no tasks yet.
+Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Channels with Daphne, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Redis is Django's cache, which holds the throttle counters, the WebSocket tickets and the presence entries, the Channels layer that fans WebSocket events out between processes, and the Celery broker. Celery runs the offline fallback task.
 
 ## Run locally
 
@@ -382,7 +415,13 @@ docker compose exec web python manage.py seed_demo
 
 `createsuperuser` creates a user with the customer role. To act as an agent or admin in the API, change the role in the admin site.
 
-Run the tests (they always use local storage, an in-memory cache and channel layer, and relaxed throttle limits, whatever `.env` says):
+The `celery` service starts with the stack and runs the offline fallback task. To watch it work, start a chat with no agent online and follow the worker log:
+
+```bash
+docker compose logs -f celery
+```
+
+Run the tests (they always use local storage, an in-memory cache, channel layer and Celery broker, and relaxed throttle limits, whatever `.env` says):
 
 ```bash
 docker compose exec -e STORAGE_BACKEND=local web pytest --cov
@@ -503,7 +542,7 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 
 Every push and pull request runs linting, the test suite and `check --deploy` on GitHub Actions. The project is run locally with Docker Compose and is not deployed anywhere.
 
-`Dockerfile.prod` builds the production image, which runs gunicorn with `config.settings.prod` as a non-root user. Gunicorn's own access log is switched off, because the app writes a JSON access line with the request ID for every request (see Logging). `.env.prod.example` lists everything that image needs: a PostgreSQL `DATABASE_URL`, `REDIS_URL`, a `JWT_SIGNING_KEY` that differs from `SECRET_KEY`, `STORAGE_BACKEND=s3` with the MinIO settings, and the host and origin lists. Migrations run when the container starts if `RUN_MIGRATIONS_ON_START=true`.
+`Dockerfile.prod` builds the production image, which runs gunicorn with `config.settings.prod` as a non-root user. Gunicorn's own access log is switched off, because the app writes a JSON access line with the request ID for every request (see Logging). `.env.prod.example` lists everything that image needs: a PostgreSQL `DATABASE_URL`, `REDIS_URL`, a `JWT_SIGNING_KEY` that differs from `SECRET_KEY`, `STORAGE_BACKEND=s3` with the MinIO settings, and the host and origin lists. Migrations run when the container starts if `RUN_MIGRATIONS_ON_START=true`. The offline fallback needs a Celery worker next to the web process, which the production Compose file will run as its own service in Task 18.1.
 
 ## License
 

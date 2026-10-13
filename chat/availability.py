@@ -1,7 +1,5 @@
-from accounts.models import User
-
-STAFF_ROLES = (User.Role.AGENT, User.Role.ADMIN)
+from realtime import presence
 
 
 def agents_available(site):
-    return User.objects.filter(is_active=True, role__in=STAFF_ROLES).exists()
+    return bool(presence.available_agent_ids())
