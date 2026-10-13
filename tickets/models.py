@@ -5,12 +5,19 @@ from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxLengthValidator
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import AppendOnlyModel, SoftDeleteModel, TimeStampedModel
 from core.search import build_search_vector
-from tickets.validators import MAX_BODY_LENGTH, MAX_SHORTCUT_LENGTH, validate_shortcut
+from tickets.validators import (
+    MAX_BODY_LENGTH,
+    MAX_SHORTCUT_LENGTH,
+    MAX_TAG_NAME_LENGTH,
+    normalize_tag_name,
+    validate_shortcut,
+)
 
 TICKET_SEARCH_FIELDS = ("title", "description")
 COMMENT_SEARCH_FIELDS = ("body",)
@@ -19,6 +26,34 @@ COMMENT_SEARCH_FIELDS = ("body",)
 def attachment_upload_path(instance, filename):
     extension = Attachment.CONTENT_TYPE_EXTENSIONS.get(instance.content_type, "")
     return f"attachments/{timezone.localdate():%Y/%m/%d}/{uuid.uuid4().hex}{extension}"
+
+
+class Tag(TimeStampedModel):
+    class Color(models.TextChoices):
+        GRAY = "gray", "Gray"
+        RED = "red", "Red"
+        ORANGE = "orange", "Orange"
+        YELLOW = "yellow", "Yellow"
+        GREEN = "green", "Green"
+        TEAL = "teal", "Teal"
+        BLUE = "blue", "Blue"
+        PURPLE = "purple", "Purple"
+        PINK = "pink", "Pink"
+
+    name = models.CharField(max_length=MAX_TAG_NAME_LENGTH)
+    color = models.CharField(max_length=10, choices=Color.choices, default=Color.GRAY)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(Lower("name"), name="tag_unique_name_ci"),
+        ]
+
+    def clean(self):
+        self.name = normalize_tag_name(self.name)
+
+    def __str__(self):
+        return self.name
 
 
 class Ticket(SoftDeleteModel, TimeStampedModel):
@@ -82,6 +117,7 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
         blank=True,
         related_name="assigned_tickets",
     )
+    tags = models.ManyToManyField(Tag, blank=True, related_name="tickets")
 
     class Meta:
         ordering = ["-created_at"]

@@ -51,3 +51,11 @@ canned_reply_schema = extend_schema_view(
     partial_update=extend_schema(tags=["Canned replies"]),
     destroy=extend_schema(tags=["Canned replies"]),
 )
+
+tag_schema = extend_schema_view(
+    list=extend_schema(tags=["Tags"]),
+    retrieve=extend_schema(tags=["Tags"]),
+    create=extend_schema(tags=["Tags"]),
+    partial_update=extend_schema(tags=["Tags"]),
+    destroy=extend_schema(tags=["Tags"]),
+)

@@ -1,11 +1,11 @@
 from django.utils.translation import gettext_lazy as _
 
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from accounts.models import User
 from tickets.models import Ticket
 
-STAFF_ONLY_FIELDS = frozenset({"status", "priority", "assignee"})
+STAFF_ONLY_FIELDS = frozenset({"status", "priority", "assignee", "tags"})
 
 
 def _is_customer(user):
@@ -29,6 +29,16 @@ class IsAgentOrAdmin(BasePermission):
             and request.user.is_authenticated
             and request.user.role in (User.Role.AGENT, User.Role.ADMIN)
         )
+
+
+class IsAdminOrAgentReadOnly(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if user.role == User.Role.ADMIN:
+            return True
+        return user.role == User.Role.AGENT and request.method in SAFE_METHODS
 
 
 class IsCustomerOwnerOrReadOwn(BasePermission):

@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from accounts.models import User
 from core.downloads import build_download_link
 from tickets.assignment import claim_ticket
+from tickets.events import TAG_FIELD
 from tickets.filters import TicketFilter
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
 from tickets.models import Attachment, Ticket
@@ -60,6 +61,8 @@ class TicketViewSet(viewsets.ModelViewSet):
             queryset = Ticket.objects.all()
         if user.role == User.Role.CUSTOMER:
             queryset = queryset.filter(customer=user)
+        else:
+            queryset = queryset.prefetch_related("tags")
         return annotate_unread(queryset, user)
 
     def get_serializer_class(self):
@@ -127,7 +130,10 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def events(self, request, pk=None):
         ticket = self.get_object()
-        serializer = TicketEventSerializer(ticket.events.all(), many=True)
+        events = ticket.events.all()
+        if request.user.role == User.Role.CUSTOMER:
+            events = events.exclude(field_changed=TAG_FIELD)
+        serializer = TicketEventSerializer(events, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=["get", "post"])

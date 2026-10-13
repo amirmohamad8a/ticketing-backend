@@ -1,6 +1,21 @@
 from django.contrib import admin
 
-from tickets.models import Attachment, CannedReply, Comment, ConversationRead, Ticket, TicketEvent
+from tickets.models import (
+    Attachment,
+    CannedReply,
+    Comment,
+    ConversationRead,
+    Tag,
+    Ticket,
+    TicketEvent,
+)
+
+
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "color", "updated_at")
+    list_filter = ("color",)
+    search_fields = ("name",)
 
 
 @admin.register(Ticket)
@@ -25,7 +40,7 @@ class TicketAdmin(admin.ModelAdmin):
         "visitor__name",
         "assignee__username",
     )
-    autocomplete_fields = ("customer", "visitor", "site", "assignee")
+    autocomplete_fields = ("customer", "visitor", "site", "assignee", "tags")
     readonly_fields = ("is_deleted", "deleted_at")
     actions = ["restore_selected"]
 

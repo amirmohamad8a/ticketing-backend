@@ -6,9 +6,10 @@ from rest_framework import serializers
 
 from accounts.models import User
 from core.uploads import clean_file_name, ensure_content_matches
-from tickets.events import record_event
+from tickets.events import record_event, tag_changes
 from tickets.messages import comment_sender_type
 from tickets.models import Attachment, Comment, Ticket, TicketEvent
+from tickets.validators import MAX_TICKET_TAGS
 
 
 class TicketSerializer(serializers.ModelSerializer):
@@ -24,6 +25,7 @@ class TicketSerializer(serializers.ModelSerializer):
             "priority",
             "customer",
             "assignee",
+            "tags",
             "unread_count",
             "created_at",
             "updated_at",
@@ -58,12 +60,29 @@ class TicketSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(_("Tickets cannot be assigned to an inactive user."))
         return value
 
+    def validate_tags(self, value):
+        value = list(dict.fromkeys(value))
+        if len(value) > MAX_TICKET_TAGS:
+            message = _("A ticket can have at most %(max)s tags.")
+            raise serializers.ValidationError(message % {"max": MAX_TICKET_TAGS})
+        return value
+
     def _get_actor(self):
         request = self.context.get("request")
         actor = getattr(request, "user", None)
         if actor is not None and not actor.is_authenticated:
             return None
         return actor
+
+    def _record_changes(self, ticket, actor, changes):
+        for field_changed, old_value, new_value in changes:
+            record_event(
+                ticket=ticket,
+                actor=actor,
+                field_changed=field_changed,
+                old_value=old_value,
+                new_value=new_value,
+            )
 
     def create(self, validated_data):
         actor = self._get_actor()
@@ -77,6 +96,7 @@ class TicketSerializer(serializers.ModelSerializer):
                 old_value="",
                 new_value=ticket.status,
             )
+            self._record_changes(ticket, actor, tag_changes([], ticket.tags.all()))
 
         return ticket
 
@@ -90,23 +110,19 @@ class TicketSerializer(serializers.ModelSerializer):
             old_assignee = instance.assignee.username if instance.assignee else ""
             new_assignee = validated_data["assignee"].username if validated_data["assignee"] else ""
             changes.append(("assignee", old_assignee, new_assignee))
+        if "tags" in validated_data:
+            changes.extend(tag_changes(instance.tags.all(), validated_data["tags"]))
 
         with transaction.atomic():
             instance = super().update(instance, validated_data)
-            for field_changed, old_value, new_value in changes:
-                record_event(
-                    ticket=instance,
-                    actor=actor,
-                    field_changed=field_changed,
-                    old_value=old_value,
-                    new_value=new_value,
-                )
+            self._record_changes(instance, actor, changes)
 
         return instance
 
 
 class CustomerTicketSerializer(TicketSerializer):
     class Meta(TicketSerializer.Meta):
+        fields = [field for field in TicketSerializer.Meta.fields if field != "tags"]
         read_only_fields = [
             *TicketSerializer.Meta.read_only_fields,
             "status",
