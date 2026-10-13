@@ -1119,6 +1119,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/Ticket'
           description: ''
+  /api/tickets/export/:
+    get:
+      operationId: tickets_export_retrieve
+      description: Streams every ticket that matches the current filters as a UTF-8
+        CSV file with a byte order mark, so Excel reads Persian text correctly. Agents
+        and admins only.
+      parameters:
+      - in: query
+        name: assignee
+        schema:
+          type: string
+      - in: query
+        name: is_overdue
+        schema:
+          type: boolean
+        description: Tickets past their first-response deadline that no agent has
+          answered.
+      - in: query
+        name: priority
+        schema:
+          type: string
+          enum:
+          - high
+          - low
+          - medium
+          - urgent
+        description: |-
+          * `low` - Low
+          * `medium` - Medium
+          * `high` - High
+          * `urgent` - Urgent
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search ticket titles, descriptions and messages.
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - closed
+          - in_progress
+          - open
+          - resolved
+          - waiting_on_customer
+        description: |-
+          * `open` - Open
+          * `in_progress` - In Progress
+          * `waiting_on_customer` - Waiting on Customer
+          * `resolved` - Resolved
+          * `closed` - Closed
+      - in: query
+        name: tag
+        schema:
+          type: string
+        description: Filter by tag id.
+      tags:
+      - Tickets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            text/csv:
+              schema:
+                type: string
+          description: ''
   /api/token/:
     post:
       operationId: token_create

@@ -1,3 +1,4 @@
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 
 from core.serializers import DownloadLinkSerializer
@@ -16,6 +17,16 @@ ticket_schema = extend_schema_view(
     update=extend_schema(tags=["Tickets"]),
     partial_update=extend_schema(tags=["Tickets"]),
     destroy=extend_schema(tags=["Tickets"]),
+    export=extend_schema(
+        tags=["Tickets"],
+        filters=True,
+        description=(
+            "Streams every ticket that matches the current filters as a UTF-8 CSV file "
+            "with a byte order mark, so Excel reads Persian text correctly. "
+            "Agents and admins only."
+        ),
+        responses={(200, "text/csv"): OpenApiTypes.STR},
+    ),
     restore=extend_schema(tags=["Tickets"], request=None, responses=TicketSerializer),
     claim=extend_schema(tags=["Tickets"], request=None, responses=TicketSerializer),
     mark_read=extend_schema(

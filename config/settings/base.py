@@ -113,6 +113,7 @@ REST_FRAMEWORK = {
         "user_management": "60/min",
         "site_management": "60/min",
         "download": "300/min",
+        "export": "10/min",
         "ws_ticket": "30/min",
         "widget_ip": "120/min",
         "widget_visitor": "90/min",

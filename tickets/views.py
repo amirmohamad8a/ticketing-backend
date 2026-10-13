@@ -15,6 +15,7 @@ from accounts.models import User
 from core.downloads import build_download_link
 from tickets.assignment import claim_ticket
 from tickets.events import TAG_FIELD
+from tickets.export import build_export_response
 from tickets.filters import TicketFilter
 from tickets.lifecycle import reopen_on_customer_reply
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
@@ -41,6 +42,7 @@ from tickets.serializers import (
     TicketRatingSerializer,
     TicketSerializer,
 )
+from tickets.throttles import ExportThrottle
 
 
 @ticket_schema
@@ -67,6 +69,8 @@ class TicketViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(customer=user)
         else:
             queryset = queryset.prefetch_related("tags")
+        if self.action == "export":
+            return queryset
         return annotate_unread(queryset, user)
 
     def get_serializer_class(self):
@@ -90,6 +94,16 @@ class TicketViewSet(viewsets.ModelViewSet):
             AttachmentSerializer(attachment, context=context).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(
+        detail=False,
+        methods=["get"],
+        permission_classes=[IsAgentOrAdmin],
+        throttle_classes=[ExportThrottle],
+    )
+    def export(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+        return build_export_response(queryset)
 
     @action(detail=True, methods=["post"])
     def restore(self, request, pk=None):
