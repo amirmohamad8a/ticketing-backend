@@ -355,6 +355,11 @@ paths:
           * `high` - High
           * `urgent` - Urgent
       - in: query
+        name: search
+        schema:
+          type: string
+        description: Search ticket titles, descriptions and messages.
+      - in: query
         name: status
         schema:
           type: string

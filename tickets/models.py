@@ -1,12 +1,17 @@
 import uuid
 
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import AppendOnlyModel, SoftDeleteModel, TimeStampedModel
+from core.search import build_search_vector
+
+TICKET_SEARCH_FIELDS = ("title", "description")
+COMMENT_SEARCH_FIELDS = ("body",)
 
 
 def attachment_upload_path(instance, filename):
@@ -87,6 +92,9 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
                 name="ticket_exactly_one_owner",
             )
         ]
+        indexes = [
+            GinIndex(build_search_vector(*TICKET_SEARCH_FIELDS), name="ticket_search_gin"),
+        ]
 
     def clean(self):
         if bool(self.customer_id) == bool(self.visitor_id):
@@ -159,6 +167,9 @@ class Comment(TimeStampedModel):
                 ),
                 name="comment_message_exactly_one_sender",
             ),
+        ]
+        indexes = [
+            GinIndex(build_search_vector(*COMMENT_SEARCH_FIELDS), name="comment_search_gin"),
         ]
 
     def clean(self):
