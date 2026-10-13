@@ -11,6 +11,8 @@ from tickets.messages import comment_sender_type
 from tickets.models import Attachment, Comment, Ticket, TicketEvent
 from tickets.validators import MAX_TICKET_TAGS
 
+STAFF_ONLY_RESPONSE_FIELDS = frozenset({"tags", "first_response_due_at"})
+
 
 class TicketSerializer(serializers.ModelSerializer):
     unread_count = serializers.SerializerMethodField()
@@ -26,11 +28,18 @@ class TicketSerializer(serializers.ModelSerializer):
             "customer",
             "assignee",
             "tags",
+            "first_response_due_at",
             "unread_count",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "customer", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "customer",
+            "first_response_due_at",
+            "created_at",
+            "updated_at",
+        ]
 
     def get_unread_count(self, obj) -> int:
         return getattr(obj, "unread_count", 0)
@@ -122,7 +131,11 @@ class TicketSerializer(serializers.ModelSerializer):
 
 class CustomerTicketSerializer(TicketSerializer):
     class Meta(TicketSerializer.Meta):
-        fields = [field for field in TicketSerializer.Meta.fields if field != "tags"]
+        fields = [
+            field
+            for field in TicketSerializer.Meta.fields
+            if field not in STAFF_ONLY_RESPONSE_FIELDS
+        ]
         read_only_fields = [
             *TicketSerializer.Meta.read_only_fields,
             "status",

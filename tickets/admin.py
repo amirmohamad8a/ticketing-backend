@@ -29,6 +29,7 @@ class TicketAdmin(admin.ModelAdmin):
         "customer",
         "visitor",
         "assignee",
+        "first_response_due_at",
         "is_deleted",
         "created_at",
     )
@@ -41,7 +42,7 @@ class TicketAdmin(admin.ModelAdmin):
         "assignee__username",
     )
     autocomplete_fields = ("customer", "visitor", "site", "assignee", "tags")
-    readonly_fields = ("is_deleted", "deleted_at")
+    readonly_fields = ("is_deleted", "deleted_at", "first_response_due_at")
     actions = ["restore_selected"]
 
     def get_queryset(self, request):

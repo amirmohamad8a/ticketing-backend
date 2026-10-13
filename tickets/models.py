@@ -11,6 +11,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import AppendOnlyModel, SoftDeleteModel, TimeStampedModel
 from core.search import build_search_vector
+from tickets.sla import compute_first_response_due_at
 from tickets.validators import (
     MAX_BODY_LENGTH,
     MAX_SHORTCUT_LENGTH,
@@ -118,6 +119,9 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
         related_name="assigned_tickets",
     )
     tags = models.ManyToManyField(Tag, blank=True, related_name="tickets")
+    first_response_due_at = models.DateTimeField(
+        null=True, blank=True, editable=False, db_index=True
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -137,6 +141,16 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
     def clean(self):
         if bool(self.customer_id) == bool(self.visitor_id):
             raise ValidationError(_("Ticket must belong to exactly one of customer or visitor."))
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        if update_fields is None or "priority" in update_fields:
+            self.first_response_due_at = compute_first_response_due_at(
+                self.priority, self.created_at or timezone.now()
+            )
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "first_response_due_at"}
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"#{self.pk} {self.title}"

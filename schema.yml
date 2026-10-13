@@ -559,6 +559,12 @@ paths:
         schema:
           type: string
       - in: query
+        name: is_overdue
+        schema:
+          type: boolean
+        description: Tickets past their first-response deadline that no agent has
+          answered.
+      - in: query
         name: priority
         schema:
           type: string
@@ -1902,6 +1908,11 @@ components:
           type: array
           items:
             type: integer
+        first_response_due_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         unread_count:
           type: integer
           readOnly: true
@@ -2177,6 +2188,11 @@ components:
           type: array
           items:
             type: integer
+        first_response_due_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         unread_count:
           type: integer
           readOnly: true
@@ -2192,6 +2208,7 @@ components:
       - created_at
       - customer
       - description
+      - first_response_due_at
       - id
       - title
       - unread_count
