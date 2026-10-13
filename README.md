@@ -1,24 +1,31 @@
 # Ticketing Backend
 
-A support-ticketing REST API built with Django and Django REST Framework. Customers open tickets, agents work them through a validated status workflow, and every change is recorded in an append-only audit log.
+A support-ticketing REST API built with Django and Django REST Framework, with a real-time chat layer on top. Customers open tickets, website visitors talk to agents through an embeddable chat widget, agents work conversations and tickets through a validated status workflow, and every change is recorded in an append-only audit log.
 
 ## Features
 
 - Three roles (customer, agent, admin) on a custom user model
 - Self-service registration at `POST /api/auth/register/`: it always creates a customer (a role can never be chosen), checks the password with Django's validators and accepts an optional unique Iranian mobile number, which is normalized to `09XXXXXXXXX`
-- Profile at `GET/PATCH /api/auth/me/`: first and last name, an optional phone number and an optional avatar (PNG, JPEG or WebP up to 2 MB, verified as a real image and stored under a random name). The username and role cannot be changed there. The response carries an `avatar_download_url` instead of a file URL
+- Profile at `GET/PATCH /api/auth/me/`: first and last name, an optional phone number and an optional avatar (PNG, JPEG or WebP up to 2 MB, verified as a real image and stored under a random name). The username and role cannot be changed there. The response carries an `avatar_download_url` instead of a file URL. Agents and admins also get `max_concurrent_chats` (1 to 50, default 5), the number of open chats they accept at the same time
 - Password change at `POST /api/auth/password/change/`: it needs the current password, applies Django's validators, revokes every refresh token of the user and returns a fresh token pair for the session that made the change
 - User management for admins at `/api/users/`: list with `role` and `is_active` filters, create users (agents by default), change roles, deactivate and reactivate accounts and reset passwords. Every change writes a row to an append-only `UserEvent` log, deactivation and password resets revoke the user's sessions, and an admin cannot demote or deactivate themselves or reset their own password there
 - Agents list for assignment dropdowns at `GET /api/agents/`: the id, display name and role of every active agent and admin, readable by agents and admins only. It is not paginated and exposes no usernames, phone numbers or other account details
 - Chat sites for admins at `/api/sites/`: a `Site` is a website that will host the chat widget. It has a name, an auto-generated public key, a list of allowed origins, an active flag and the widget settings (greeting, primary color, position, offline timeout, whether a name or a contact is required). Allowed origins are validated, normalized to the form browsers send in the `Origin` header and deduplicated. Sites can be listed (filterable by `key` and `is_active`), created, read and updated, and the key can be rotated at `POST /api/sites/{id}/rotate-key/`. A site is deactivated rather than deleted
 - Chat visitors and ticket ownership: a `Visitor` belongs to a site and has an optional name, phone and email, a `last_seen_at` and a `created_at`. Every ticket has a `channel` (`portal`, `chat` or `offline_form`, `portal` by default) and an optional `site`. A ticket belongs to exactly one owner, either a `customer` or a `visitor`, enforced by a database check constraint and by `Ticket.clean()`. Customers and visitors with tickets cannot be deleted, and neither can sites that have visitors or tickets
+- Visitor identity: the first contact issues a signed, expiring visitor token that encodes the visitor and the site. A tampered or expired token is rejected, a returning visitor resolves to the same row, and the token is replaced by a fresh one every time the visitor starts or continues a conversation
 - Messages as comments: a chat message is a `Comment` with a `kind` (`message` or `system`), an optional `visitor` and an optional `client_msg_id`. Every message has exactly one sender, an `author` or a `visitor`, enforced by a database check constraint and by `Comment.clean()`, and system messages have neither. Sending again with the same `client_msg_id` returns the stored comment instead of creating a second row. Comment responses carry a `sender_type` (`customer`, `agent`, `visitor` or `system`), and internal notes stay hidden from customers
 - Public widget API under `/api/widget/`: the public config of a site, starting or resuming a conversation, reading and sending messages, uploading files and getting signed download URLs. Visitors authenticate with the `X-Visitor-Token` header and can only ever reach their own conversation. Every request must come from an origin listed in the site's `allowed_origins` (anything else gets 403), and every route is throttled per IP address and per visitor. Uploads go through the same content checks as every other upload
 - Read state and unread counts: a `ConversationRead` row stores, for each participant (a user or a visitor) and ticket, the id of the last message they have read. Every ticket response carries an `unread_count` for the signed-in user: the messages from other people after that point, without internal notes for customers. Participants mark a conversation read at `POST /api/tickets/{id}/read/` (visitors at `POST /api/widget/conversations/{id}/read/`), and the marker only ever moves forward
 - Missed-message recovery: a client that lost its connection catches up with `GET /api/tickets/{id}/messages/?after=<id>` (visitors use the widget route with the same parameter). Messages come oldest first, 100 at a time, with `has_more`, and the `message.created` WebSocket event carries the message id that serves as the cursor, so nothing is lost and the order is kept
+- WebSocket support: the app runs on ASGI with Django Channels and a Redis channel layer. Clients connect to `/ws/` with a short-lived, single-use ticket obtained over HTTP (users at `POST /api/ws/ticket/`, widget visitors at `POST /api/widget/ws/ticket/`), so no long-lived token ever appears in a URL. Visitors are also checked against the site's allowed origins. A socket can only join the conversations its owner could open over HTTP, and every connection has a message size limit and a message rate limit
+- Live events: ticket changes and new messages are pushed to the sockets that may see them, only after the database transaction commits, so a rolled-back change never reaches a socket
+- Typing indicators: a participant who has joined a ticket can tell the others in it that they started or stopped typing. The signals are relayed over the channel layer only, never stored, and throttled per connection and ticket
+- Agent presence: agents and admins keep a presence socket open at `/ws/presence/`. Presence lives in Redis with a time-to-live that a heartbeat refreshes, so a closed tab goes offline by itself. Each staff member is `available` or `away`, and `GET /api/agents/online/` lists who is online with their open chat count and capacity
+- Chat routing: a new chat is assigned right away to the available agent with the fewest open chats (the one who was assigned a chat longest ago breaks ties), never above `max_concurrent_chats`. The assignment goes through the normal ticket serializer, so the audit event is written and the assignee rules apply, and concurrent new chats are serialized with row locks so one agent is not overloaded. With nobody available the chat stays unassigned in the queue
+- Claiming: an agent or admin can take an unassigned ticket with `POST /api/tickets/{id}/claim/`, and two agents claiming at once cannot both win
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout. Tokens are signed with their own `JWT_SIGNING_KEY`, so a leaked `SECRET_KEY` cannot be used to forge them
 - Immediate token revocation: a password change or reset invalidates the user's access tokens at once instead of at the end of their 15-minute lifetime, and deactivation does the same
-- Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management, site management and signed downloads. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
+- Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management, site management, signed downloads and WebSocket tickets. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
 - Production hardening: HTTPS redirect, HSTS with subdomains and preload, secure cookies, `nosniff` and a strict referrer policy, checked by `manage.py check --deploy`
 - Structured logging: every log line is one JSON object with a timestamp, level, logger, message, `request_id` and `user_id`. A request ID middleware keeps a valid incoming `X-Request-ID` or generates one, stamps it on every log line of that request and returns it in the `X-Request-ID` response header (exposed to browsers through CORS), so a bug report that quotes the ID can be traced end to end. Each request writes one access line with the method, path, status, duration and client IP. Passwords, tokens, signed download URLs and query strings never reach the logs
 - Role-scoped querysets: a customer only ever sees their own tickets
@@ -39,8 +46,50 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Persian (`fa`) language and the Asia/Tehran time zone: timestamps are stored in UTC and returned with the Tehran offset, and custom error messages are marked for translation
 - OpenAPI schema and Swagger UI
 - Database-free `/health/` endpoint for uptime checks
-- WebSocket support: the app runs on ASGI with Django Channels and a Redis channel layer. Clients connect to `/ws/` with a short-lived, single-use ticket obtained over HTTP (users at `POST /api/ws/ticket/`, widget visitors at `POST /api/widget/ws/ticket/`), so no long-lived token ever appears in a URL. Visitors are also checked against the site's allowed origins. A socket can only join the conversations its owner could open over HTTP, and every connection has a message size limit and a message rate limit
 - Automated tests with an 85% coverage threshold and GitHub Actions CI
+
+## Project layout
+
+| App | What it holds |
+| --- | --- |
+| `accounts` | The user model, registration, profile, password change, user management, avatars and the `UserEvent` audit log |
+| `tickets` | Tickets, comments (which are also chat messages), attachments, read state, the `TicketEvent` audit log, assignment and claiming |
+| `chat` | Sites, visitors, visitor tokens, the public widget API, conversations and chat routing |
+| `realtime` | The WebSocket consumers, single-use socket tickets, event publishing, agent presence and the online agents endpoint |
+| `core` | Shared infrastructure: the error envelope, logging, the request ID middleware, upload checks, signed downloads, storage and the append-only and soft-delete base models |
+| `config` | Settings (`base`, `dev`, `prod`, `test`), URLs, ASGI routing and Celery |
+
+## API overview
+
+All routes live under `/api/` unless noted. Routes marked "signed in" need a bearer access token.
+
+| Route | Who | Purpose |
+| --- | --- | --- |
+| `POST /api/token/`, `POST /api/token/refresh/` | Anyone | Log in and refresh the access token |
+| `POST /api/auth/register/` | Anyone | Register a customer |
+| `POST /api/auth/logout/` | Signed in | Blacklist a refresh token |
+| `GET, PATCH /api/auth/me/` | Signed in | Read and update the own profile |
+| `POST /api/auth/password/change/` | Signed in | Change the own password and get a new token pair |
+| `/api/users/`, `/api/users/{id}/` | Admins | Manage users (`GET`, `POST`, `PATCH`) |
+| `GET /api/agents/` | Agents, admins | Active agents and admins for assignment dropdowns |
+| `GET /api/agents/online/` | Agents, admins | Staff with a live presence entry |
+| `/api/tickets/`, `/api/tickets/{id}/` | Signed in | List, create, read, update tickets. Only admins delete |
+| `POST /api/tickets/{id}/restore/` | Admins | Restore a deleted ticket |
+| `POST /api/tickets/{id}/claim/` | Agents, admins | Take an unassigned ticket |
+| `POST /api/tickets/{id}/read/` | Signed in | Mark a conversation as read |
+| `GET /api/tickets/{id}/messages/` | Signed in | Messages after a cursor |
+| `GET /api/tickets/{id}/events/` | Signed in | Audit trail of the ticket |
+| `GET, POST /api/tickets/{id}/comments/` | Signed in | Comments and messages |
+| `GET, POST /api/tickets/{id}/attachments/` | Signed in | Attachments on the ticket |
+| `GET, POST /api/tickets/{id}/comments/{comment_id}/attachments/` | Signed in | Attachments on a comment |
+| `GET /api/attachments/{id}/download/` | Signed in | Signed download URL of an attachment |
+| `GET /api/avatars/{id}/download/` | Signed in | Signed download URL of an avatar |
+| `GET /api/downloads/{token}/` | Holder of a signed URL | Stream a file from local storage |
+| `/api/sites/` | Admins | Manage chat sites |
+| `/api/widget/...` | Visitors | The widget API (see Widget API) |
+| `POST /api/ws/ticket/` | Signed in | Single-use WebSocket ticket |
+| `GET /health/` | Anyone | Database-free health check (not under `/api/`) |
+| `GET /api/schema/`, `GET /api/docs/` | Anyone | OpenAPI schema and Swagger UI |
 
 ## Chat sites
 
@@ -138,15 +187,16 @@ The embeddable widget talks to these routes. They need no staff account.
 | `GET` | `/api/widget/attachments/{id}/download/` | token | Short-lived signed download URL as `{url, expires_in}` |
 | `POST` | `/api/widget/ws/ticket/` | token | Exchange the visitor token for a single-use WebSocket ticket as `{ticket, expires_in}` |
 
-- Authentication: send the token from the first `POST /api/widget/conversations/` in an `X-Visitor-Token` header. A missing, tampered or expired token, and the token of a deactivated site, get `401`
+- Authentication: send the token from the first `POST /api/widget/conversations/` in an `X-Visitor-Token` header. A missing, tampered or expired token, and the token of a deactivated site, get `401`. A token is valid for `VISITOR_TOKEN_LIFETIME_DAYS` days
 - Origin: the `Origin` header must be one of the site's `allowed_origins`. A missing header, an unlisted origin or a site with no origins gets `403`, so add the host page's origin to the site before embedding the widget. The routes send CORS headers to any origin so the browser can read that `403`, and the origin check is what enforces access
-- Starting a conversation: `body` is the first message and is always required. Without a token, `site_key` is required, a visitor is created and `name`, `phone` and `email` are stored (the site's `require_name` and `require_contact` are enforced). With a token, the token is replaced by a fresh one, and the message goes into the visitor's current conversation (one that is not resolved or closed) or opens a new one. The response is `201` when a conversation was created and `200` otherwise, and carries `token`, `conversation`, `message` and `agents_available`
-- A conversation is a ticket with `channel` `chat`. Its title is the start of the first message and its description is empty, because the messages are the content
-- Messages: responses never contain internal notes. `GET` returns at most 100 messages as `{results, has_more, agents_available, unread_count}`, so a client that reconnects calls it with the last id it saw until `has_more` is `false` (see Missed-message recovery). `unread_count` is the number of staff messages the visitor has not marked as read.
+- Starting a conversation: `body` (up to 4000 characters) is the first message and is always required. Without a token, `site_key` is required, a visitor is created and `name`, `phone` and `email` are stored (the site's `require_name` and `require_contact` are enforced). With a token, the token is replaced by a fresh one, and the message goes into the visitor's current conversation (one that is not resolved or closed) or opens a new one. The response is `201` when a conversation was created and `200` otherwise, and carries `token`, `conversation`, `message` and `agents_available`
+- A conversation is a ticket with `channel` `chat`. Its title is the start of the first message and its description is empty, because the messages are the content. A new conversation is routed to an available agent when it is created (see Chat routing)
+- Messages: responses never contain internal notes. `GET` returns at most 100 messages as `{results, has_more, agents_available, unread_count}`, so a client that reconnects calls it with the last id it saw until `has_more` is `false` (see Missed-message recovery). `unread_count` is the number of staff messages the visitor has not marked as read
+- Closed conversations: sending a message or a file into a resolved or closed conversation gets `409` with the code `conversation_closed`. Start a new conversation with `POST /api/widget/conversations/` instead
 - Attachments: the file becomes a message of its own, so it appears in order in the thread. It must pass the same size, type and magic-byte checks as every other upload
 - Downloads: a visitor can only get a URL for a file on a public message of their own conversation. Everything else is `404`
 - Another visitor's conversation, message or file is always `404`
-- `agents_available` is `true` while at least one active agent or admin exists. It will be replaced by real presence in the real-time layer
+- `agents_available` is `true` while at least one active agent or admin exists. It does not use presence yet
 
 ## Forgotten passwords
 
@@ -154,7 +204,7 @@ There is no password reset by email. Outbound email is out of scope for this pro
 
 ## WebSockets
 
-The app is an ASGI application (`config/asgi.py`). HTTP goes to Django and WebSocket connections go to `/ws/` (`config/routing.py`). In development `runserver` is served by Daphne, so it handles both. The channel layer is `channels_redis` on `REDIS_URL`, with the key prefix `ticketing`. Tests use the in-memory channel layer.
+The app is an ASGI application (`config/asgi.py`). HTTP goes to Django and WebSocket connections go to `/ws/` and `/ws/presence/` (`config/routing.py`). In development `runserver` is served by Daphne, so it handles both. The channel layer is `channels_redis` on `REDIS_URL`, with the key prefix `ticketing`. Tests use the in-memory channel layer.
 
 ### Connecting
 
@@ -183,9 +233,11 @@ Every message is a JSON object with a `type`.
 | Client to server | `{"type": "ping"}` | Heartbeat. The server answers `{"type": "pong"}` |
 | Client to server | `{"type": "join", "ticket_id": 1}` | Subscribe to a ticket. The server answers `{"type": "joined", "ticket_id": 1}` |
 | Client to server | `{"type": "leave", "ticket_id": 1}` | Unsubscribe. The server answers `{"type": "left", "ticket_id": 1}` |
+| Client to server | `{"type": "typing", "ticket_id": 1, "is_typing": true}` | Tell the others in the ticket that you started (`true`) or stopped (`false`) typing. Never answered |
+| Server to client | `{"type": "typing", "ticket_id": 1, "is_typing": true, "sender_type": "agent", "sender_name": "..."}` | Someone else in a joined ticket started or stopped typing. `sender_type` is `customer`, `agent` or `visitor` |
 | Server to client | `{"type": "error", "code": "...", "ticket_id": 1}` | A message was rejected. `ticket_id` is present when it applies |
 
-Error codes: `invalid_json`, `invalid_message`, `unknown_type`, `invalid_ticket_id`, `not_found` and `too_many_tickets`.
+Error codes: `invalid_json`, `invalid_message`, `unknown_type`, `invalid_ticket_id`, `not_found`, `not_joined` and `too_many_tickets`.
 
 - A visitor can join only their own conversations, a customer only their own tickets, and an agent or admin any ticket that is not deleted. Anything else answers `not_found`, the same as the HTTP API, so a client cannot tell a missing ticket from someone else's
 - A connection can be joined to at most 50 tickets at once
@@ -203,6 +255,18 @@ Changes are pushed to sockets as events with the shape `{"type", "id", "ticket_i
 - `data.message_id` of a `message.created` event is the id to use as the `after` cursor. The `id` of a `ticket.event` is an audit row id from another sequence and must never be used as a cursor
 - Events do not carry the message text. Clients fetch messages as described in Missed-message recovery
 
+### Typing indicators
+
+Typing signals are ephemeral. They are not stored, they are not part of the audit trail and they are not sent to the agents queue, so only sockets that have joined the ticket receive them.
+
+- A client must have joined the ticket first, otherwise the answer is `not_joined`. `is_typing` must be a boolean, otherwise the answer is `invalid_message`
+- The sender never receives its own signal, and neither does another socket of the same user or visitor
+- The server throttles per connection and ticket: a `true` that follows another `true` within `WS_TYPING_THROTTLE_SECONDS` is dropped silently, and a `false` is relayed only after a `true`
+- When a socket leaves a ticket or disconnects while typing, the others receive `is_typing: false`
+- A lost `false` must not leave the indicator on forever, so clients repeat `true` about every 3 seconds while the user types and hide the indicator 5 seconds after the last `true`
+- Clients should debounce keystrokes before sending, because every message counts against the per-connection rate limit
+- Clients should not send typing signals while the user writes an internal note
+
 ### Limits
 
 | Limit | Result |
@@ -210,6 +274,9 @@ Changes are pushed to sockets as events with the shape `{"type", "id", "ticket_i
 | Message larger than `WS_MAX_MESSAGE_BYTES` | Connection closed with code `1009` |
 | More than `WS_RATE_LIMIT_MESSAGES` messages in `WS_RATE_LIMIT_WINDOW_SECONDS` | Connection closed with code `4429` |
 | Binary frame | Connection closed with code `1003` |
+| Typing update within `WS_TYPING_THROTTLE_SECONDS` of the previous one for the same ticket | Dropped silently, the connection stays open |
+
+The same size, rate and binary limits apply to the presence socket.
 
 Check that the Redis channel layer works:
 
@@ -219,9 +286,76 @@ docker compose exec web python manage.py shell -c "from asgiref.sync import asyn
 
 The production image still runs gunicorn (WSGI) and does not serve WebSockets yet. It moves to an ASGI server in Task 18.1.
 
+## Agent presence
+
+Presence tells the system which staff members are online and whether they accept new chats. It is kept in Redis (Django's cache) with a time-to-live, so a closed tab or a crashed browser drops out by itself.
+
+### Presence socket
+
+Agents and admins connect to `ws://localhost:8000/ws/presence/?ticket=<ticket>` with a ticket from `POST /api/ws/ticket/`. An anonymous socket and a visitor are closed with `4401`, and a customer with `4403`.
+
+| Direction | Message | Meaning |
+| --- | --- | --- |
+| Server to client | `{"type": "presence", "status": "available"}` | Sent on connect and after every status change |
+| Client to server | `{"type": "ping"}` | Heartbeat. Refreshes the time-to-live. The server answers `{"type": "pong", "status": "available"}` |
+| Client to server | `{"type": "set_status", "status": "away"}` | Set the status to `available` or `away`. The server answers with a `presence` message |
+| Server to client | `{"type": "error", "code": "..."}` | A message was rejected. Codes: `invalid_json`, `invalid_message`, `unknown_type` and `invalid_status` |
+
+- A staff member is online while their presence entry exists. It is created when they connect, refreshed by every `ping` and removed by Redis when it has not been refreshed for `PRESENCE_TTL_SECONDS`. Clients should ping well inside that time, for example every 10 seconds with the default of 30
+- Closing the socket does not delete the entry, so the agent goes offline within the time-to-live
+- Presence is kept per user, not per socket. Two tabs of the same agent share one status, and closing one tab does not take the agent offline while the other keeps sending heartbeats
+- A new connection keeps the stored status when the entry is still alive. Without an entry the status starts as `available`
+- Only `available` agents receive new chats. `away` agents stay online and keep the chats they have
+
+### Online agents
+
+`GET /api/agents/online/` is readable by agents and admins. It lists every active staff member with a live presence entry, ordered by name.
+
+```json
+[
+  {
+    "id": 2,
+    "name": "Sara Ahmadi",
+    "role": "agent",
+    "status": "available",
+    "max_concurrent_chats": 5,
+    "open_chats": 1,
+    "accepting_chats": true
+  }
+]
+```
+
+- `open_chats` counts the chat tickets assigned to the agent that are not deleted, resolved or closed
+- `accepting_chats` is `true` when the status is `available` and `open_chats` is below `max_concurrent_chats`
+- Staff set their own `max_concurrent_chats` (1 to 50, default 5) at `PATCH /api/auth/me/`
+
+## Chat routing
+
+When a visitor starts a new conversation, the backend tries to assign it to an agent in the same transaction that creates it.
+
+1. Take the staff members who are active and whose presence status is `available`
+2. Lock their user rows (`select_for_update`, in id order), so two concurrent new chats cannot read the same load and pick the same agent
+3. Drop agents whose open chats have reached `max_concurrent_chats`
+4. Pick the agent with the fewest open chats. On a tie, pick the one who was assigned a chat longest ago (agents never assigned one go first), and then the lowest id
+5. Assign through the normal ticket serializer, so the assignee rules apply (an active agent or admin) and an `assignee` audit event is written with no actor
+
+- With no available agent the conversation stays unassigned in the queue. Later messages in the same conversation do not trigger routing again
+- `last_chat_assigned_at` on the user is updated whenever routing or a claim assigns a chat, and it drives the round-robin tie-break
+- The assignee audit event reaches staff sockets only, never customers or visitors
+
+### Claiming
+
+`POST /api/tickets/{id}/claim/` lets an agent or admin take a ticket. Customers get `403`.
+
+- An unassigned ticket is assigned to the caller and an `assignee` audit event is written
+- A ticket that is already assigned to the caller is returned unchanged
+- A ticket assigned to someone else answers `409` with the code `ticket_already_assigned`
+- The ticket row is locked while it is checked, so two agents claiming at once cannot both succeed
+- A deleted ticket is `404`. A manual claim does not check the caller's `max_concurrent_chats`
+
 ## Tech stack
 
-Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Channels with Daphne, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Redis is Django's cache, which holds the throttle counters, the Channels layer that fans WebSocket events out between processes, and the Celery broker. Celery has no tasks yet.
+Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Channels with Daphne, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Redis is Django's cache, which holds the throttle counters, the WebSocket tickets and the presence entries, the Channels layer that fans WebSocket events out between processes, and the Celery broker. Celery has no tasks yet.
 
 ## Run locally
 
@@ -248,7 +382,7 @@ docker compose exec web python manage.py seed_demo
 
 `createsuperuser` creates a user with the customer role. To act as an agent or admin in the API, change the role in the admin site.
 
-Run the tests (they always use local storage, an in-memory cache and relaxed throttle limits, whatever `.env` says):
+Run the tests (they always use local storage, an in-memory cache and channel layer, and relaxed throttle limits, whatever `.env` says):
 
 ```bash
 docker compose exec -e STORAGE_BACKEND=local web pytest --cov
@@ -302,12 +436,15 @@ Throttling needs Redis, because the counters are kept in Django's cache. A throt
 | `user_management` | `/api/users/` | User | 60/min |
 | `site_management` | `/api/sites/` | User | 60/min |
 | `download` | `/api/downloads/{token}/` | IP address | 300/min |
+| `ws_ticket` | `POST /api/ws/ticket/` | User | 30/min |
 | `widget_ip` | Every `/api/widget/` route | IP address | 120/min |
 | `widget_visitor` | Widget routes called with a visitor token | Visitor | 90/min |
 | `widget_start` | `POST /api/widget/conversations/` | IP address | 20/hour |
 | `widget_upload` | `POST /api/widget/conversations/{id}/attachments/` | Visitor | 30/hour |
 
 The limits live in `REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]` in `config/settings/base.py`. Behind a reverse proxy, set `NUM_PROXIES` to the number of proxies in front of the app, so the real client address is read from `X-Forwarded-For`. With the default `0` the header is ignored, which stops clients from spoofing it to dodge the limits. To reset the counters while testing by hand, run `docker compose exec redis redis-cli FLUSHDB`.
+
+WebSocket connections have their own limits, described under Limits in the WebSockets section.
 
 ## Checking the production settings
 
@@ -331,15 +468,15 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `SECRET_KEY` | Yes | none | Django secret key |
-| `JWT_SIGNING_KEY` | Production | `SECRET_KEY` | Key that signs JWTs. Production refuses to start without one that differs from `SECRET_KEY` |
+| `JWT_SIGNING_KEY` | Production | `SECRET_KEY` | Key that signs JWTs and visitor tokens. Production refuses to start without one that differs from `SECRET_KEY` |
 | `DEBUG` | No | `False` | Debug mode. Development settings force it on |
 | `ALLOWED_HOSTS` | No | empty | Comma-separated host names |
 | `DATABASE_URL` | No | SQLite file | Database connection URL |
 | `DJANGO_SETTINGS_MODULE` | No | `config.settings.dev` | `config.settings.prod` in the production image |
-| `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend, and Django's cache (throttle counters) |
+| `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend, Django's cache (throttle counters, WebSocket tickets, presence) and the Channels layer |
 | `NUM_PROXIES` | No | `0` | Number of reverse proxies in front of the app, used to read the client IP for throttling and logging |
 | `LOG_LEVEL` | No | `INFO` | Verbosity of the JSON logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated origins allowed to call the API |
+| `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated origins allowed to call the API. Widget routes accept any origin and check the site's `allowed_origins` instead |
 | `CSRF_TRUSTED_ORIGINS` | No | empty | Production only. Comma-separated trusted origins |
 | `SECURE_SSL_REDIRECT` | No | `true` | Production only. Redirect HTTP to HTTPS (`/health/` is exempt). Set `false` when you reach the container over plain HTTP without a proxy |
 | `SECURE_HSTS_SECONDS` | No | `31536000` | Production only. Lifetime of the HSTS header. Once a browser has seen it over HTTPS it insists on HTTPS for that host for this long |
@@ -348,10 +485,13 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `PORT` | No | `8000` | Port gunicorn listens on |
 | `STORAGE_BACKEND` | No | `local` | `local` for disk or `s3` for an S3-compatible bucket |
 | `DOWNLOAD_URL_TTL_SECONDS` | No | `300` | Lifetime of signed download URLs |
+| `VISITOR_TOKEN_LIFETIME_DAYS` | No | `30` | Lifetime of a widget visitor token |
 | `WS_TICKET_TTL_SECONDS` | No | `30` | Lifetime of a single-use WebSocket ticket |
 | `WS_MAX_MESSAGE_BYTES` | No | `4096` | Largest message a client may send over a WebSocket. A bigger one closes the connection |
 | `WS_RATE_LIMIT_MESSAGES` | No | `30` | Messages a single connection may send per window |
 | `WS_RATE_LIMIT_WINDOW_SECONDS` | No | `10` | Length of the per-connection rate-limit window |
+| `WS_TYPING_THROTTLE_SECONDS` | No | `2` | Minimum time between two relayed typing signals of the same connection and ticket |
+| `PRESENCE_TTL_SECONDS` | No | `30` | How long a presence entry lives without a heartbeat before the agent counts as offline |
 | `S3_BUCKET_NAME` | With `s3` | none | Bucket that holds attachments and avatars |
 | `S3_ACCESS_KEY` | With `s3` | none | Access key for the bucket |
 | `S3_SECRET_KEY` | With `s3` | none | Secret key for the bucket |
