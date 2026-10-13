@@ -8,6 +8,7 @@ from tickets.models import (
     Tag,
     Ticket,
     TicketEvent,
+    TicketRating,
 )
 
 
@@ -89,6 +90,17 @@ class ConversationReadAdmin(admin.ModelAdmin):
     list_display = ("id", "ticket", "user", "visitor", "last_read_comment_id", "updated_at")
     search_fields = ("ticket__title", "user__username", "visitor__name")
     autocomplete_fields = ("ticket", "user", "visitor")
+
+
+@admin.register(TicketRating)
+class TicketRatingAdmin(admin.ModelAdmin):
+    list_display = ("id", "ticket", "score", "created_at")
+    list_filter = ("score",)
+    search_fields = ("ticket__title", "comment")
+    autocomplete_fields = ("ticket",)
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Attachment)

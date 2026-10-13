@@ -9,7 +9,7 @@ from accounts.models import User
 from core.uploads import clean_file_name, ensure_content_matches
 from tickets.events import record_event, tag_changes
 from tickets.messages import comment_sender_type
-from tickets.models import Attachment, Comment, Ticket, TicketEvent
+from tickets.models import Attachment, Comment, Ticket, TicketEvent, TicketRating
 from tickets.validators import MAX_TICKET_TAGS
 
 STAFF_ONLY_RESPONSE_FIELDS = frozenset({"tags", "first_response_due_at"})
@@ -223,6 +223,13 @@ class ReadMarkSerializer(serializers.Serializer):
 class ReadStateSerializer(serializers.Serializer):
     last_read_comment_id = serializers.IntegerField(read_only=True)
     unread_count = serializers.IntegerField(read_only=True)
+
+
+class TicketRatingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TicketRating
+        fields = ["score", "comment", "created_at"]
+        read_only_fields = ["created_at"]
 
 
 class AttachmentSerializer(serializers.ModelSerializer):

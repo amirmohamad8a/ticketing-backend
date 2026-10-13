@@ -3,7 +3,7 @@ import uuid
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxLengthValidator
+from django.core.validators import MaxLengthValidator, MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
@@ -22,6 +22,9 @@ from tickets.validators import (
 
 TICKET_SEARCH_FIELDS = ("title", "description")
 COMMENT_SEARCH_FIELDS = ("body",)
+RATING_MIN_SCORE = 1
+RATING_MAX_SCORE = 5
+RATING_MAX_COMMENT_LENGTH = 1000
 
 
 def attachment_upload_path(instance, filename):
@@ -277,6 +280,30 @@ class ConversationRead(TimeStampedModel):
 
     def __str__(self):
         return f"Read state of Ticket #{self.ticket_id} up to Comment #{self.last_read_comment_id}"
+
+
+class TicketRating(TimeStampedModel):
+    ticket = models.OneToOneField(Ticket, on_delete=models.CASCADE, related_name="rating")
+    score = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(RATING_MIN_SCORE), MaxValueValidator(RATING_MAX_SCORE)]
+    )
+    comment = models.TextField(
+        blank=True,
+        default="",
+        validators=[MaxLengthValidator(RATING_MAX_COMMENT_LENGTH)],
+    )
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(score__gte=RATING_MIN_SCORE, score__lte=RATING_MAX_SCORE),
+                name="ticketrating_score_between_1_and_5",
+            )
+        ]
+
+    def __str__(self):
+        return f"Rating {self.score}/{RATING_MAX_SCORE} for Ticket #{self.ticket_id}"
 
 
 class Attachment(TimeStampedModel):

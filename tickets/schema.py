@@ -5,6 +5,7 @@ from tickets.serializers import (
     MessageListSerializer,
     ReadMarkSerializer,
     ReadStateSerializer,
+    TicketRatingSerializer,
     TicketSerializer,
 )
 
@@ -21,6 +22,11 @@ ticket_schema = extend_schema_view(
         tags=["Tickets"],
         request=ReadMarkSerializer,
         responses=ReadStateSerializer,
+    ),
+    rating=extend_schema(
+        tags=["Tickets"],
+        request=TicketRatingSerializer,
+        responses={200: TicketRatingSerializer, 201: TicketRatingSerializer},
     ),
     messages=extend_schema(
         tags=["Tickets"],

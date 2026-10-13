@@ -12,7 +12,7 @@ from chat.widget.serializers import (
 )
 from core.serializers import DownloadLinkSerializer
 from realtime.serializers import SocketTicketSerializer
-from tickets.serializers import ReadMarkSerializer, ReadStateSerializer
+from tickets.serializers import ReadMarkSerializer, ReadStateSerializer, TicketRatingSerializer
 
 TAGS = ["Widget"]
 PK = OpenApiParameter("pk", int, OpenApiParameter.PATH)
@@ -63,6 +63,16 @@ conversation_read_schema = extend_schema_view(
         request=ReadMarkSerializer,
         responses=ReadStateSerializer,
     )
+)
+
+conversation_rating_schema = extend_schema_view(
+    get=extend_schema(tags=TAGS, parameters=[PK], responses=TicketRatingSerializer),
+    post=extend_schema(
+        tags=TAGS,
+        parameters=[PK],
+        request=TicketRatingSerializer,
+        responses={201: TicketRatingSerializer},
+    ),
 )
 
 attachment_upload_schema = extend_schema_view(

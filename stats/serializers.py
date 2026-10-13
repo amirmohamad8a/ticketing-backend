@@ -55,6 +55,8 @@ class StatsSerializer(serializers.Serializer):
     open_chats_per_agent = AgentLoadSerializer(many=True, read_only=True)
     average_first_response_seconds = serializers.FloatField(read_only=True, allow_null=True)
     average_resolution_seconds = serializers.FloatField(read_only=True, allow_null=True)
+    average_rating = serializers.FloatField(read_only=True, allow_null=True)
+    ratings_total = serializers.IntegerField(read_only=True)
     tickets_total = serializers.IntegerField(read_only=True)
     tickets_per_day = DailyCountSerializer(many=True, read_only=True)
     tickets_per_channel = ChannelCountSerializer(many=True, read_only=True)

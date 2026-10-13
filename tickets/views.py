@@ -16,7 +16,7 @@ from tickets.assignment import claim_ticket
 from tickets.events import TAG_FIELD
 from tickets.filters import TicketFilter
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
-from tickets.models import Attachment, Ticket
+from tickets.models import Attachment, Ticket, TicketRating
 from tickets.pagination import TicketCursorPagination
 from tickets.permissions import (
     AdminOnlyDeleteAndRestore,
@@ -24,6 +24,7 @@ from tickets.permissions import (
     IsAgentOrAdmin,
     IsCustomerOwnerOrReadOwn,
 )
+from tickets.ratings import rate_ticket
 from tickets.reads import annotate_unread, mark_conversation_read, visible_comments
 from tickets.schema import attachment_download_schema, ticket_schema
 from tickets.serializers import (
@@ -35,6 +36,7 @@ from tickets.serializers import (
     ReadMarkSerializer,
     ReadStateSerializer,
     TicketEventSerializer,
+    TicketRatingSerializer,
     TicketSerializer,
 )
 
@@ -111,6 +113,19 @@ class TicketViewSet(viewsets.ModelViewSet):
             user=request.user,
         )
         return Response(ReadStateSerializer(state).data)
+
+    @action(detail=True, methods=["get", "post"])
+    def rating(self, request, pk=None):
+        ticket = self.get_object()
+        if request.method == "GET":
+            record = get_object_or_404(TicketRating, ticket=ticket)
+            return Response(TicketRatingSerializer(record).data)
+        if ticket.customer_id != request.user.pk:
+            raise PermissionDenied(_("Only the owner of a ticket can rate it."))
+        serializer = TicketRatingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        record = rate_ticket(ticket, **serializer.validated_data)
+        return Response(TicketRatingSerializer(record).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"])
     def messages(self, request, pk=None):

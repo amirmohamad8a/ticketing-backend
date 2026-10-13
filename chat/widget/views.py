@@ -26,6 +26,7 @@ from chat.widget.auth import (
 from chat.widget.schema import (
     attachment_upload_schema,
     conversation_create_schema,
+    conversation_rating_schema,
     conversation_read_schema,
     message_schema,
     widget_config_schema,
@@ -52,9 +53,10 @@ from chat.widget.throttles import (
 from core.downloads import build_download_link
 from realtime.tickets import issue_ticket
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
-from tickets.models import Attachment
+from tickets.models import Attachment, TicketRating
+from tickets.ratings import rate_ticket
 from tickets.reads import mark_conversation_read, unread_count, visible_comments
-from tickets.serializers import ReadMarkSerializer, ReadStateSerializer
+from tickets.serializers import ReadMarkSerializer, ReadStateSerializer, TicketRatingSerializer
 
 
 class ConversationClosed(APIException):
@@ -205,6 +207,21 @@ class ConversationReadView(WidgetAPIView):
             visitor=visitor,
         )
         return Response(ReadStateSerializer(state).data)
+
+
+@conversation_rating_schema
+class ConversationRatingView(WidgetAPIView):
+    def get(self, request, pk):
+        ticket = _get_conversation(request.auth, pk)
+        record = get_object_or_404(TicketRating, ticket=ticket)
+        return Response(TicketRatingSerializer(record).data)
+
+    def post(self, request, pk):
+        ticket = _get_conversation(request.auth, pk)
+        serializer = TicketRatingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        record = rate_ticket(ticket, **serializer.validated_data)
+        return Response(TicketRatingSerializer(record).data, status=status.HTTP_201_CREATED)
 
 
 @attachment_upload_schema

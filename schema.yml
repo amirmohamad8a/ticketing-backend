@@ -1001,6 +1001,71 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageList'
           description: ''
+  /api/tickets/{id}/rating/:
+    get:
+      operationId: tickets_rating_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketRating'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketRating'
+          description: ''
+    post:
+      operationId: tickets_rating_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        required: true
+      tags:
+      - Tickets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketRating'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketRating'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketRating'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketRating'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketRating'
+          description: ''
   /api/tickets/{id}/read/:
     post:
       operationId: tickets_read_create
@@ -1407,6 +1472,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WidgetMessage'
+          description: ''
+  /api/widget/conversations/{id}/rating/:
+    get:
+      operationId: widget_conversations_rating_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Widget
+      security:
+      - visitorToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketRating'
+          description: ''
+    post:
+      operationId: widget_conversations_rating_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Widget
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketRating'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketRating'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketRating'
+        required: true
+      security:
+      - visitorToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketRating'
           description: ''
   /api/widget/conversations/{id}/read/:
     post:
@@ -2230,6 +2356,14 @@ components:
           format: double
           readOnly: true
           nullable: true
+        average_rating:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+        ratings_total:
+          type: integer
+          readOnly: true
         tickets_total:
           type: integer
           readOnly: true
@@ -2245,10 +2379,12 @@ components:
           readOnly: true
       required:
       - average_first_response_seconds
+      - average_rating
       - average_resolution_seconds
       - open_chats_per_agent
       - queue_size
       - range
+      - ratings_total
       - tickets_per_channel
       - tickets_per_day
       - tickets_total
@@ -2341,6 +2477,23 @@ components:
       - title
       - unread_count
       - updated_at
+    TicketRating:
+      type: object
+      properties:
+        score:
+          type: integer
+          maximum: 5
+          minimum: 1
+        comment:
+          type: string
+          maxLength: 1000
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - score
     TicketStatusEnum:
       enum:
       - open

@@ -7,7 +7,7 @@ from django.utils import timezone
 from accounts.models import User
 from accounts.permissions import STAFF_ROLES
 from realtime.presence import OPEN_CHAT_FILTER
-from tickets.models import Ticket
+from tickets.models import Ticket, TicketRating
 
 
 def _bounds(date_from, date_to):
@@ -72,6 +72,17 @@ def _tickets_per_channel(tickets):
     ]
 
 
+def _rating_summary(tickets):
+    totals = TicketRating.objects.filter(ticket__in=tickets).aggregate(
+        average=Avg("score"), total=Count("pk")
+    )
+    average = totals["average"]
+    return {
+        "average_rating": None if average is None else round(float(average), 2),
+        "ratings_total": totals["total"],
+    }
+
+
 def build_stats(date_from, date_to):
     start, end = _bounds(date_from, date_to)
     tickets = Ticket.objects.filter(created_at__gte=start, created_at__lt=end)
@@ -89,4 +100,5 @@ def build_stats(date_from, date_to):
         "tickets_total": totals["total"],
         "tickets_per_day": _tickets_per_day(tickets, date_from, date_to),
         "tickets_per_channel": _tickets_per_channel(tickets),
+        **_rating_summary(tickets),
     }
