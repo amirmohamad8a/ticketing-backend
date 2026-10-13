@@ -142,6 +142,11 @@ class ProfileSerializer(serializers.ModelSerializer):
         return instance
 
 
+class StaffProfileSerializer(ProfileSerializer):
+    class Meta(ProfileSerializer.Meta):
+        fields = [*ProfileSerializer.Meta.fields, "max_concurrent_chats"]
+
+
 class PasswordChangeSerializer(serializers.Serializer):
     old_password = serializers.CharField(
         write_only=True,

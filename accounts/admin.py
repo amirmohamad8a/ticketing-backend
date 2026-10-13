@@ -5,7 +5,9 @@ from accounts.models import User, UserEvent
 
 
 class UserAdmin(DjangoUserAdmin):
-    fieldsets = DjangoUserAdmin.fieldsets + ((None, {"fields": ("role", "phone", "avatar")}),)
+    fieldsets = DjangoUserAdmin.fieldsets + (
+        (None, {"fields": ("role", "phone", "avatar", "max_concurrent_chats")}),
+    )
     add_fieldsets = DjangoUserAdmin.add_fieldsets + ((None, {"fields": ("role", "phone")}),)
     list_display = DjangoUserAdmin.list_display + ("role", "phone")
     list_filter = DjangoUserAdmin.list_filter + ("role",)

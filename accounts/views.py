@@ -19,7 +19,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from accounts.models import User
 from accounts.pagination import UserCursorPagination
-from accounts.permissions import IsAdmin, can_view_avatar
+from accounts.permissions import STAFF_ROLES, IsAdmin, can_view_avatar
 from accounts.schema import (
     agent_schema,
     auth_schema,
@@ -34,6 +34,7 @@ from accounts.serializers import (
     PasswordChangeSerializer,
     ProfileSerializer,
     RegisterSerializer,
+    StaffProfileSerializer,
     UserCreateSerializer,
     UserSerializer,
     UserUpdateSerializer,
@@ -60,6 +61,13 @@ class RegisterView(CreateAPIView):
 class MeView(RetrieveUpdateAPIView):
     serializer_class = ProfileSerializer
     http_method_names = ["get", "patch", "head", "options"]
+
+    def get_serializer_class(self):
+        request = getattr(self, "request", None)
+        role = getattr(getattr(request, "user", None), "role", None)
+        if role in STAFF_ROLES:
+            return StaffProfileSerializer
+        return ProfileSerializer
 
     def get_object(self):
         return self.request.user

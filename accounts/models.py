@@ -3,6 +3,7 @@ import uuid
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from accounts.validators import validate_iranian_mobile
@@ -25,6 +26,8 @@ class User(AbstractUser):
         "image/jpeg": ".jpg",
         "image/webp": ".webp",
     }
+    DEFAULT_MAX_CONCURRENT_CHATS = 5
+    MAX_CONCURRENT_CHATS_LIMIT = 50
 
     class Role(models.TextChoices):
         CUSTOMER = "customer", "Customer"
@@ -40,6 +43,10 @@ class User(AbstractUser):
         validators=[validate_iranian_mobile],
     )
     avatar = models.ImageField(upload_to=avatar_upload_path, null=True, blank=True)
+    max_concurrent_chats = models.PositiveSmallIntegerField(
+        default=DEFAULT_MAX_CONCURRENT_CHATS,
+        validators=[MinValueValidator(1), MaxValueValidator(MAX_CONCURRENT_CHATS_LIMIT)],
+    )
 
     def __str__(self):
         return self.username
