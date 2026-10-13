@@ -12,13 +12,14 @@ logger = logging.getLogger(__name__)
 CHANNEL_EVENT_TYPE = "realtime.event"
 
 
-async def _send_to_groups(layer, payload, staff_only):
+async def _send_to_groups(layer, payload, staff_only, public_payload=None):
     for group in (ticket_group(payload["ticket_id"]), AGENTS_QUEUE_GROUP):
         message = {
             "type": CHANNEL_EVENT_TYPE,
             "group": group,
             "staff_only": staff_only,
             "payload": payload,
+            "public_payload": public_payload or payload,
         }
         try:
             await layer.group_send(group, message)
@@ -29,13 +30,20 @@ async def _send_to_groups(layer, payload, staff_only):
             )
 
 
-def _deliver(payload, staff_only):
+def _deliver(payload, staff_only, public_payload=None):
     layer = get_channel_layer()
     if layer is None:
         return
-    async_to_sync(_send_to_groups)(layer, payload, staff_only)
+    async_to_sync(_send_to_groups)(layer, payload, staff_only, public_payload)
 
 
-def publish(event_type, event_id, ticket_id, data, staff_only=False):
-    payload = {"type": event_type, "id": event_id, "ticket_id": ticket_id, "data": data}
-    transaction.on_commit(lambda: _deliver(payload, staff_only), robust=True)
+def _build_payload(event_type, event_id, ticket_id, data):
+    return {"type": event_type, "id": event_id, "ticket_id": ticket_id, "data": data}
+
+
+def publish(event_type, event_id, ticket_id, data, staff_only=False, public_data=None):
+    payload = _build_payload(event_type, event_id, ticket_id, data)
+    public_payload = None
+    if public_data is not None:
+        public_payload = _build_payload(event_type, event_id, ticket_id, public_data)
+    transaction.on_commit(lambda: _deliver(payload, staff_only, public_payload), robust=True)

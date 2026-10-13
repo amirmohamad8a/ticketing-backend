@@ -8,6 +8,7 @@ from realtime.events import publish
 from tickets.models import Comment
 
 MESSAGE_EVENT_TYPE = "message.created"
+MESSAGES_PAGE_SIZE = 100
 
 
 def comment_sender_type(comment):
@@ -18,6 +19,11 @@ def comment_sender_type(comment):
     if comment.author_id and comment.author.role == User.Role.CUSTOMER:
         return "customer"
     return "agent"
+
+
+def message_page(queryset, after, page_size):
+    rows = list(queryset.filter(id__gt=after).order_by("id")[: page_size + 1])
+    return rows[:page_size], len(rows) > page_size
 
 
 def _find_existing(ticket, client_msg_id, author, visitor):
@@ -35,6 +41,7 @@ def _publish_created(comment):
         comment.pk,
         comment.ticket_id,
         {
+            "message_id": comment.pk,
             "kind": comment.kind,
             "sender_type": comment_sender_type(comment),
             "is_internal": comment.is_internal,

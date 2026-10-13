@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from accounts.models import User
 from core.downloads import build_download_link
 from tickets.filters import TicketFilter
-from tickets.messages import post_message
+from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
 from tickets.models import Attachment, Ticket
 from tickets.pagination import TicketCursorPagination
 from tickets.permissions import (
@@ -21,12 +21,14 @@ from tickets.permissions import (
     CustomerFieldRestrictions,
     IsCustomerOwnerOrReadOwn,
 )
-from tickets.reads import annotate_unread, mark_conversation_read
+from tickets.reads import annotate_unread, mark_conversation_read, visible_comments
 from tickets.schema import attachment_download_schema, ticket_schema
 from tickets.serializers import (
     AttachmentSerializer,
     CommentSerializer,
     CustomerTicketSerializer,
+    MessageListSerializer,
+    MessageQuerySerializer,
     ReadMarkSerializer,
     ReadStateSerializer,
     TicketEventSerializer,
@@ -97,6 +99,21 @@ class TicketViewSet(viewsets.ModelViewSet):
             user=request.user,
         )
         return Response(ReadStateSerializer(state).data)
+
+    @action(detail=True, methods=["get"])
+    def messages(self, request, pk=None):
+        ticket = self.get_object()
+        query = MessageQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        after = query.validated_data["after"]
+        queryset = visible_comments(ticket, user=request.user).select_related("author")
+        rows, has_more = message_page(queryset, after, MESSAGES_PAGE_SIZE)
+        payload = {
+            "results": rows,
+            "has_more": has_more,
+            "unread_count": ticket.unread_count,
+        }
+        return Response(MessageListSerializer(payload, context={"request": request}).data)
 
     @action(detail=True, methods=["get"])
     def events(self, request, pk=None):

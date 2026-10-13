@@ -15,6 +15,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Messages as comments: a chat message is a `Comment` with a `kind` (`message` or `system`), an optional `visitor` and an optional `client_msg_id`. Every message has exactly one sender, an `author` or a `visitor`, enforced by a database check constraint and by `Comment.clean()`, and system messages have neither. Sending again with the same `client_msg_id` returns the stored comment instead of creating a second row. Comment responses carry a `sender_type` (`customer`, `agent`, `visitor` or `system`), and internal notes stay hidden from customers
 - Public widget API under `/api/widget/`: the public config of a site, starting or resuming a conversation, reading and sending messages, uploading files and getting signed download URLs. Visitors authenticate with the `X-Visitor-Token` header and can only ever reach their own conversation. Every request must come from an origin listed in the site's `allowed_origins` (anything else gets 403), and every route is throttled per IP address and per visitor. Uploads go through the same content checks as every other upload
 - Read state and unread counts: a `ConversationRead` row stores, for each participant (a user or a visitor) and ticket, the id of the last message they have read. Every ticket response carries an `unread_count` for the signed-in user: the messages from other people after that point, without internal notes for customers. Participants mark a conversation read at `POST /api/tickets/{id}/read/` (visitors at `POST /api/widget/conversations/{id}/read/`), and the marker only ever moves forward
+- Missed-message recovery: a client that lost its connection catches up with `GET /api/tickets/{id}/messages/?after=<id>` (visitors use the widget route with the same parameter). Messages come oldest first, 100 at a time, with `has_more`, and the `message.created` WebSocket event carries the message id that serves as the cursor, so nothing is lost and the order is kept
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout. Tokens are signed with their own `JWT_SIGNING_KEY`, so a leaked `SECRET_KEY` cannot be used to forge them
 - Immediate token revocation: a password change or reset invalidates the user's access tokens at once instead of at the end of their 15-minute lifetime, and deactivation does the same
 - Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management, site management and signed downloads. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
@@ -100,6 +101,28 @@ Admins manage the sites that will host the chat widget at `/api/sites/`. Every r
 - Before a participant has marked a conversation read, every message from other people counts as unread
 - `unread_count` is on every ticket response (list, detail and updates), for customers and staff alike
 
+## Missed-message recovery
+
+A WebSocket event is a notification. It names the ticket and the message id but does not carry the message text, so clients read messages over HTTP and use the id of the last message they have processed as a cursor. The same cursor repairs any gap, whether the socket dropped, the tab slept or an event was lost.
+
+| Method | Route | Who | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/tickets/{id}/messages/?after=<id>` | Customers (own tickets), agents, admins | Messages with an id greater than `after`, oldest first |
+| `GET` | `/api/widget/conversations/{id}/messages/?after=<id>` | Visitors | The same for the visitor's own conversation |
+
+- Response: `{results, has_more, unread_count}`, and the widget route adds `agents_available`. `results` holds at most 100 messages, so call again with the id of the last one until `has_more` is `false`
+- `after` is a message id. It defaults to `0`, which returns the conversation from its first message. It must be an integer from 0 to 2^63-1, otherwise the answer is `400`
+- Ids only grow, so ordering by id is ordering by arrival. Message ids are shared by all tickets, so they are not consecutive inside one ticket, and a jump in the numbers does not mean a message is missing
+- Visibility is the same as everywhere else: customers and visitors never receive internal notes, agents and admins receive everything, and the ticket of another customer or visitor, or a deleted ticket, is `404`
+- Each message has the same shape as in the matching comment or widget message responses, including `client_msg_id`, so a recovered message can be matched with one the client sent itself
+
+Contract for clients:
+
+1. Keep `last_id`, the highest message id processed for each conversation (`0` when there is none)
+2. After every connect or reconnect, open the socket, send `join`, wait for `joined`, and then call the messages route with `after=last_id` until `has_more` is `false`. Joining first means a message sent between the two steps still produces an event
+3. When a `message.created` event arrives with a `data.message_id` greater than `last_id`, call the messages route with `after=last_id`. That returns the new message and any earlier one the client missed
+4. Merge by message id (and by `client_msg_id` for messages the client sent optimistically) and only ever move `last_id` up, so receiving the same message twice changes nothing
+
 ## Widget API
 
 The embeddable widget talks to these routes. They need no staff account.
@@ -119,7 +142,7 @@ The embeddable widget talks to these routes. They need no staff account.
 - Origin: the `Origin` header must be one of the site's `allowed_origins`. A missing header, an unlisted origin or a site with no origins gets `403`, so add the host page's origin to the site before embedding the widget. The routes send CORS headers to any origin so the browser can read that `403`, and the origin check is what enforces access
 - Starting a conversation: `body` is the first message and is always required. Without a token, `site_key` is required, a visitor is created and `name`, `phone` and `email` are stored (the site's `require_name` and `require_contact` are enforced). With a token, the token is replaced by a fresh one, and the message goes into the visitor's current conversation (one that is not resolved or closed) or opens a new one. The response is `201` when a conversation was created and `200` otherwise, and carries `token`, `conversation`, `message` and `agents_available`
 - A conversation is a ticket with `channel` `chat`. Its title is the start of the first message and its description is empty, because the messages are the content
-- Messages: responses never contain internal notes. `GET` returns at most 100 messages as `{results, has_more, agents_available, unread_count}`, so a client that reconnects calls it with the last id it saw until `has_more` is `false`. `unread_count` is the number of staff messages the visitor has not marked as read.
+- Messages: responses never contain internal notes. `GET` returns at most 100 messages as `{results, has_more, agents_available, unread_count}`, so a client that reconnects calls it with the last id it saw until `has_more` is `false` (see Missed-message recovery). `unread_count` is the number of staff messages the visitor has not marked as read.
 - Attachments: the file becomes a message of its own, so it appears in order in the thread. It must pass the same size, type and magic-byte checks as every other upload
 - Downloads: a visitor can only get a URL for a file on a public message of their own conversation. Everything else is `404`
 - Another visitor's conversation, message or file is always `404`
@@ -166,6 +189,19 @@ Error codes: `invalid_json`, `invalid_message`, `unknown_type`, `invalid_ticket_
 
 - A visitor can join only their own conversations, a customer only their own tickets, and an agent or admin any ticket that is not deleted. Anything else answers `not_found`, the same as the HTTP API, so a client cannot tell a missing ticket from someone else's
 - A connection can be joined to at most 50 tickets at once
+
+### Events
+
+Changes are pushed to sockets as events with the shape `{"type", "id", "ticket_id", "data"}`. They are sent only after the database transaction commits, so a rolled-back change never reaches a socket.
+
+| Type | `id` | `data` | Who receives it |
+| --- | --- | --- | --- |
+| `message.created` | The message id | `message_id`, `kind`, `sender_type`, `is_internal`, `client_msg_id` | Everyone in the ticket. Internal notes reach staff only |
+| `ticket.event` | The audit event id | `field_changed`, `old_value`, `new_value` | Everyone in the ticket. Assignee changes reach staff only |
+
+- Agents and admins receive the events of every ticket through the agents queue. Customers and visitors receive the events of the tickets they have joined
+- `data.message_id` of a `message.created` event is the id to use as the `after` cursor. The `id` of a `ticket.event` is an audit row id from another sequence and must never be used as a cursor
+- Events do not carry the message text. Clients fetch messages as described in Missed-message recovery
 
 ### Limits
 

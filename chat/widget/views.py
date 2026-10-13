@@ -51,12 +51,10 @@ from chat.widget.throttles import (
 )
 from core.downloads import build_download_link
 from realtime.tickets import issue_ticket
-from tickets.messages import post_message
+from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
 from tickets.models import Attachment
-from tickets.reads import mark_conversation_read, unread_count
+from tickets.reads import mark_conversation_read, unread_count, visible_comments
 from tickets.serializers import ReadMarkSerializer, ReadStateSerializer
-
-MESSAGES_PAGE_SIZE = 100
 
 
 class ConversationClosed(APIException):
@@ -162,16 +160,16 @@ class MessageListCreateView(WidgetAPIView):
         ticket = _get_conversation(visitor, pk)
         query = WidgetMessageQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
+        after = query.validated_data["after"]
         queryset = (
-            ticket.comments.filter(is_internal=False, id__gt=query.validated_data["after"])
+            visible_comments(ticket, visitor=visitor)
             .select_related("author", "visitor")
             .prefetch_related("attachments")
-            .order_by("id")
         )
-        rows = list(queryset[: MESSAGES_PAGE_SIZE + 1])
+        rows, has_more = message_page(queryset, after, MESSAGES_PAGE_SIZE)
         payload = {
-            "results": rows[:MESSAGES_PAGE_SIZE],
-            "has_more": len(rows) > MESSAGES_PAGE_SIZE,
+            "results": rows,
+            "has_more": has_more,
             "agents_available": agents_available(visitor.site),
             "unread_count": unread_count(ticket, visitor=visitor),
         }

@@ -168,6 +168,16 @@ class CommentSerializer(serializers.ModelSerializer):
         return value or None
 
 
+class MessageQuerySerializer(serializers.Serializer):
+    after = serializers.IntegerField(min_value=0, max_value=2**63 - 1, default=0)
+
+
+class MessageListSerializer(serializers.Serializer):
+    results = CommentSerializer(many=True, read_only=True)
+    has_more = serializers.BooleanField(read_only=True)
+    unread_count = serializers.IntegerField(read_only=True)
+
+
 class ReadMarkSerializer(serializers.Serializer):
     last_read_comment_id = serializers.IntegerField(
         required=False, min_value=1, max_value=2**63 - 1
