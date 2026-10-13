@@ -2,10 +2,12 @@ from django.urls import path
 
 from rest_framework.routers import DefaultRouter
 
+from tickets.canned import CannedReplyViewSet
 from tickets.views import AttachmentDownloadView, TicketViewSet
 
 router = DefaultRouter()
 router.register("tickets", TicketViewSet, basename="ticket")
+router.register("canned-replies", CannedReplyViewSet, basename="canned-reply")
 
 urlpatterns = [
     *router.urls,

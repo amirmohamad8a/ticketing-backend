@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from tickets.models import Attachment, Comment, ConversationRead, Ticket, TicketEvent
+from tickets.models import Attachment, CannedReply, Comment, ConversationRead, Ticket, TicketEvent
 
 
 @admin.register(Ticket)
@@ -90,3 +90,9 @@ class AttachmentAdmin(admin.ModelAdmin):
     list_filter = ("content_type",)
     search_fields = ("file", "original_name", "ticket__title", "uploaded_by__username")
     autocomplete_fields = ("ticket", "comment", "uploaded_by")
+
+
+@admin.register(CannedReply)
+class CannedReplyAdmin(admin.ModelAdmin):
+    list_display = ("id", "shortcut", "title", "updated_at")
+    search_fields = ("shortcut", "title", "body")

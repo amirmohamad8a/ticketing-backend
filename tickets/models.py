@@ -3,12 +3,14 @@ import uuid
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxLengthValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import AppendOnlyModel, SoftDeleteModel, TimeStampedModel
 from core.search import build_search_vector
+from tickets.validators import MAX_BODY_LENGTH, MAX_SHORTCUT_LENGTH, validate_shortcut
 
 TICKET_SEARCH_FIELDS = ("title", "description")
 COMMENT_SEARCH_FIELDS = ("body",)
@@ -283,3 +285,17 @@ class Attachment(TimeStampedModel):
 
     def __str__(self):
         return f"Attachment #{self.pk} ({self.file.name})"
+
+
+class CannedReply(TimeStampedModel):
+    title = models.CharField(max_length=100)
+    body = models.TextField(validators=[MaxLengthValidator(MAX_BODY_LENGTH)])
+    shortcut = models.CharField(
+        max_length=MAX_SHORTCUT_LENGTH, unique=True, validators=[validate_shortcut]
+    )
+
+    class Meta:
+        ordering = ["shortcut", "id"]
+
+    def __str__(self):
+        return f"/{self.shortcut}"

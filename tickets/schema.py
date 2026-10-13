@@ -43,3 +43,11 @@ attachment_download_schema = extend_schema_view(
         responses=DownloadLinkSerializer,
     )
 )
+
+canned_reply_schema = extend_schema_view(
+    list=extend_schema(tags=["Canned replies"]),
+    retrieve=extend_schema(tags=["Canned replies"]),
+    create=extend_schema(tags=["Canned replies"]),
+    partial_update=extend_schema(tags=["Canned replies"]),
+    destroy=extend_schema(tags=["Canned replies"]),
+)
