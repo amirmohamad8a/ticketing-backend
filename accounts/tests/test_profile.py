@@ -16,6 +16,7 @@ PROFILE_KEYS = {
     "avatar_download_url",
     "role",
 }
+STAFF_PROFILE_KEYS = PROFILE_KEYS | {"max_concurrent_chats"}
 
 
 def _client_for(user):
@@ -55,9 +56,57 @@ class ProfileReadTests(TestCase):
             with self.subTest(role=user.role):
                 response = _client_for(user).get(URL)
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(set(response.data), PROFILE_KEYS)
+                expected = PROFILE_KEYS if user.role == User.Role.CUSTOMER else STAFF_PROFILE_KEYS
+                self.assertEqual(set(response.data), expected)
                 self.assertEqual(response.data["id"], user.id)
                 self.assertEqual(response.data["role"], user.role)
+
+    def test_staff_profile_carries_the_chat_capacity(self):
+        for user in (AgentFactory(), AdminFactory()):
+            with self.subTest(role=user.role):
+                response = _client_for(user).get(URL)
+                self.assertEqual(
+                    response.data["max_concurrent_chats"], User.DEFAULT_MAX_CONCURRENT_CHATS
+                )
+
+    def test_customer_profile_has_no_chat_capacity(self):
+        response = _client_for(UserFactory()).get(URL)
+        self.assertNotIn("max_concurrent_chats", response.data)
+
+
+class ProfileChatCapacityTests(TestCase):
+    def setUp(self):
+        self.agent = AgentFactory()
+        self.client = _client_for(self.agent)
+
+    def _patch(self, value):
+        return self.client.patch(URL, {"max_concurrent_chats": value}, format="json")
+
+    def test_staff_can_change_their_capacity_within_the_limits(self):
+        for value in (1, 12, User.MAX_CONCURRENT_CHATS_LIMIT):
+            with self.subTest(value=value):
+                response = self._patch(value)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data["max_concurrent_chats"], value)
+                self.agent.refresh_from_db()
+                self.assertEqual(self.agent.max_concurrent_chats, value)
+
+    def test_values_outside_the_limits_are_rejected(self):
+        for value in (0, -1, User.MAX_CONCURRENT_CHATS_LIMIT + 1, "many"):
+            with self.subTest(value=value):
+                response = self._patch(value)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.data["error"]["code"], "validation_error")
+                self.assertIn("max_concurrent_chats", response.data["error"]["details"])
+                self.agent.refresh_from_db()
+                self.assertEqual(self.agent.max_concurrent_chats, User.DEFAULT_MAX_CONCURRENT_CHATS)
+
+    def test_customers_cannot_set_a_capacity(self):
+        customer = UserFactory()
+        response = _client_for(customer).patch(URL, {"max_concurrent_chats": 20}, format="json")
+        self.assertEqual(response.status_code, 200)
+        customer.refresh_from_db()
+        self.assertEqual(customer.max_concurrent_chats, User.DEFAULT_MAX_CONCURRENT_CHATS)
 
 
 class ProfileUpdateTests(TestCase):

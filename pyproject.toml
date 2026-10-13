@@ -27,6 +27,11 @@ ignore = ["E501"]
 DJANGO_SETTINGS_MODULE = "config.settings.test"
 addopts = "--ds=config.settings.test"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore:.*WindowsSelectorEventLoopPolicy.*:DeprecationWarning",
+    "ignore:.*set_event_loop_policy.*:DeprecationWarning",
+]
 
 [tool.coverage.run]
 source = ["accounts", "chat", "config", "core", "realtime", "tickets"]

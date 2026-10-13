@@ -110,11 +110,15 @@ class AvatarDownloadTests(TestCase):
         client = _client_for(user)
         client.patch("/api/auth/me/", {"avatar": _png()})
         old_link = client.get(_url(user)).data["url"]
-        self.assertEqual(APIClient().get(old_link).status_code, 200)
+        old_response = APIClient().get(old_link)
+        self.assertEqual(old_response.status_code, 200)
+        b"".join(old_response.streaming_content)
         client.patch("/api/auth/me/", {"avatar": _png()})
         self.assertEqual(APIClient().get(old_link).status_code, 404)
         new_link = client.get(_url(user)).data["url"]
-        self.assertEqual(APIClient().get(new_link).status_code, 200)
+        new_response = APIClient().get(new_link)
+        self.assertEqual(new_response.status_code, 200)
+        b"".join(new_response.streaming_content)
 
 
 class AvatarDownloadSchemaTests(TestCase):

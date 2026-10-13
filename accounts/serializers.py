@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
@@ -12,6 +14,8 @@ from accounts.models import User
 from accounts.tokens import blacklist_user_tokens
 from accounts.validators import normalize_phone, validate_iranian_mobile
 from core.uploads import ensure_content_matches
+
+logger = logging.getLogger(__name__)
 
 
 class PhoneField(serializers.CharField):
@@ -138,8 +142,19 @@ class ProfileSerializer(serializers.ModelSerializer):
         if "avatar" in validated_data and old_name:
             new_name = instance.avatar.name if instance.avatar else ""
             if new_name != old_name:
-                storage.delete(old_name)
+                self._delete_old_avatar(storage, old_name)
         return instance
+
+    @staticmethod
+    def _delete_old_avatar(storage, name):
+        try:
+            storage.delete(name)
+        except OSError:
+            logger.warning(
+                "Could not delete a replaced avatar file",
+                extra={"avatar_name": name},
+                exc_info=True,
+            )
 
 
 class StaffProfileSerializer(ProfileSerializer):
