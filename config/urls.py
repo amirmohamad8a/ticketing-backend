@@ -15,6 +15,7 @@ urlpatterns = [
     path("api/downloads/<str:token>/", SignedDownloadView.as_view(), name="signed-download"),
     path("api/", include("accounts.user_urls")),
     path("api/", include("tickets.urls")),
+    path("api/", include("stats.urls")),
     path("api/", include("chat.urls")),
     path("api/", include("chat.widget.urls")),
     path("api/", include("realtime.urls")),

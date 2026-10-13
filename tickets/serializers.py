@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from rest_framework import serializers
@@ -114,7 +115,13 @@ class TicketSerializer(serializers.ModelSerializer):
 
         changes = []
         if "status" in validated_data and validated_data["status"] != instance.status:
-            changes.append(("status", instance.status, validated_data["status"]))
+            new_status = validated_data["status"]
+            changes.append(("status", instance.status, new_status))
+            if new_status in Ticket.FINISHED_STATUSES:
+                if instance.resolved_at is None:
+                    validated_data["resolved_at"] = timezone.now()
+            else:
+                validated_data["resolved_at"] = None
         if "assignee" in validated_data and validated_data["assignee"] != instance.assignee:
             old_assignee = instance.assignee.username if instance.assignee else ""
             new_assignee = validated_data["assignee"].username if validated_data["assignee"] else ""

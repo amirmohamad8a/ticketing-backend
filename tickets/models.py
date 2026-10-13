@@ -122,6 +122,8 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
     first_response_due_at = models.DateTimeField(
         null=True, blank=True, editable=False, db_index=True
     )
+    first_response_at = models.DateTimeField(null=True, blank=True, editable=False)
+    resolved_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         ordering = ["-created_at"]

@@ -34,7 +34,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["accounts", "chat", "config", "core", "realtime", "tickets"]
+source = ["accounts", "chat", "config", "core", "realtime", "stats", "tickets"]
 branch = true
 omit = [
     "*/migrations/*",

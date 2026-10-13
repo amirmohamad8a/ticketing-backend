@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "tickets",
     "chat",
     "realtime",
+    "stats",
     "core",
 ]
 

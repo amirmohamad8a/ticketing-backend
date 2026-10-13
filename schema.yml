@@ -435,6 +435,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/Site'
           description: ''
+  /api/stats/:
+    get:
+      operationId: stats_retrieve
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+      tags:
+      - Stats
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stats'
+          description: ''
   /api/tags/:
     get:
       operationId: tags_list
@@ -1466,6 +1491,22 @@ components:
       - id
       - name
       - role
+    AgentLoad:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        open_chats:
+          type: integer
+          readOnly: true
+      required:
+      - id
+      - name
+      - open_chats
     CannedReply:
       type: object
       properties:
@@ -1496,6 +1537,19 @@ components:
       - shortcut
       - title
       - updated_at
+    ChannelCount:
+      type: object
+      properties:
+        channel:
+          allOf:
+          - $ref: '#/components/schemas/ChannelEnum'
+          readOnly: true
+        count:
+          type: integer
+          readOnly: true
+      required:
+      - channel
+      - count
     ChannelEnum:
       enum:
       - portal
@@ -1607,6 +1661,19 @@ components:
             maxLength: 0
       required:
       - body
+    DailyCount:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          readOnly: true
+        count:
+          type: integer
+          readOnly: true
+      required:
+      - count
+      - date
     DownloadLink:
       type: object
       properties:
@@ -2138,6 +2205,67 @@ components:
       required:
       - expires_in
       - ticket
+    Stats:
+      type: object
+      properties:
+        range:
+          allOf:
+          - $ref: '#/components/schemas/StatsRange'
+          readOnly: true
+        queue_size:
+          type: integer
+          readOnly: true
+        open_chats_per_agent:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentLoad'
+          readOnly: true
+        average_first_response_seconds:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+        average_resolution_seconds:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+        tickets_total:
+          type: integer
+          readOnly: true
+        tickets_per_day:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyCount'
+          readOnly: true
+        tickets_per_channel:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChannelCount'
+          readOnly: true
+      required:
+      - average_first_response_seconds
+      - average_resolution_seconds
+      - open_chats_per_agent
+      - queue_size
+      - range
+      - tickets_per_channel
+      - tickets_per_day
+      - tickets_total
+    StatsRange:
+      type: object
+      properties:
+        date_from:
+          type: string
+          format: date
+          readOnly: true
+        date_to:
+          type: string
+          format: date
+          readOnly: true
+      required:
+      - date_from
+      - date_to
     Tag:
       type: object
       properties:

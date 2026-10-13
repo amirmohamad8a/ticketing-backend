@@ -4,8 +4,9 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework.exceptions import ValidationError
 
 from accounts.models import User
+from accounts.permissions import STAFF_ROLES
 from realtime.events import publish
-from tickets.models import Comment
+from tickets.models import Comment, Ticket
 
 MESSAGE_EVENT_TYPE = "message.created"
 MESSAGES_PAGE_SIZE = 100
@@ -51,6 +52,25 @@ def _publish_created(comment):
     )
 
 
+def _is_public_staff_reply(comment):
+    return (
+        comment.kind == Comment.Kind.MESSAGE
+        and not comment.is_internal
+        and comment.author_id is not None
+        and comment.author.role in STAFF_ROLES
+    )
+
+
+def _record_first_response(ticket, comment):
+    if not _is_public_staff_reply(comment):
+        return
+    updated = Ticket.all_objects.filter(pk=ticket.pk, first_response_at__isnull=True).update(
+        first_response_at=comment.created_at
+    )
+    if updated:
+        ticket.first_response_at = comment.created_at
+
+
 def post_message(
     ticket,
     body,
@@ -82,6 +102,7 @@ def post_message(
                 body=body,
                 is_internal=is_internal,
             )
+            _record_first_response(ticket, comment)
             _publish_created(comment)
     except IntegrityError:
         if not client_msg_id:
