@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "accounts",
     "tickets",
     "chat",
+    "realtime",
     "core",
 ]
 
@@ -110,6 +111,7 @@ REST_FRAMEWORK = {
         "user_management": "60/min",
         "site_management": "60/min",
         "download": "300/min",
+        "ws_ticket": "30/min",
         "widget_ip": "120/min",
         "widget_visitor": "90/min",
         "widget_start": "20/hour",
@@ -208,6 +210,11 @@ CHANNEL_LAYERS = {
         },
     }
 }
+
+WS_TICKET_TTL_SECONDS = env.int("WS_TICKET_TTL_SECONDS", default=30)
+WS_MAX_MESSAGE_BYTES = env.int("WS_MAX_MESSAGE_BYTES", default=4096)
+WS_RATE_LIMIT_MESSAGES = env.int("WS_RATE_LIMIT_MESSAGES", default=30)
+WS_RATE_LIMIT_WINDOW_SECONDS = env.int("WS_RATE_LIMIT_WINDOW_SECONDS", default=10)
 
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL

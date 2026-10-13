@@ -38,7 +38,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Persian (`fa`) language and the Asia/Tehran time zone: timestamps are stored in UTC and returned with the Tehran offset, and custom error messages are marked for translation
 - OpenAPI schema and Swagger UI
 - Database-free `/health/` endpoint for uptime checks
-- WebSocket support: the app runs on ASGI with Django Channels and a Redis channel layer. `ws://localhost:8000/ws/echo/` is a temporary echo endpoint that proves the stack works, and it is replaced by authenticated consumers
+- WebSocket support: the app runs on ASGI with Django Channels and a Redis channel layer. Clients connect to `/ws/` with a short-lived, single-use ticket obtained over HTTP (users at `POST /api/ws/ticket/`, widget visitors at `POST /api/widget/ws/ticket/`), so no long-lived token ever appears in a URL. Visitors are also checked against the site's allowed origins. A socket can only join the conversations its owner could open over HTTP, and every connection has a message size limit and a message rate limit
 - Automated tests with an 85% coverage threshold and GitHub Actions CI
 
 ## Chat sites
@@ -113,6 +113,7 @@ The embeddable widget talks to these routes. They need no staff account.
 | `POST` | `/api/widget/conversations/{id}/read/` | token | Mark messages as read. Optional `last_read_comment_id`. Returns `{last_read_comment_id, unread_count}` |
 | `POST` | `/api/widget/conversations/{id}/attachments/` | token | Send a file as a message (multipart: `file`, optional `body` and `client_msg_id`) |
 | `GET` | `/api/widget/attachments/{id}/download/` | token | Short-lived signed download URL as `{url, expires_in}` |
+| `POST` | `/api/widget/ws/ticket/` | token | Exchange the visitor token for a single-use WebSocket ticket as `{ticket, expires_in}` |
 
 - Authentication: send the token from the first `POST /api/widget/conversations/` in an `X-Visitor-Token` header. A missing, tampered or expired token, and the token of a deactivated site, get `401`
 - Origin: the `Origin` header must be one of the site's `allowed_origins`. A missing header, an unlisted origin or a site with no origins gets `403`, so add the host page's origin to the site before embedding the widget. The routes send CORS headers to any origin so the browser can read that `403`, and the origin check is what enforces access
@@ -130,15 +131,49 @@ There is no password reset by email. Outbound email is out of scope for this pro
 
 ## WebSockets
 
-The app is an ASGI application (`config/asgi.py`). HTTP goes to Django and WebSocket connections go to the routes in `config/routing.py`. In development `runserver` is served by Daphne, so it handles both. The channel layer is `channels_redis` on `REDIS_URL`, with the key prefix `ticketing`. Tests use the in-memory channel layer.
+The app is an ASGI application (`config/asgi.py`). HTTP goes to Django and WebSocket connections go to `/ws/` (`config/routing.py`). In development `runserver` is served by Daphne, so it handles both. The channel layer is `channels_redis` on `REDIS_URL`, with the key prefix `ticketing`. Tests use the in-memory channel layer.
 
-Try the echo consumer from a browser console:
+### Connecting
+
+1. Get a ticket over HTTP. Signed-in users call `POST /api/ws/ticket/` with their access token. Widget visitors call `POST /api/widget/ws/ticket/` with `X-Visitor-Token` from an allowed origin. The response is `{ticket, expires_in}`.
+2. Open `ws://localhost:8000/ws/?ticket=<ticket>` before it expires.
+
+A ticket works once and expires after `WS_TICKET_TTL_SECONDS`. A missing, unknown, reused or expired ticket, a deactivated user, a deactivated site and a visitor whose `Origin` header is not in the site's `allowed_origins` are all refused at the handshake with HTTP 403.
 
 ```js
-const ws = new WebSocket("ws://localhost:8000/ws/echo/");
+const { ticket } = await fetch("http://localhost:8000/api/ws/ticket/", {
+  method: "POST",
+  headers: { Authorization: `Bearer ${accessToken}` },
+}).then((response) => response.json());
+
+const ws = new WebSocket(`ws://localhost:8000/ws/?ticket=${ticket}`);
 ws.onmessage = (event) => console.log(event.data);
-ws.onopen = () => ws.send("hello");
+ws.onopen = () => ws.send(JSON.stringify({ type: "join", ticket_id: 1 }));
 ```
+
+### Messages
+
+Every message is a JSON object with a `type`.
+
+| Direction | Message | Meaning |
+| --- | --- | --- |
+| Client to server | `{"type": "ping"}` | Heartbeat. The server answers `{"type": "pong"}` |
+| Client to server | `{"type": "join", "ticket_id": 1}` | Subscribe to a ticket. The server answers `{"type": "joined", "ticket_id": 1}` |
+| Client to server | `{"type": "leave", "ticket_id": 1}` | Unsubscribe. The server answers `{"type": "left", "ticket_id": 1}` |
+| Server to client | `{"type": "error", "code": "...", "ticket_id": 1}` | A message was rejected. `ticket_id` is present when it applies |
+
+Error codes: `invalid_json`, `invalid_message`, `unknown_type`, `invalid_ticket_id`, `not_found` and `too_many_tickets`.
+
+- A visitor can join only their own conversations, a customer only their own tickets, and an agent or admin any ticket that is not deleted. Anything else answers `not_found`, the same as the HTTP API, so a client cannot tell a missing ticket from someone else's
+- A connection can be joined to at most 50 tickets at once
+
+### Limits
+
+| Limit | Result |
+| --- | --- |
+| Message larger than `WS_MAX_MESSAGE_BYTES` | Connection closed with code `1009` |
+| More than `WS_RATE_LIMIT_MESSAGES` messages in `WS_RATE_LIMIT_WINDOW_SECONDS` | Connection closed with code `4429` |
+| Binary frame | Connection closed with code `1003` |
 
 Check that the Redis channel layer works:
 
@@ -146,7 +181,7 @@ Check that the Redis channel layer works:
 docker compose exec web python manage.py shell -c "from asgiref.sync import async_to_sync; from channels.layers import get_channel_layer; layer = get_channel_layer(); async_to_sync(layer.send)('probe', {'type': 'ping'}); print(async_to_sync(layer.receive)('probe'))"
 ```
 
-The production image still runs gunicorn (WSGI) and does not serve WebSockets yet. It moves to an ASGI server
+The production image still runs gunicorn (WSGI) and does not serve WebSockets yet. It moves to an ASGI server in Task 18.1.
 
 ## Tech stack
 
@@ -277,6 +312,10 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `PORT` | No | `8000` | Port gunicorn listens on |
 | `STORAGE_BACKEND` | No | `local` | `local` for disk or `s3` for an S3-compatible bucket |
 | `DOWNLOAD_URL_TTL_SECONDS` | No | `300` | Lifetime of signed download URLs |
+| `WS_TICKET_TTL_SECONDS` | No | `30` | Lifetime of a single-use WebSocket ticket |
+| `WS_MAX_MESSAGE_BYTES` | No | `4096` | Largest message a client may send over a WebSocket. A bigger one closes the connection |
+| `WS_RATE_LIMIT_MESSAGES` | No | `30` | Messages a single connection may send per window |
+| `WS_RATE_LIMIT_WINDOW_SECONDS` | No | `10` | Length of the per-connection rate-limit window |
 | `S3_BUCKET_NAME` | With `s3` | none | Bucket that holds attachments and avatars |
 | `S3_ACCESS_KEY` | With `s3` | none | Access key for the bucket |
 | `S3_SECRET_KEY` | With `s3` | none | Secret key for the bucket |

@@ -30,6 +30,7 @@ from chat.widget.schema import (
     message_schema,
     widget_config_schema,
     widget_download_schema,
+    widget_socket_ticket_schema,
 )
 from chat.widget.serializers import (
     ConversationCreateSerializer,
@@ -49,6 +50,7 @@ from chat.widget.throttles import (
     WidgetVisitorThrottle,
 )
 from core.downloads import build_download_link
+from realtime.tickets import issue_ticket
 from tickets.messages import post_message
 from tickets.models import Attachment
 from tickets.reads import mark_conversation_read, unread_count
@@ -251,3 +253,9 @@ class WidgetAttachmentDownloadView(WidgetAPIView):
             comment__ticket__is_deleted=False,
             comment__is_internal=False,
         )
+
+
+@widget_socket_ticket_schema
+class WidgetSocketTicketView(WidgetAPIView):
+    def post(self, request):
+        return Response(issue_ticket(visitor=request.auth))

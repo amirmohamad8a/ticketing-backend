@@ -30,8 +30,7 @@ class VisitorTokenAuthentication(BaseAuthentication):
         return "Visitor"
 
 
-def is_origin_allowed(request, site):
-    origin = request.META.get(ORIGIN_META_KEY, "")
+def origin_allowed_for_site(origin, site):
     if not origin:
         return False
     try:
@@ -39,6 +38,10 @@ def is_origin_allowed(request, site):
     except DjangoValidationError:
         return False
     return normalized in site.allowed_origins
+
+
+def is_origin_allowed(request, site):
+    return origin_allowed_for_site(request.META.get(ORIGIN_META_KEY, ""), site)
 
 
 def ensure_origin_allowed(request, site):

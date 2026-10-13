@@ -9,10 +9,11 @@ django_asgi_app = get_asgi_application()
 from channels.routing import ProtocolTypeRouter, URLRouter
 
 from config.routing import websocket_urlpatterns
+from realtime.auth import TicketAuthMiddleware
 
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
-        "websocket": URLRouter(websocket_urlpatterns),
+        "websocket": TicketAuthMiddleware(URLRouter(websocket_urlpatterns)),
     }
 )

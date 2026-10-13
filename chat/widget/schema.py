@@ -11,6 +11,7 @@ from chat.widget.serializers import (
     WidgetUploadSerializer,
 )
 from core.serializers import DownloadLinkSerializer
+from realtime.serializers import SocketTicketSerializer
 from tickets.serializers import ReadMarkSerializer, ReadStateSerializer
 
 TAGS = ["Widget"]
@@ -75,4 +76,8 @@ attachment_upload_schema = extend_schema_view(
 
 widget_download_schema = extend_schema_view(
     get=extend_schema(tags=TAGS, parameters=[PK], responses=DownloadLinkSerializer)
+)
+
+widget_socket_ticket_schema = extend_schema_view(
+    post=extend_schema(tags=TAGS, request=None, responses=SocketTicketSerializer)
 )

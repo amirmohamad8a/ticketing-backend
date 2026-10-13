@@ -7,6 +7,7 @@ from chat.widget.views import (
     MessageListCreateView,
     WidgetAttachmentDownloadView,
     WidgetConfigView,
+    WidgetSocketTicketView,
 )
 
 urlpatterns = [
@@ -36,4 +37,5 @@ urlpatterns = [
         WidgetAttachmentDownloadView.as_view(),
         name="widget-attachment-download",
     ),
+    path("widget/ws/ticket/", WidgetSocketTicketView.as_view(), name="widget-ws-ticket"),
 ]

@@ -25,7 +25,7 @@ _SENSITIVE_KEY = re.compile(
 
 _SECRET_PARAM = (
     r"(?:token|password|passwd|secret|signature|credential|authorization|refresh|access"
-    r"|api[_-]?key)"
+    r"|api[_-]?key|ticket)"
 )
 
 _TEXT_PATTERNS = (
