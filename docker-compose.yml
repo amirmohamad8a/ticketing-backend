@@ -35,6 +35,23 @@ services:
       redis:
         condition: service_healthy
 
+  celery-beat:
+    build: .
+    command: celery -A config beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://ticketing:ticketing@db:5432/ticketing
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   db:
     image: postgres:16-alpine
     environment:

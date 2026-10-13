@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
@@ -15,6 +16,7 @@ from core.downloads import build_download_link
 from tickets.assignment import claim_ticket
 from tickets.events import TAG_FIELD
 from tickets.filters import TicketFilter
+from tickets.lifecycle import reopen_on_customer_reply
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
 from tickets.models import Attachment, Ticket, TicketRating
 from tickets.pagination import TicketCursorPagination
@@ -166,15 +168,19 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         is_internal = data.get("is_internal", False)
-        if request.user.role == User.Role.CUSTOMER:
+        is_customer = request.user.role == User.Role.CUSTOMER
+        if is_customer:
             is_internal = False
-        comment, created = post_message(
-            ticket,
-            data["body"],
-            author=request.user,
-            is_internal=is_internal,
-            client_msg_id=data.get("client_msg_id"),
-        )
+        with transaction.atomic():
+            comment, created = post_message(
+                ticket,
+                data["body"],
+                author=request.user,
+                is_internal=is_internal,
+                client_msg_id=data.get("client_msg_id"),
+            )
+            if created and is_customer:
+                reopen_on_customer_reply(ticket.pk, request)
         status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response(CommentSerializer(comment).data, status=status_code)
 
