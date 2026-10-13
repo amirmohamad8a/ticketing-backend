@@ -126,7 +126,7 @@ class Comment(TimeStampedModel):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="comments")
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="comments",
@@ -215,7 +215,6 @@ class ConversationRead(TimeStampedModel):
 
 class Attachment(TimeStampedModel):
     MAX_SIZE_BYTES = 10 * 1024 * 1024
-
     CONTENT_TYPE_EXTENSIONS = {
         "image/png": ".png",
         "image/jpeg": ".jpg",

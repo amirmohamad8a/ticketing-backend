@@ -5,6 +5,7 @@ from django.contrib.admin.sites import site
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
+from django.db.models import ProtectedError
 from django.test import TestCase, override_settings
 
 from accounts.models import User
@@ -73,7 +74,7 @@ class TicketModelTests(TestCase):
         Ticket.objects.create(
             title="Refund request", description="Please refund my order.", customer=self.customer
         )
-        with self.assertRaises(Exception):
+        with self.assertRaises(ProtectedError):
             self.customer.delete()
 
     def test_str_representation(self):
@@ -233,11 +234,10 @@ class CommentModelTests(TestCase):
         self.assertIsNotNone(comment.created_at)
         self.assertIsNotNone(comment.updated_at)
 
-    def test_deleting_author_sets_null(self):
-        comment = Comment.objects.create(ticket=self.ticket, author=self.agent, body="On it.")
-        self.agent.delete()
-        comment.refresh_from_db()
-        self.assertIsNone(comment.author)
+    def test_deleting_author_is_protected(self):
+        Comment.objects.create(ticket=self.ticket, author=self.agent, body="On it.")
+        with self.assertRaises(ProtectedError):
+            self.agent.delete()
 
     def test_deleting_ticket_keeps_its_comments(self):
         comment = Comment.objects.create(ticket=self.ticket, author=self.customer, body="Thanks!")

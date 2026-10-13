@@ -73,6 +73,10 @@ class ProductionSettingsTests(SimpleTestCase):
             "user_management",
             "site_management",
             "download",
+            "widget_ip",
+            "widget_visitor",
+            "widget_start",
+            "widget_upload",
         }
         self.assertEqual(scopes, set(rest_framework["DEFAULT_THROTTLE_RATES"]))
 

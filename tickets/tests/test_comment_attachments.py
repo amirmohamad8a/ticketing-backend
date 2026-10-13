@@ -15,7 +15,7 @@ from core.tests.factories import (
     TicketFactory,
     UserFactory,
 )
-from tickets.models import Attachment, Ticket
+from tickets.models import Attachment, Comment, Ticket
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
 
@@ -242,8 +242,13 @@ class CommentAttachmentAuthorRuleTests(CommentAttachmentFixture):
         self._assert_forbidden(self.admin, self.public_comment)
         self._assert_forbidden(self.admin, self.internal_comment)
 
-    def test_nobody_can_attach_to_a_comment_whose_author_was_deleted(self):
-        orphan = CommentFactory(ticket=self.ticket, author=None)
+    def test_nobody_can_attach_to_a_system_comment(self):
+        system_comment = CommentFactory(
+            ticket=self.ticket,
+            author=None,
+            visitor=None,
+            kind=Comment.Kind.SYSTEM,
+        )
         for user in (self.customer, self.agent, self.admin):
             with self.subTest(role=user.role):
-                self._assert_forbidden(user, orphan)
+                self._assert_forbidden(user, system_comment)

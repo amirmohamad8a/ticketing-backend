@@ -2,7 +2,7 @@ import factory
 
 from accounts.models import User
 from chat.models import Site, Visitor
-from tickets.models import Attachment, Comment, Ticket, TicketEvent
+from tickets.models import Attachment, Comment, ConversationRead, Ticket, TicketEvent
 
 
 class UserFactory(factory.django.DjangoModelFactory):
@@ -106,3 +106,20 @@ class AttachmentFactory(factory.django.DjangoModelFactory):
     uploaded_by = factory.SubFactory(UserFactory)
     size = factory.LazyAttribute(lambda attachment: attachment.file.size)
     content_type = "text/plain"
+
+
+class ConversationReadFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ConversationRead
+
+    ticket = factory.SubFactory(TicketFactory)
+    last_read_comment_id = 0
+    user = factory.SubFactory(UserFactory)
+    visitor = None
+
+    class Params:
+        for_visitor = factory.Trait(
+            user=None,
+            ticket=factory.SubFactory(TicketFactory, from_visitor=True),
+            visitor=factory.SelfAttribute("ticket.visitor"),
+        )
