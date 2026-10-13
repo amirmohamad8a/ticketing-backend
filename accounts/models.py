@@ -47,6 +47,7 @@ class User(AbstractUser):
         default=DEFAULT_MAX_CONCURRENT_CHATS,
         validators=[MinValueValidator(1), MaxValueValidator(MAX_CONCURRENT_CHATS_LIMIT)],
     )
+    last_chat_assigned_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     def __str__(self):
         return self.username

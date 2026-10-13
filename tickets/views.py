@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 
 from accounts.models import User
 from core.downloads import build_download_link
+from tickets.assignment import claim_ticket
 from tickets.filters import TicketFilter
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
 from tickets.models import Attachment, Ticket
@@ -19,6 +20,7 @@ from tickets.pagination import TicketCursorPagination
 from tickets.permissions import (
     AdminOnlyDeleteAndRestore,
     CustomerFieldRestrictions,
+    IsAgentOrAdmin,
     IsCustomerOwnerOrReadOwn,
 )
 from tickets.reads import annotate_unread, mark_conversation_read, visible_comments
@@ -87,6 +89,13 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket = self.get_object()
         ticket.restore()
         return Response(self.get_serializer(ticket).data)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAgentOrAdmin])
+    def claim(self, request, pk=None):
+        ticket = self.get_object()
+        claim_ticket(ticket.pk, request.user, request)
+        refreshed = self.get_queryset().get(pk=ticket.pk)
+        return Response(self.get_serializer(refreshed).data)
 
     @action(detail=True, methods=["post"], url_path="read", url_name="read")
     def mark_read(self, request, pk=None):

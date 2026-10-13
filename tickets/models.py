@@ -40,6 +40,7 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
         Status.RESOLVED: {Status.CLOSED, Status.IN_PROGRESS},
         Status.CLOSED: {Status.IN_PROGRESS},
     }
+    FINISHED_STATUSES = (Status.RESOLVED, Status.CLOSED)
 
     title = models.CharField(max_length=255)
     description = models.TextField()

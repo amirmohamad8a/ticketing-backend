@@ -4,14 +4,18 @@ from django.db.models import Count, Q
 
 from accounts.models import User
 from accounts.permissions import STAFF_ROLES
-from chat.conversations import FINISHED_STATUSES
 from tickets.models import Ticket
 
 CACHE_PREFIX = "presence:"
 STATUS_AVAILABLE = "available"
 STATUS_AWAY = "away"
 STATUSES = (STATUS_AVAILABLE, STATUS_AWAY)
-ACTIVE_STATUSES = [value for value in Ticket.Status.values if value not in FINISHED_STATUSES]
+ACTIVE_STATUSES = [value for value in Ticket.Status.values if value not in Ticket.FINISHED_STATUSES]
+OPEN_CHAT_FILTER = Q(
+    assigned_tickets__channel=Ticket.Channel.CHAT,
+    assigned_tickets__is_deleted=False,
+    assigned_tickets__status__in=ACTIVE_STATUSES,
+)
 
 
 def _key(user_id):
@@ -44,19 +48,18 @@ def get_statuses(user_ids):
     return {keys[key]: state["status"] for key, state in found.items()}
 
 
+def available_agent_ids():
+    staff_ids = list(
+        User.objects.filter(is_active=True, role__in=STAFF_ROLES).values_list("pk", flat=True)
+    )
+    statuses = get_statuses(staff_ids)
+    return [user_id for user_id, status in statuses.items() if status == STATUS_AVAILABLE]
+
+
 def online_agents():
     agents = list(
         User.objects.filter(is_active=True, role__in=STAFF_ROLES)
-        .annotate(
-            open_chats=Count(
-                "assigned_tickets",
-                filter=Q(
-                    assigned_tickets__channel=Ticket.Channel.CHAT,
-                    assigned_tickets__is_deleted=False,
-                    assigned_tickets__status__in=ACTIVE_STATUSES,
-                ),
-            )
-        )
+        .annotate(open_chats=Count("assigned_tickets", filter=OPEN_CHAT_FILTER))
         .order_by("first_name", "last_name", "username", "id")
     )
     statuses = get_statuses([agent.pk for agent in agents])

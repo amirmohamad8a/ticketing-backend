@@ -16,6 +16,7 @@ ticket_schema = extend_schema_view(
     partial_update=extend_schema(tags=["Tickets"]),
     destroy=extend_schema(tags=["Tickets"]),
     restore=extend_schema(tags=["Tickets"], request=None, responses=TicketSerializer),
+    claim=extend_schema(tags=["Tickets"], request=None, responses=TicketSerializer),
     mark_read=extend_schema(
         tags=["Tickets"],
         request=ReadMarkSerializer,

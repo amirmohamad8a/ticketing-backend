@@ -1,13 +1,14 @@
 from django.db import transaction
 from django.utils.text import Truncator
 
+from chat.assignment import route_new_chat
 from chat.models import Visitor
 from chat.visitors import start_visitor_session
 from tickets.events import record_event
 from tickets.messages import post_message
 from tickets.models import Ticket
 
-FINISHED_STATUSES = (Ticket.Status.RESOLVED, Ticket.Status.CLOSED)
+FINISHED_STATUSES = Ticket.FINISHED_STATUSES
 TITLE_MAX_LENGTH = 100
 
 
@@ -45,6 +46,8 @@ def open_conversation(visitor, body, client_msg_id=None):
                 new_value=ticket.status,
             )
         comment, _posted = post_message(ticket, body, visitor=visitor, client_msg_id=client_msg_id)
+        if created:
+            route_new_chat(ticket)
     return ticket, comment, created
 
 
