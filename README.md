@@ -38,6 +38,7 @@ A support-ticketing REST API built with Django and Django REST Framework. Custom
 - Persian (`fa`) language and the Asia/Tehran time zone: timestamps are stored in UTC and returned with the Tehran offset, and custom error messages are marked for translation
 - OpenAPI schema and Swagger UI
 - Database-free `/health/` endpoint for uptime checks
+- WebSocket support: the app runs on ASGI with Django Channels and a Redis channel layer. `ws://localhost:8000/ws/echo/` is a temporary echo endpoint that proves the stack works, and it is replaced by authenticated consumers
 - Automated tests with an 85% coverage threshold and GitHub Actions CI
 
 ## Chat sites
@@ -127,9 +128,29 @@ The embeddable widget talks to these routes. They need no staff account.
 
 There is no password reset by email. Outbound email is out of scope for this project, so a user who forgets their password asks an admin, who sets a new one with `PATCH /api/users/{id}/` and a `password` field. That also signs the user out of every session. Signed-in users change their own password with `POST /api/auth/password/change/`.
 
+## WebSockets
+
+The app is an ASGI application (`config/asgi.py`). HTTP goes to Django and WebSocket connections go to the routes in `config/routing.py`. In development `runserver` is served by Daphne, so it handles both. The channel layer is `channels_redis` on `REDIS_URL`, with the key prefix `ticketing`. Tests use the in-memory channel layer.
+
+Try the echo consumer from a browser console:
+
+```js
+const ws = new WebSocket("ws://localhost:8000/ws/echo/");
+ws.onmessage = (event) => console.log(event.data);
+ws.onopen = () => ws.send("hello");
+```
+
+Check that the Redis channel layer works:
+
+```bash
+docker compose exec web python manage.py shell -c "from asgiref.sync import async_to_sync; from channels.layers import get_channel_layer; layer = get_channel_layer(); async_to_sync(layer.send)('probe', {'type': 'ping'}); print(async_to_sync(layer.receive)('probe'))"
+```
+
+The production image still runs gunicorn (WSGI) and does not serve WebSockets yet. It moves to an ASGI server
+
 ## Tech stack
 
-Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Redis is Django's cache, which holds the throttle counters, and it is also the Celery broker. Celery has no tasks yet.
+Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Channels with Daphne, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Redis is Django's cache, which holds the throttle counters, the Channels layer that fans WebSocket events out between processes, and the Celery broker. Celery has no tasks yet.
 
 ## Run locally
 

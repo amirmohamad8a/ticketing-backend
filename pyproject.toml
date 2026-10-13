@@ -18,6 +18,7 @@ select = ["E", "F", "W"]
 ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
+"config/asgi.py" = ["E402"]
 "config/settings/dev.py" = ["F403"]
 "config/settings/prod.py" = ["F403", "F405"]
 "config/settings/test.py" = ["F403", "F405"]
