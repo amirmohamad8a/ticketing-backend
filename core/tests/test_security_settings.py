@@ -73,6 +73,7 @@ class ProductionSettingsTests(SimpleTestCase):
             "user_management",
             "site_management",
             "download",
+            "export",
             "ws_ticket",
             "widget_ip",
             "widget_visitor",

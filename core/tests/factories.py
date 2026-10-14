@@ -2,7 +2,16 @@ import factory
 
 from accounts.models import User
 from chat.models import Site, Visitor
-from tickets.models import Attachment, Comment, ConversationRead, Ticket, TicketEvent
+from tickets.models import (
+    Attachment,
+    CannedReply,
+    Comment,
+    ConversationRead,
+    Tag,
+    Ticket,
+    TicketEvent,
+    TicketRating,
+)
 
 
 class UserFactory(factory.django.DjangoModelFactory):
@@ -45,9 +54,27 @@ class VisitorFactory(factory.django.DjangoModelFactory):
     name = factory.Sequence(lambda n: f"Visitor {n}")
 
 
+class TagFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Tag
+
+    name = factory.Sequence(lambda n: f"tag-{n}")
+    color = Tag.Color.GRAY
+
+
+class CannedReplyFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = CannedReply
+
+    title = factory.Sequence(lambda n: f"Reply {n}")
+    shortcut = factory.Sequence(lambda n: f"reply-{n}")
+    body = "Thanks for contacting support."
+
+
 class TicketFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Ticket
+        skip_postgeneration_save = True
 
     class Params:
         from_visitor = factory.Trait(
@@ -66,6 +93,20 @@ class TicketFactory(factory.django.DjangoModelFactory):
     visitor = None
     site = None
     assignee = None
+
+    @factory.post_generation
+    def tags(self, create, extracted, **kwargs):
+        if create and extracted:
+            self.tags.set(extracted)
+
+
+class TicketRatingFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = TicketRating
+
+    ticket = factory.SubFactory(TicketFactory, status=Ticket.Status.RESOLVED)
+    score = 5
+    comment = ""
 
 
 class TicketEventFactory(factory.django.DjangoModelFactory):

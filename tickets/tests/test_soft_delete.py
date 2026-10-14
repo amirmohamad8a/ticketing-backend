@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from core.management.commands.seed_demo import TICKETS
+from core.demo import CHAT_TICKETS, PORTAL_TICKETS
 from core.tests.factories import (
     AdminFactory,
     AgentFactory,
@@ -226,8 +226,9 @@ class TicketAdminSoftDeleteTests(TestCase):
 
 class SeedDemoSoftDeleteTests(TestCase):
     def test_rerun_restores_a_deleted_demo_ticket_without_duplicating_it(self):
+        total = len(PORTAL_TICKETS) + len(CHAT_TICKETS)
         call_command("seed_demo", stdout=StringIO())
         Ticket.objects.first().delete()
         call_command("seed_demo", stdout=StringIO())
-        self.assertEqual(Ticket.all_objects.count(), len(TICKETS))
-        self.assertEqual(Ticket.objects.count(), len(TICKETS))
+        self.assertEqual(Ticket.all_objects.count(), total)
+        self.assertEqual(Ticket.objects.count(), total)
