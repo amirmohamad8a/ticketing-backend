@@ -14,6 +14,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from core.downloads import read_download_token
+from core.health import all_passed, run_checks
 from core.metrics import render_metrics
 
 
@@ -21,6 +22,15 @@ from core.metrics import render_metrics
 @never_cache
 def health(request):
     return JsonResponse({"status": "ok"})
+
+
+@require_http_methods(["GET", "HEAD"])
+@never_cache
+def ready(request):
+    checks = run_checks()
+    passed = all_passed(checks)
+    body = {"status": "ok" if passed else "unavailable", "checks": checks}
+    return JsonResponse(body, status=200 if passed else 503)
 
 
 def _bearer_token(request):

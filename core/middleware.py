@@ -9,7 +9,7 @@ from core.logs import request_id_var, scrub, user_id_var
 
 REQUEST_ID_HEADER = "X-Request-ID"
 REQUEST_ID_META_KEY = "HTTP_X_REQUEST_ID"
-QUIET_PATHS = frozenset({"/health/", "/metrics/"})
+QUIET_PATHS = frozenset({"/health/", "/ready/", "/metrics/"})
 
 _VALID_REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{8,64}")
 
