@@ -285,6 +285,7 @@ SLA_FIRST_RESPONSE_MINUTES = {
 }
 
 AUTO_CLOSE_AFTER_DAYS = env.int("AUTO_CLOSE_AFTER_DAYS", default=7)
+VISITOR_RETENTION_DAYS = env.int("VISITOR_RETENTION_DAYS", default=30)
 
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
@@ -296,6 +297,10 @@ CELERY_BEAT_SCHEDULE = {
     "tickets-auto-close-resolved": {
         "task": "tickets.auto_close_resolved",
         "schedule": timedelta(hours=1),
+    },
+    "chat-purge-stale-visitors": {
+        "task": "chat.purge_stale_visitors",
+        "schedule": timedelta(days=1),
     },
 }
 

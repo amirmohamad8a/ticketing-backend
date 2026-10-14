@@ -7,6 +7,7 @@ __pycache__/
 .github/
 db.sqlite3
 media/
+backups/
 staticfiles/
 .ruff_cache/
 .pytest_cache/
