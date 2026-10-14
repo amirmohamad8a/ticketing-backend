@@ -16,6 +16,7 @@ urlpatterns = [
     path("api/", include("accounts.user_urls")),
     path("api/", include("tickets.urls")),
     path("api/", include("stats.urls")),
+    path("api/", include("audit.urls")),
     path("api/", include("chat.urls")),
     path("api/", include("chat.widget.urls")),
     path("api/", include("realtime.urls")),

@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "chat",
     "realtime",
     "stats",
+    "audit",
     "core",
 ]
 
@@ -143,6 +144,8 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "TicketStatusEnum": "tickets.models.Ticket.Status",
         "PresenceStatusEnum": "realtime.presence.STATUSES",
+        "KindEnum": "tickets.models.Comment.Kind",
+        "AuditKindEnum": "audit.cursors.KINDS",
     },
 }
 

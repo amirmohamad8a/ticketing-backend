@@ -62,6 +62,61 @@ paths:
               schema:
                 $ref: '#/components/schemas/DownloadLink'
           description: ''
+  /api/audit/:
+    get:
+      operationId: audit_retrieve
+      parameters:
+      - in: query
+        name: actor
+        schema:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 1
+          format: int64
+      - in: query
+        name: cursor
+        schema:
+          type: string
+          maxLength: 200
+          minLength: 1
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: field_changed
+        schema:
+          type: string
+          maxLength: 50
+          minLength: 1
+      - in: query
+        name: kind
+        schema:
+          enum:
+          - ticket
+          - user
+          type: string
+          minLength: 1
+        description: |-
+          * `ticket` - ticket
+          * `user` - user
+      tags:
+      - Audit
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+          description: ''
   /api/auth/logout/:
     post:
       operationId: auth_logout_create
@@ -1701,6 +1756,80 @@ components:
       - id
       - name
       - open_chats
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/AuditKindEnum'
+          readOnly: true
+        ticket:
+          type: integer
+          readOnly: true
+          nullable: true
+        user:
+          type: integer
+          readOnly: true
+          nullable: true
+        actor:
+          type: integer
+          readOnly: true
+          nullable: true
+        actor_username:
+          type: string
+          readOnly: true
+          nullable: true
+        field_changed:
+          type: string
+          readOnly: true
+        old_value:
+          type: string
+          readOnly: true
+        new_value:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - actor
+      - actor_username
+      - created_at
+      - field_changed
+      - id
+      - kind
+      - new_value
+      - old_value
+      - ticket
+      - user
+    AuditKindEnum:
+      enum:
+      - ticket
+      - user
+      type: string
+      description: |-
+        * `ticket` - ticket
+        * `user` - user
+    AuditPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+          readOnly: true
+      required:
+      - next
+      - results
     CannedReply:
       type: object
       properties:
