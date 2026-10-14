@@ -1,5 +1,10 @@
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
-from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 
 from chat.widget.serializers import (
     ConversationCreateSerializer,
@@ -15,7 +20,17 @@ from realtime.serializers import SocketTicketSerializer
 from tickets.serializers import ReadMarkSerializer, ReadStateSerializer, TicketRatingSerializer
 
 TAGS = ["Widget"]
-PK = OpenApiParameter("pk", int, OpenApiParameter.PATH)
+ID = OpenApiParameter("id", int, OpenApiParameter.PATH)
+
+CONVERSATION_CLOSED = OpenApiResponse(
+    description="The conversation is resolved or closed (`conversation_closed`)."
+)
+RATING_CONFLICT = OpenApiResponse(
+    description=(
+        "The conversation is not resolved yet or was already rated "
+        "(`ticket_not_resolved`, `ticket_already_rated`)."
+    )
+)
 
 
 class VisitorTokenScheme(OpenApiAuthenticationExtension):
@@ -30,7 +45,11 @@ widget_config_schema = extend_schema_view(
     get=extend_schema(
         tags=TAGS,
         parameters=[OpenApiParameter("key", str, OpenApiParameter.QUERY, required=True)],
-        responses=WidgetConfigSerializer,
+        responses={
+            200: WidgetConfigSerializer,
+            403: OpenApiResponse(description="The request origin is not allowed for the site."),
+            404: OpenApiResponse(description="No active site has this key."),
+        },
     )
 )
 
@@ -38,54 +57,66 @@ conversation_create_schema = extend_schema_view(
     post=extend_schema(
         tags=TAGS,
         request=ConversationCreateSerializer,
-        responses={200: WidgetConversationStartSerializer, 201: WidgetConversationStartSerializer},
+        responses={
+            200: WidgetConversationStartSerializer,
+            201: WidgetConversationStartSerializer,
+            404: OpenApiResponse(description="No active site has this key."),
+        },
     )
 )
 
 message_schema = extend_schema_view(
     get=extend_schema(
         tags=TAGS,
-        parameters=[PK, OpenApiParameter("after", int, OpenApiParameter.QUERY)],
+        parameters=[ID, OpenApiParameter("after", int, OpenApiParameter.QUERY)],
         responses=WidgetMessageListSerializer,
     ),
     post=extend_schema(
         tags=TAGS,
-        parameters=[PK],
+        parameters=[ID],
         request=WidgetMessageInputSerializer,
-        responses={200: WidgetMessageSerializer, 201: WidgetMessageSerializer},
+        responses={
+            200: WidgetMessageSerializer,
+            201: WidgetMessageSerializer,
+            409: CONVERSATION_CLOSED,
+        },
     ),
 )
 
 conversation_read_schema = extend_schema_view(
     post=extend_schema(
         tags=TAGS,
-        parameters=[PK],
+        parameters=[ID],
         request=ReadMarkSerializer,
         responses=ReadStateSerializer,
     )
 )
 
 conversation_rating_schema = extend_schema_view(
-    get=extend_schema(tags=TAGS, parameters=[PK], responses=TicketRatingSerializer),
+    get=extend_schema(tags=TAGS, parameters=[ID], responses=TicketRatingSerializer),
     post=extend_schema(
         tags=TAGS,
-        parameters=[PK],
+        parameters=[ID],
         request=TicketRatingSerializer,
-        responses={201: TicketRatingSerializer},
+        responses={201: TicketRatingSerializer, 409: RATING_CONFLICT},
     ),
 )
 
 attachment_upload_schema = extend_schema_view(
     post=extend_schema(
         tags=TAGS,
-        parameters=[PK],
+        parameters=[ID],
         request={"multipart/form-data": WidgetUploadSerializer},
-        responses={200: WidgetMessageSerializer, 201: WidgetMessageSerializer},
+        responses={
+            200: WidgetMessageSerializer,
+            201: WidgetMessageSerializer,
+            409: CONVERSATION_CLOSED,
+        },
     )
 )
 
 widget_download_schema = extend_schema_view(
-    get=extend_schema(tags=TAGS, parameters=[PK], responses=DownloadLinkSerializer)
+    get=extend_schema(tags=TAGS, parameters=[ID], responses=DownloadLinkSerializer)
 )
 
 widget_socket_ticket_schema = extend_schema_view(

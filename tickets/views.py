@@ -29,7 +29,14 @@ from tickets.permissions import (
 )
 from tickets.ratings import rate_ticket
 from tickets.reads import annotate_unread, mark_conversation_read, visible_comments
-from tickets.schema import attachment_download_schema, ticket_schema
+from tickets.schema import (
+    attachment_download_schema,
+    attachments_schema,
+    comment_attachments_schema,
+    comments_schema,
+    rating_schema,
+    ticket_schema,
+)
 from tickets.serializers import (
     AttachmentSerializer,
     CommentSerializer,
@@ -130,6 +137,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         )
         return Response(ReadStateSerializer(state).data)
 
+    @rating_schema
     @action(detail=True, methods=["get", "post"])
     def rating(self, request, pk=None):
         ticket = self.get_object()
@@ -158,7 +166,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         }
         return Response(MessageListSerializer(payload, context={"request": request}).data)
 
-    @action(detail=True, methods=["get"])
+    @action(detail=True, methods=["get"], pagination_class=None)
     def events(self, request, pk=None):
         ticket = self.get_object()
         events = ticket.events.all()
@@ -167,7 +175,8 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer = TicketEventSerializer(events, many=True)
         return Response(serializer.data)
 
-    @action(detail=True, methods=["get", "post"])
+    @comments_schema
+    @action(detail=True, methods=["get", "post"], pagination_class=None)
     def comments(self, request, pk=None):
         ticket = self.get_object()
 
@@ -198,16 +207,19 @@ class TicketViewSet(viewsets.ModelViewSet):
         status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response(CommentSerializer(comment).data, status=status_code)
 
-    @action(detail=True, methods=["get", "post"])
+    @attachments_schema
+    @action(detail=True, methods=["get", "post"], pagination_class=None)
     def attachments(self, request, pk=None):
         ticket = self.get_object()
         return self._attachments_response(request, ticket.attachments.all(), ticket=ticket)
 
+    @comment_attachments_schema
     @action(
         detail=True,
         methods=["get", "post"],
         url_path=r"comments/(?P<comment_id>\d+)/attachments",
         url_name="comment-attachments",
+        pagination_class=None,
     )
     def comment_attachments(self, request, pk=None, comment_id=None):
         ticket = self.get_object()

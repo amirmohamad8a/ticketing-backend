@@ -1,8 +1,15 @@
-from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    PolymorphicProxySerializer,
+    extend_schema,
+    extend_schema_view,
+)
 
 from accounts.serializers import (
     LogoutSerializer,
     PasswordChangeSerializer,
+    ProfileSerializer,
+    StaffProfileSerializer,
     TokenPairSerializer,
     UserCreateSerializer,
     UserSerializer,
@@ -20,9 +27,19 @@ logout_schema = extend_schema_view(
     )
 )
 
+profile_response = PolymorphicProxySerializer(
+    component_name="MeProfile",
+    serializers=[ProfileSerializer, StaffProfileSerializer],
+    resource_type_field_name=None,
+)
+
 profile_schema = extend_schema_view(
-    get=extend_schema(tags=["Auth"]),
-    patch=extend_schema(tags=["Auth"]),
+    get=extend_schema(tags=["Auth"], responses=profile_response),
+    patch=extend_schema(
+        tags=["Auth"],
+        request=StaffProfileSerializer,
+        responses=profile_response,
+    ),
 )
 
 password_change_schema = extend_schema_view(
@@ -53,7 +70,7 @@ agent_schema = extend_schema_view(get=extend_schema(tags=["Agents"]))
 avatar_download_schema = extend_schema_view(
     get=extend_schema(
         tags=["Avatars"],
-        parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH)],
+        parameters=[OpenApiParameter("id", int, OpenApiParameter.PATH)],
         responses=DownloadLinkSerializer,
     )
 )

@@ -138,9 +138,54 @@ VISITOR_TOKEN_LIFETIME_DAYS = env.int("VISITOR_TOKEN_LIFETIME_DAYS", default=30)
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Ticketing API",
-    "DESCRIPTION": "Support ticketing system API — tickets, comments, attachments, audit history.",
+    "DESCRIPTION": (
+        "Support ticketing system API: tickets, comments, attachments, the chat widget, "
+        "agent presence, statistics and the audit trail.\n\n"
+        "Staff and customers authenticate with `Authorization: Bearer <access token>`. "
+        "Widget visitors authenticate with the `X-Visitor-Token` header and must call "
+        "from an origin listed in the site's `allowed_origins`.\n\n"
+        "Every failed request returns the same envelope: "
+        '`{"error": {"code": "...", "message": "...", "details": ...}}`. '
+        "`details` holds the field errors of a validation error and is `null` otherwise. "
+        "Clients should branch on `code` and never display `message`.\n\n"
+        "WebSocket messages are not part of OpenAPI. They are described in "
+        "`docs/realtime.md`."
+    ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "TAGS": [
+        {
+            "name": "Auth",
+            "description": "Registration, login, logout, profile and password change.",
+        },
+        {"name": "Users", "description": "User management for admins."},
+        {
+            "name": "Agents",
+            "description": "Agent lists for assignment and live presence.",
+        },
+        {"name": "Avatars", "description": "Signed download links for avatars."},
+        {
+            "name": "Tickets",
+            "description": (
+                "Tickets, messages, comments, attachments, ratings and events. "
+                "Customers receive a reduced ticket without `tags` and "
+                "`first_response_due_at`."
+            ),
+        },
+        {"name": "Attachments", "description": "Signed download links for attachments."},
+        {"name": "Canned replies", "description": "Reply templates for agents."},
+        {"name": "Tags", "description": "Ticket tags."},
+        {"name": "Sites", "description": "Chat sites and widget settings for admins."},
+        {"name": "Widget", "description": "Public API used by the embeddable chat widget."},
+        {"name": "Realtime", "description": "HTTP side of the WebSocket layer."},
+        {"name": "Stats", "description": "Support metrics."},
+        {"name": "Audit", "description": "Ticket and user audit trail for admins."},
+    ],
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "core.schema.add_error_responses",
+    ],
     "ENUM_NAME_OVERRIDES": {
         "TicketStatusEnum": "tickets.models.Ticket.Status",
         "PresenceStatusEnum": "realtime.presence.STATUSES",
