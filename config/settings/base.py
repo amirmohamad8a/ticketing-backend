@@ -43,6 +43,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "core.metrics.RequestMetricsMiddleware",
     "core.middleware.RequestIdMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -135,6 +136,8 @@ SIMPLE_JWT = {
 }
 
 VISITOR_TOKEN_LIFETIME_DAYS = env.int("VISITOR_TOKEN_LIFETIME_DAYS", default=30)
+
+METRICS_TOKEN = env("METRICS_TOKEN", default="")
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Ticketing API",

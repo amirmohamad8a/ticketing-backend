@@ -114,6 +114,27 @@ services:
       mc anonymous set none local/$${BUCKET}
       "
 
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: ["monitoring"]
+    entrypoint: >
+      /bin/sh -c "
+      printf '%s' $${METRICS_TOKEN} > /tmp/metrics_token &&
+      exec /bin/prometheus
+      --config.file=/etc/prometheus/prometheus.yml
+      --storage.tsdb.path=/prometheus
+      "
+    environment:
+      METRICS_TOKEN: ${METRICS_TOKEN:-dev-metrics-token}
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - web
+
 volumes:
   postgres_data:
   minio_data:
+  prometheus_data:

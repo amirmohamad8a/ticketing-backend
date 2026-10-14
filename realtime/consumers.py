@@ -5,6 +5,7 @@ from django.conf import settings
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from accounts.permissions import STAFF_ROLES
+from core.metrics import TICKETS_ENDPOINT, socket_closed, socket_opened
 from realtime.access import can_join_ticket
 from realtime.events import publish_typing
 from realtime.groups import AGENTS_QUEUE_GROUP, ticket_group
@@ -34,6 +35,7 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         self.sender_type = None
         self.sender_name = ""
         self.ticket_ids = set()
+        self.metrics_client = None
 
     async def connect(self):
         user = self.scope.get("user")
@@ -60,8 +62,13 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         if self.is_staff:
             await self.channel_layer.group_add(AGENTS_QUEUE_GROUP, self.channel_name)
         await self.accept()
+        socket_opened(TICKETS_ENDPOINT, self.sender_type)
+        self.metrics_client = self.sender_type
 
     async def disconnect(self, code):
+        if self.metrics_client is not None:
+            socket_closed(TICKETS_ENDPOINT, self.metrics_client)
+            self.metrics_client = None
         if self.typing is not None:
             for ticket_id in self.typing.active_tickets():
                 await self._relay_typing(ticket_id, False)

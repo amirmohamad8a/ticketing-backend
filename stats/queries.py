@@ -27,7 +27,7 @@ def _seconds(value):
     return round(value.total_seconds(), 1)
 
 
-def _queue_size():
+def queue_size():
     return (
         Ticket.objects.filter(assignee__isnull=True)
         .exclude(status__in=Ticket.FINISHED_STATUSES)
@@ -93,7 +93,7 @@ def build_stats(date_from, date_to):
     )
     return {
         "range": {"date_from": date_from, "date_to": date_to},
-        "queue_size": _queue_size(),
+        "queue_size": queue_size(),
         "open_chats_per_agent": _open_chats_per_agent(),
         "average_first_response_seconds": _seconds(totals["first_response"]),
         "average_resolution_seconds": _seconds(totals["resolution"]),

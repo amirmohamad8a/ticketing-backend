@@ -1,22 +1,47 @@
+import hmac
 import os
 
+from django.conf import settings
 from django.core.files.storage import default_storage
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
 from drf_spectacular.utils import extend_schema
+from prometheus_client import CONTENT_TYPE_LATEST
 from rest_framework.permissions import AllowAny
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from core.downloads import read_download_token
+from core.metrics import render_metrics
 
 
 @require_http_methods(["GET", "HEAD"])
 @never_cache
 def health(request):
     return JsonResponse({"status": "ok"})
+
+
+def _bearer_token(request):
+    scheme, _sep, value = request.META.get("HTTP_AUTHORIZATION", "").partition(" ")
+    if scheme.lower() != "bearer":
+        return ""
+    return value.strip()
+
+
+@require_http_methods(["GET", "HEAD"])
+@never_cache
+def metrics(request):
+    expected = settings.METRICS_TOKEN
+    if not expected:
+        raise Http404
+    provided = _bearer_token(request)
+    if not hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
+        response = HttpResponse(status=401)
+        response["WWW-Authenticate"] = "Bearer"
+        return response
+    return HttpResponse(render_metrics(), content_type=CONTENT_TYPE_LATEST)
 
 
 @extend_schema(exclude=True)

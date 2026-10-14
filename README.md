@@ -29,6 +29,7 @@ A support-ticketing REST API built with Django and Django REST Framework, with a
 - Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management, site management, signed downloads and WebSocket tickets. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
 - Production hardening: HTTPS redirect, HSTS with subdomains and preload, secure cookies, `nosniff` and a strict referrer policy, checked by `manage.py check --deploy`
 - Structured logging: every log line is one JSON object with a timestamp, level, logger, message, `request_id` and `user_id`. A request ID middleware keeps a valid incoming `X-Request-ID` or generates one, stamps it on every log line of that request and returns it in the `X-Request-ID` response header (exposed to browsers through CORS), so a bug report that quotes the ID can be traced end to end. Each request writes one access line with the method, path, status, duration and client IP. Passwords, tokens, signed download URLs and query strings never reach the logs
+- Prometheus metrics: `GET /metrics/` exposes request counts and latency per view, plus two custom gauges, the number of open WebSocket connections and the size of the unassigned queue. It needs a bearer token (`METRICS_TOKEN`) and is disabled when no token is set. A Prometheus container in the `monitoring` Compose profile scrapes it
 - Role-scoped querysets: a customer only ever sees their own tickets
 - Field-level permissions: customers can edit only the title and description of their own open tickets, and status, priority and assignee are staff-only
 - Soft delete: only admins can delete a ticket, deletion hides it without removing its comments, attachments or audit rows, and admins can restore it at `/api/tickets/{id}/restore/`
@@ -57,7 +58,7 @@ A support-ticketing REST API built with Django and Django REST Framework, with a
 | `tickets` | Tickets, comments (which are also chat messages), attachments, read state, the `TicketEvent` audit log, assignment and claiming |
 | `chat` | Sites, visitors, visitor tokens, the public widget API, conversations, chat routing and the offline fallback task |
 | `realtime` | The WebSocket consumers, single-use socket tickets, event publishing, agent presence and the online agents endpoint |
-| `core` | Shared infrastructure: the error envelope, logging, the request ID middleware, upload checks, signed downloads, storage and the append-only and soft-delete base models |
+| `core` | Shared infrastructure: the error envelope, logging, the request ID middleware, Prometheus metrics, upload checks, signed downloads, storage and the append-only and soft-delete base models |
 | `config` | Settings (`base`, `dev`, `prod`, `test`), URLs, ASGI routing and Celery |
 
 ## API overview
@@ -90,6 +91,7 @@ All routes live under `/api/` unless noted. Routes marked "signed in" need a bea
 | `/api/widget/...` | Visitors | The widget API (see Widget API) |
 | `POST /api/ws/ticket/` | Signed in | Single-use WebSocket ticket |
 | `GET /health/` | Anyone | Database-free health check (not under `/api/`) |
+| `GET /metrics/` | Holder of `METRICS_TOKEN` | Prometheus metrics (not under `/api/`, not in the OpenAPI schema) |
 | `GET /api/schema/`, `GET /api/docs/` | Anyone | OpenAPI schema and Swagger UI |
 
 ## Chat sites
@@ -388,7 +390,7 @@ Otherwise it does this in one transaction, with the ticket row locked:
 
 ## Tech stack
 
-Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Channels with Daphne, Celery, Redis, PostgreSQL, MinIO (local S3), Docker, pytest. Redis is Django's cache, which holds the throttle counters, the WebSocket tickets and the presence entries, the Channels layer that fans WebSocket events out between processes, and the Celery broker. Celery runs the offline fallback task.
+Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Pillow, filetype, django-storages with boto3, Channels with Daphne, Celery, Redis, PostgreSQL, MinIO (local S3), prometheus_client and Prometheus, Docker, pytest. Redis is Django's cache, which holds the throttle counters, the WebSocket tickets and the presence entries, the Channels layer that fans WebSocket events out between processes, and the Celery broker. Celery runs the offline fallback task.
 
 ## Run locally
 
@@ -447,7 +449,7 @@ Every log line, from the web process and from the Celery worker, is a single JSO
 
 - `request_id`: taken from an incoming `X-Request-ID` header when it is 8 to 64 characters of letters, digits, `.`, `_` or `-`, otherwise generated. Every response carries it in `X-Request-ID`, including errors, throttled requests and CORS preflights, and the header is exposed to browsers through CORS so the frontend can show it in an error message.
 - `user_id`: the id of the user authenticated by the JWT, `null` for anonymous requests and for the login, refresh and registration routes.
-- Every request writes one `core.access` line. `/health/` is written at `DEBUG` level only, so uptime checks do not flood the log, and responses with a 5xx status are written at `ERROR`. `duration_ms` is the time taken to produce the response, so for streamed downloads it does not include the transfer.
+- Every request writes one `core.access` line. `/health/` and `/metrics/` are written at `DEBUG` level only, so uptime checks and metric scrapes do not flood the log, and responses with a 5xx status are written at `ERROR`. `duration_ms` is the time taken to produce the response, so for streamed downloads it does not include the transfer.
 - Unhandled exceptions are logged by `django.request` at `ERROR` with the traceback in `exception` and the same `request_id`. Client errors (4xx) are covered by the access line only.
 
 To follow one request, quote its ID from the `X-Request-ID` header:
@@ -485,6 +487,32 @@ The limits live in `REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]` in `config/setting
 
 WebSocket connections have their own limits, described under Limits in the WebSockets section.
 
+## Metrics
+
+`GET /metrics/` returns metrics in the Prometheus text format. It is a plain Django view, so it has no throttle, no JSON error envelope and no entry in the OpenAPI schema.
+
+- Authentication: send `Authorization: Bearer <METRICS_TOKEN>`. A missing or wrong token gets `401`. When `METRICS_TOKEN` is empty the route answers `404`, so metrics are off unless you set a token
+- `ticketing_http_requests_total{method,view,status}` counts handled requests and `ticketing_http_request_duration_seconds{method,view}` is a latency histogram. `view` is the URL name (for example `ticket-detail`), never the raw path, so ids don't create new series. Requests that match no route use `unmatched`, and unusual HTTP methods are grouped as `OTHER`. `/metrics/` itself is not counted, and the duration is the time taken to produce the response, so for streamed downloads it does not include the transfer
+- `ticketing_websocket_connections{endpoint,client}` is the number of open WebSocket connections. `endpoint` is `tickets` or `presence` and `client` is `agent`, `customer` or `visitor`
+- `ticketing_queue_size` is the number of unassigned tickets that are not resolved or closed. It is computed from the database on every scrape and uses the same definition as `queue_size` in `GET /api/stats/`. If the database cannot be read, the scrape still succeeds and this one metric is left out
+- The standard Python and process metrics of `prometheus_client` (`python_gc_*`, `process_*`) are included as well
+- The route is meant for an internal network. Do not publish `/metrics/` through the reverse proxy. It is exempt from the HTTPS redirect so an internal scraper can use plain HTTP
+- With several server processes, set `PROMETHEUS_MULTIPROC_DIR` to an empty directory before the processes start. The connection gauge then adds up over live processes. The production image does not set this yet. The Celery worker does not serve metrics
+
+Look at it by hand:
+
+```bash
+curl -H "Authorization: Bearer dev-metrics-token" http://localhost:8000/metrics/
+```
+
+Run a local Prometheus that scrapes it every 15 seconds:
+
+```bash
+docker compose --profile monitoring up -d prometheus
+```
+
+Open http://localhost:9090/targets: the `ticketing` target should be `UP`. The token comes from `METRICS_TOKEN` in `.env` and `web` must be in `ALLOWED_HOSTS`, because Prometheus calls the app as `http://web:8000`. The scrape settings are in `monitoring/prometheus.yml`.
+
 ## Checking the production settings
 
 `manage.py check --deploy` must report no issues with the production settings. The command below runs it inside the dev container with throwaway keys:
@@ -509,15 +537,17 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `SECRET_KEY` | Yes | none | Django secret key |
 | `JWT_SIGNING_KEY` | Production | `SECRET_KEY` | Key that signs JWTs and visitor tokens. Production refuses to start without one that differs from `SECRET_KEY` |
 | `DEBUG` | No | `False` | Debug mode. Development settings force it on |
-| `ALLOWED_HOSTS` | No | empty | Comma-separated host names |
+| `ALLOWED_HOSTS` | No | empty | Comma-separated host names. Include `web` when Prometheus scrapes the app |
 | `DATABASE_URL` | No | SQLite file | Database connection URL |
 | `DJANGO_SETTINGS_MODULE` | No | `config.settings.dev` | `config.settings.prod` in the production image |
 | `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend, Django's cache (throttle counters, WebSocket tickets, presence) and the Channels layer |
 | `NUM_PROXIES` | No | `0` | Number of reverse proxies in front of the app, used to read the client IP for throttling and logging |
 | `LOG_LEVEL` | No | `INFO` | Verbosity of the JSON logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `METRICS_TOKEN` | No | empty | Bearer token for `GET /metrics/`. Empty disables the endpoint |
+| `PROMETHEUS_MULTIPROC_DIR` | No | unset | Directory for metric files when several server processes run. Must exist and be empty at start |
 | `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated origins allowed to call the API. Widget routes accept any origin and check the site's `allowed_origins` instead |
 | `CSRF_TRUSTED_ORIGINS` | No | empty | Production only. Comma-separated trusted origins |
-| `SECURE_SSL_REDIRECT` | No | `true` | Production only. Redirect HTTP to HTTPS (`/health/` is exempt). Set `false` when you reach the container over plain HTTP without a proxy |
+| `SECURE_SSL_REDIRECT` | No | `true` | Production only. Redirect HTTP to HTTPS (`/health/` and `/metrics/` are exempt). Set `false` when you reach the container over plain HTTP without a proxy |
 | `SECURE_HSTS_SECONDS` | No | `31536000` | Production only. Lifetime of the HSTS header. Once a browser has seen it over HTTPS it insists on HTTPS for that host for this long |
 | `RUN_MIGRATIONS_ON_START` | No | `false` | Run migrations when the production container starts |
 | `WEB_CONCURRENCY` | No | gunicorn default | Number of gunicorn workers |
@@ -542,7 +572,7 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 
 Every push and pull request runs linting, the test suite and `check --deploy` on GitHub Actions. The project is run locally with Docker Compose and is not deployed anywhere.
 
-`Dockerfile.prod` builds the production image, which runs gunicorn with `config.settings.prod` as a non-root user. Gunicorn's own access log is switched off, because the app writes a JSON access line with the request ID for every request (see Logging). `.env.prod.example` lists everything that image needs: a PostgreSQL `DATABASE_URL`, `REDIS_URL`, a `JWT_SIGNING_KEY` that differs from `SECRET_KEY`, `STORAGE_BACKEND=s3` with the MinIO settings, and the host and origin lists. Migrations run when the container starts if `RUN_MIGRATIONS_ON_START=true`. The offline fallback needs a Celery worker next to the web process, which the production Compose file will run as its own service in Task 18.1.
+`Dockerfile.prod` builds the production image, which runs gunicorn with `config.settings.prod` as a non-root user. Gunicorn's own access log is switched off, because the app writes a JSON access line with the request ID for every request (see Logging). `.env.prod.example` lists everything that image needs: a PostgreSQL `DATABASE_URL`, `REDIS_URL`, a `JWT_SIGNING_KEY` that differs from `SECRET_KEY`, a `METRICS_TOKEN`, `STORAGE_BACKEND=s3` with the MinIO settings, and the host and origin lists. Migrations run when the container starts if `RUN_MIGRATIONS_ON_START=true`. The offline fallback needs a Celery worker next to the web process, which the production Compose file will run as its own service in Task 18.1.
 
 ## License
 

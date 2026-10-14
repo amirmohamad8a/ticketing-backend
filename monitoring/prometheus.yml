@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: ticketing
+    metrics_path: /metrics/
+    authorization:
+      type: Bearer
+      credentials_file: /tmp/metrics_token
+    static_configs:
+      - targets: ["web:8000"]

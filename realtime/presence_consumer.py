@@ -6,6 +6,7 @@ from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from accounts.permissions import STAFF_ROLES
+from core.metrics import PRESENCE_ENDPOINT, socket_closed, socket_opened
 from realtime import presence
 from realtime.consumers import (
     CLOSE_MESSAGE_TOO_BIG,
@@ -16,6 +17,7 @@ from realtime.consumers import (
 from realtime.limits import MessageRateLimiter
 
 CLOSE_FORBIDDEN = 4403
+METRICS_CLIENT = "agent"
 
 
 class PresenceConsumer(AsyncWebsocketConsumer):
@@ -24,6 +26,7 @@ class PresenceConsumer(AsyncWebsocketConsumer):
         self.user = None
         self.limiter = None
         self.status = presence.STATUS_AVAILABLE
+        self.counted = False
 
     async def connect(self):
         user = self.scope.get("user")
@@ -38,8 +41,15 @@ class PresenceConsumer(AsyncWebsocketConsumer):
             settings.WS_RATE_LIMIT_MESSAGES, settings.WS_RATE_LIMIT_WINDOW_SECONDS
         )
         await self.accept()
+        socket_opened(PRESENCE_ENDPOINT, METRICS_CLIENT)
+        self.counted = True
         await self._heartbeat()
         await self._send_state()
+
+    async def disconnect(self, code):
+        if self.counted:
+            socket_closed(PRESENCE_ENDPOINT, METRICS_CLIENT)
+            self.counted = False
 
     async def receive(self, text_data=None, bytes_data=None):
         if text_data is None:
