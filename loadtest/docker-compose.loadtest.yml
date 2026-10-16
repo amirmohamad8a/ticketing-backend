@@ -1,0 +1,18 @@
+# Load-testing override for docker-compose.yml.
+#
+# It relaxes the per-IP and per-user throttle limits for the web service only,
+# and only while this file is explicitly layered on top of the base compose
+# file. Running `docker compose up` without it keeps the production limits
+# from config/settings/base.py.
+#
+#   docker compose -f docker-compose.yml -f loadtest/docker-compose.loadtest.yml up -d web
+#
+# The values come from LOADTEST_THROTTLE_RATES, an opt-in JSON override read by
+# config/settings/base.py. It is empty by default, so this does not change any
+# production behaviour.
+services:
+  web:
+    environment:
+      # k6 runs on the compose network and calls the service by name.
+      ALLOWED_HOSTS: localhost,127.0.0.1,web
+      LOADTEST_THROTTLE_RATES: '{"anon":"1000000/min","user":"1000000/min","login":"1000/min","register":"1000/min","password_change":"1000/min","user_management":"100000/min","site_management":"100000/min","download":"1000000/min","export":"100000/min","ws_ticket":"100000/min","widget_ip":"1000000/min","widget_visitor":"1000000/min","widget_start":"1000000/min","widget_upload":"100000/min"}'

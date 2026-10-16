@@ -28,6 +28,10 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      # Redis backs the throttle counters, WebSocket tickets and presence
+      # entries. The redis service and REQUIRE_REDIS=1 make the tests in
+      # core/tests/test_redis_integration.py run against a real Redis instead
+      # of being skipped, so the Redis-only code paths are actually covered.
       redis:
         image: redis:7-alpine
         ports:
@@ -44,6 +48,7 @@ jobs:
       ALLOWED_HOSTS: localhost,127.0.0.1
       DATABASE_URL: postgres://ticketing:ticketing@localhost:5432/ticketing
       REDIS_URL: redis://localhost:6379/0
+      # Fails the run instead of skipping when Redis is unreachable.
       REQUIRE_REDIS: "1"
       DJANGO_SETTINGS_MODULE: config.settings.dev
 
@@ -112,5 +117,8 @@ jobs:
       - name: Static analysis (bandit)
         run: bandit -r . -c pyproject.toml --severity-level medium --confidence-level medium
 
-      - name: Dependency audit (pip-audit)
+      - name: Dependency audit (pip-audit, runtime)
         run: pip-audit -r requirements.txt --no-deps --disable-pip
+
+      - name: Dependency audit (pip-audit, dev)
+        run: pip-audit -r requirements-dev.txt --no-deps --disable-pip

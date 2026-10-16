@@ -287,6 +287,10 @@ WIDGET_CALLS = {
         {"body": "hello", "site_key": w.site.key},
         format="json",
     ),
+    "rating_get": lambda c, w: c.get(f"/api/widget/conversations/{w.ticket.id}/rating/"),
+    "rating_post": lambda c, w: c.post(
+        f"/api/widget/conversations/{w.ticket.id}/rating/", {"score": 5}, format="json"
+    ),
 }
 WIDGET_STATUSES = {
     "messages_get": (200, 404, 403, 403, 401, 401),
@@ -297,6 +301,10 @@ WIDGET_STATUSES = {
     "download_internal": (404, 404, 403, 403, 401, 401),
     "ws_ticket": (200, 200, 403, 403, 401, 401),
     "conversation_start": (200, 201, 403, 403, 201, 401),
+    # The fixture ticket is open, so the owner reaches the view and gets the
+    # "not resolved" conflict, while everyone else is stopped before it.
+    "rating_get": (404, 404, 403, 403, 401, 401),
+    "rating_post": (409, 404, 403, 403, 401, 401),
 }
 
 

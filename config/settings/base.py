@@ -125,6 +125,14 @@ REST_FRAMEWORK = {
     "NUM_PROXIES": env.int("NUM_PROXIES", default=0),
 }
 
+# Load-testing escape hatch. It is an optional JSON object of
+# {"scope": "rate"} pairs (for example {"widget_start": "100000/hour"}) that
+# overrides individual throttle scopes. It is empty by default, so the
+# production limits in REST_FRAMEWORK are never changed unless an operator
+# explicitly sets LOADTEST_THROTTLE_RATES for a dedicated run. See
+# loadtest/README.md.
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"].update(env.json("LOADTEST_THROTTLE_RATES", default={}))
+
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),

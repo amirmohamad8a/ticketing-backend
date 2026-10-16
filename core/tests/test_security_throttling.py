@@ -165,3 +165,14 @@ class SocketTicketThrottleTests(ThrottleTestCase):
             other = second.post("/api/ws/ticket/")
         self.assertEqual(statuses, [200, 200, 429])
         self.assertEqual(other.status_code, 200)
+
+
+class SignedDownloadThrottleTests(ThrottleTestCase):
+    URL = "/api/downloads/not-a-token/"
+
+    def test_signed_downloads_are_limited_per_address(self):
+        with _rates(download="2/min"):
+            statuses = [APIClient().get(self.URL).status_code for _attempt in range(3)]
+            other = APIClient().get(self.URL, REMOTE_ADDR="10.9.9.9")
+        self.assertEqual(statuses, [403, 403, 429])
+        self.assertEqual(other.status_code, 403)

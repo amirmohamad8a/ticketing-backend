@@ -48,7 +48,7 @@ A support-ticketing REST API built with Django and Django REST Framework, with a
 - Persian (`fa`) language and the Asia/Tehran time zone: timestamps are stored in UTC and returned with the Tehran offset, and custom error messages are marked for translation
 - OpenAPI schema and Swagger UI
 - Database-free `/health/` endpoint for uptime checks
-- Automated tests with an 85% coverage threshold and GitHub Actions CI
+- Automated tests with a 92% coverage threshold and GitHub Actions CI
 
 ## Project layout
 
@@ -527,6 +527,25 @@ docker compose exec \
 ```
 
 CI runs the same check on every push.
+
+## Security checks
+
+The `security` job runs two checks on every push and pull request. Both fail the job on findings, so a security regression blocks the merge.
+
+- `bandit -r . -c pyproject.toml --severity-level medium --confidence-level medium` scans the source for common security mistakes (unsafe calls, hardcoded passwords, weak crypto and similar). The threshold is **medium severity and medium confidence**: only findings at that level or above are reported and fail the job, and the configuration lives in `[tool.bandit]` in `pyproject.toml` (`B101`, the assert warning, is skipped there because asserts are used in tests). Low-severity and low-confidence noise is deliberately not enforced.
+- `pip-audit -r requirements.txt --no-deps --disable-pip` audits the pinned runtime dependencies for known CVEs, and a second invocation audits `requirements-dev.txt`. `--no-deps` keeps the audit focused on what the project pins, and `--disable-pip` resolves from the requirements files without touching the environment. Any known vulnerability fails the job.
+
+Run the same commands locally after `pip install -r requirements-security.txt`:
+
+```bash
+bandit -r . -c pyproject.toml --severity-level medium --confidence-level medium
+pip-audit -r requirements.txt --no-deps --disable-pip
+pip-audit -r requirements-dev.txt --no-deps --disable-pip
+```
+
+## Load test results
+
+Load-test tooling and measured runs live in [`loadtest/`](loadtest/README.md). Results are committed under [`loadtest/results/`](loadtest/results/); each file records the machine, the parameters and the observed degradation point. The first run, at 10, 50, 100 and 200 concurrent visitors against the local Docker stack, is in [`loadtest/results/2026-10-16-local.md`](loadtest/results/2026-10-16-local.md).
 
 ## Configuration
 
