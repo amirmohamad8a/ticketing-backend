@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from core.demo import AGENT_USERNAME, CUSTOMER_USERNAME, seed_demo_data
+from core.demo import AGENT_USERNAME, CUSTOMER_USERNAME, DEMO_PASSWORD, seed_demo_data
 
 
 class Command(BaseCommand):
@@ -17,3 +17,7 @@ class Command(BaseCommand):
                 f"users {CUSTOMER_USERNAME} and {AGENT_USERNAME}."
             )
         )
+        self.stdout.write("")
+        self.stdout.write("Demo logins (same password for both accounts):")
+        self.stdout.write(f"  customer  {CUSTOMER_USERNAME} / {DEMO_PASSWORD}")
+        self.stdout.write(f"  agent     {AGENT_USERNAME} / {DEMO_PASSWORD}")

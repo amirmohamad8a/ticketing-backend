@@ -291,7 +291,7 @@ Check that the Redis channel layer works:
 docker compose exec web python manage.py shell -c "from asgiref.sync import async_to_sync; from channels.layers import get_channel_layer; layer = get_channel_layer(); async_to_sync(layer.send)('probe', {'type': 'ping'}); print(async_to_sync(layer.receive)('probe'))"
 ```
 
-The production image still runs gunicorn (WSGI) and does not serve WebSockets yet. It moves to an ASGI server in Task 18.1.
+The production image runs Daphne (ASGI), so the same process serves both HTTP and WebSocket and the widget and presence sockets work in production. See [Self-hosting](docs/self-hosting.md).
 
 ## Agent presence
 
@@ -401,21 +401,26 @@ cp .env.example .env
 docker compose up --build
 ```
 
-In a second terminal:
+In a second terminal, one command migrates the database, seeds the demo data and prints the demo logins:
 
 ```bash
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py createsuperuser
-docker compose exec web python manage.py seed_demo
+make demo
+```
+
+Without `make`, run the same two commands directly:
+
+```bash
+docker compose exec -T web python manage.py migrate
+docker compose exec -T web python manage.py seed_demo
 ```
 
 - API: http://localhost:8000
 - Swagger UI: http://localhost:8000/api/docs/
 - Admin: http://localhost:8000/admin/
 
-`seed_demo` is optional and safe to run more than once. It creates a demo customer, a demo agent and a few tickets with comments.
+`seed_demo` creates a demo customer (`demo_customer`), a demo agent (`demo_agent`), a chat site, tickets and conversations, and prints their logins. Both accounts use the password `demo-ticketing-2026`. It is idempotent, so it is safe to run more than once. Before recording a demo, `make reset-demo` (or `docker compose exec -T web python manage.py reset_demo`) removes everything the demo accounts and the demo site produced and seeds a clean state again.
 
-`createsuperuser` creates a user with the customer role. To act as an agent or admin in the API, change the role in the admin site.
+For an admin account, run `docker compose exec web python manage.py createsuperuser` and change the role in the admin site to act as an agent or admin in the API.
 
 The `celery` service starts with the stack and runs the offline fallback task. To watch it work, start a chat with no agent online and follow the worker log:
 
@@ -558,6 +563,7 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `DEBUG` | No | `False` | Debug mode. Development settings force it on |
 | `ALLOWED_HOSTS` | No | empty | Comma-separated host names. Include `web` when Prometheus scrapes the app |
 | `DATABASE_URL` | No | SQLite file | Database connection URL |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | With prod | `ticketing` | Credentials the production Compose database container creates. `DATABASE_URL` must match them |
 | `DJANGO_SETTINGS_MODULE` | No | `config.settings.dev` | `config.settings.prod` in the production image |
 | `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend, Django's cache (throttle counters, WebSocket tickets, presence) and the Channels layer |
 | `NUM_PROXIES` | No | `0` | Number of reverse proxies in front of the app, used to read the client IP for throttling and logging |
@@ -568,9 +574,8 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `CSRF_TRUSTED_ORIGINS` | No | empty | Production only. Comma-separated trusted origins |
 | `SECURE_SSL_REDIRECT` | No | `true` | Production only. Redirect HTTP to HTTPS (`/health/` and `/metrics/` are exempt). Set `false` when you reach the container over plain HTTP without a proxy |
 | `SECURE_HSTS_SECONDS` | No | `31536000` | Production only. Lifetime of the HSTS header. Once a browser has seen it over HTTPS it insists on HTTPS for that host for this long |
-| `RUN_MIGRATIONS_ON_START` | No | `false` | Run migrations when the production container starts |
-| `WEB_CONCURRENCY` | No | gunicorn default | Number of gunicorn workers |
-| `PORT` | No | `8000` | Port gunicorn listens on |
+| `PORT` | No | `8000` | Port Daphne listens on |
+| `WEB_PORT` | No | `8000` | Host port the production Compose file publishes. Set `127.0.0.1:8000` to expose the app to a local reverse proxy only |
 | `STORAGE_BACKEND` | No | `local` | `local` for disk or `s3` for an S3-compatible bucket |
 | `DOWNLOAD_URL_TTL_SECONDS` | No | `300` | Lifetime of signed download URLs |
 | `VISITOR_TOKEN_LIFETIME_DAYS` | No | `30` | Lifetime of a widget visitor token |
@@ -587,11 +592,15 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `S3_PUBLIC_ENDPOINT_URL` | No | `S3_ENDPOINT_URL` | Endpoint embedded in signed URLs when clients reach the bucket on another address |
 | `S3_REGION_NAME` | No | `us-east-1` | Bucket region |
 
-## Production image
+## Production image and self-hosting
 
-Every push and pull request runs linting, the test suite and `check --deploy` on GitHub Actions. The project is run locally with Docker Compose and is not deployed anywhere.
+Every push and pull request runs linting, the test suite and `check --deploy` on GitHub Actions, and every merge to `main` also builds both images as a check. The project is run locally with Docker Compose and is not deployed anywhere.
 
-`Dockerfile.prod` builds the production image, which runs gunicorn with `config.settings.prod` as a non-root user. Gunicorn's own access log is switched off, because the app writes a JSON access line with the request ID for every request (see Logging). `.env.prod.example` lists everything that image needs: a PostgreSQL `DATABASE_URL`, `REDIS_URL`, a `JWT_SIGNING_KEY` that differs from `SECRET_KEY`, a `METRICS_TOKEN`, `STORAGE_BACKEND=s3` with the MinIO settings, and the host and origin lists. Migrations run when the container starts if `RUN_MIGRATIONS_ON_START=true`. The offline fallback needs a Celery worker next to the web process, which the production Compose file will run as its own service in Task 18.1.
+`Dockerfile.prod` is a multi-stage build: it installs the runtime dependencies into a virtualenv, runs `collectstatic` at build time and drops to a non-root user. It runs Daphne, the ASGI server, so one process serves both HTTP and WebSocket. Daphne's access log is switched off because the app writes its own JSON access line (see Logging). The base image and the pip index can be pointed at mirrors that work from inside Iran with the optional `PYTHON_IMAGE` and `PIP_INDEX_URL` build arguments, which default to upstream.
+
+`docker-compose.prod.yml` runs the whole stack: `web` (Daphne), `worker` and `beat` (Celery), a one-shot `migrate` service that runs before the app services start, PostgreSQL and Redis. Migrations are a separate service, not part of the entrypoint. `.env.prod.example` lists everything the stack needs.
+
+[`docs/self-hosting.md`](docs/self-hosting.md) walks through running that Compose file on any machine or VPS: generating secrets, putting Caddy or nginx with HTTPS and `wss://` in front, and setting hosts, CORS, CSRF and widget origins. The frontend is a separate application; this repository is the API only.
 
 ## License
 
