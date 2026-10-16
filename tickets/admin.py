@@ -42,8 +42,16 @@ class TicketAdmin(admin.ModelAdmin):
         "visitor__name",
         "assignee__username",
     )
-    autocomplete_fields = ("customer", "visitor", "site", "assignee", "tags")
-    readonly_fields = ("is_deleted", "deleted_at", "first_response_due_at")
+    autocomplete_fields = ("customer", "visitor", "site", "tags")
+    readonly_fields = (
+        "status",
+        "priority",
+        "assignee",
+        "channel",
+        "is_deleted",
+        "deleted_at",
+        "first_response_due_at",
+    )
     actions = ["restore_selected"]
 
     def get_queryset(self, request):
@@ -70,6 +78,9 @@ class TicketEventAdmin(admin.ModelAdmin):
     search_fields = ("ticket__title", "actor__username", "field_changed")
     autocomplete_fields = ("ticket", "actor")
 
+    def has_add_permission(self, request):
+        return False
+
     def has_change_permission(self, request, obj=None):
         return False
 
@@ -83,6 +94,15 @@ class CommentAdmin(admin.ModelAdmin):
     list_filter = ("kind", "is_internal")
     search_fields = ("body", "ticket__title", "author__username", "visitor__name")
     autocomplete_fields = ("ticket", "author", "visitor")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(ConversationRead)

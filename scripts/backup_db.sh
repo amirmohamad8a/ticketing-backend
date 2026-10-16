@@ -17,7 +17,7 @@ esac
 
 mkdir -p "$BACKUP_DIR"
 
-stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+stamp="${BACKUP_STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
 target="$BACKUP_DIR/$POSTGRES_DB-$stamp.dump"
 partial="$target.partial"
 

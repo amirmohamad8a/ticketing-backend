@@ -73,6 +73,9 @@ class UserEvent(AppendOnlyModel):
 
     class Meta:
         ordering = ["created_at", "id"]
+        indexes = [
+            models.Index(fields=["created_at", "id"], name="userevent_created_id_idx"),
+        ]
 
     def __str__(self):
         return f"User #{self.user_id} {self.field_changed}: {self.old_value} -> {self.new_value}"

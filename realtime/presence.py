@@ -56,6 +56,16 @@ def available_agent_ids():
     return [user_id for user_id, status in statuses.items() if status == STATUS_AVAILABLE]
 
 
+def accepting_agents(user_ids=None):
+    candidate_ids = available_agent_ids() if user_ids is None else list(user_ids)
+    if not candidate_ids:
+        return []
+    agents = User.objects.filter(
+        pk__in=candidate_ids, is_active=True, role__in=STAFF_ROLES
+    ).annotate(open_chats=Count("assigned_tickets", filter=OPEN_CHAT_FILTER))
+    return [agent for agent in agents if agent.open_chats < agent.max_concurrent_chats]
+
+
 def online_agents():
     agents = list(
         User.objects.filter(is_active=True, role__in=STAFF_ROLES)

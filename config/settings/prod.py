@@ -12,6 +12,28 @@ if JWT_SIGNING_KEY == SECRET_KEY:
 
 SIMPLE_JWT = {**SIMPLE_JWT, "SIGNING_KEY": JWT_SIGNING_KEY}
 
+MIN_SECRET_LENGTH = 50
+EXAMPLE_SECRET_MARKER = "change-me"
+EXAMPLE_SECRET_PREFIX = "dev-"
+
+
+def _is_example_secret(value):
+    lowered = value.lower()
+    return EXAMPLE_SECRET_MARKER in lowered or lowered.startswith(EXAMPLE_SECRET_PREFIX)
+
+
+for _name, _value in (
+    ("SECRET_KEY", SECRET_KEY),
+    ("JWT_SIGNING_KEY", JWT_SIGNING_KEY),
+):
+    if _is_example_secret(_value):
+        raise ImproperlyConfigured(f"{_name} is still an example value. Generate a real secret.")
+    if len(_value) < MIN_SECRET_LENGTH:
+        raise ImproperlyConfigured(f"{_name} must be at least {MIN_SECRET_LENGTH} characters long.")
+
+if METRICS_TOKEN and _is_example_secret(METRICS_TOKEN):
+    raise ImproperlyConfigured("METRICS_TOKEN is still an example value. Generate a real secret.")
+
 if NUM_PROXIES == 0:
     logging.getLogger(__name__).warning(
         "NUM_PROXIES is 0. Behind a reverse proxy every client shares one throttle bucket "

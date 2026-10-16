@@ -35,7 +35,7 @@ class WidgetConfigSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_agents_available(self, obj) -> bool:
-        return agents_available(obj)
+        return agents_available()
 
 
 class WidgetAttachmentSerializer(AttachmentSerializer):

@@ -227,8 +227,8 @@ class TicketAdminSoftDeleteTests(TestCase):
 class SeedDemoSoftDeleteTests(TestCase):
     def test_rerun_restores_a_deleted_demo_ticket_without_duplicating_it(self):
         total = len(PORTAL_TICKETS) + len(CHAT_TICKETS)
-        call_command("seed_demo", stdout=StringIO())
+        call_command("seed_demo", force=True, stdout=StringIO())
         Ticket.objects.first().delete()
-        call_command("seed_demo", stdout=StringIO())
+        call_command("seed_demo", force=True, stdout=StringIO())
         self.assertEqual(Ticket.all_objects.count(), total)
         self.assertEqual(Ticket.objects.count(), total)

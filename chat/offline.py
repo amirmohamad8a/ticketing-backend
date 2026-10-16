@@ -7,7 +7,8 @@ from django.utils import timezone
 from django.utils.translation import gettext
 
 from accounts.permissions import STAFF_ROLES
-from chat.availability import any_agents_available
+from chat.availability import agents_available
+from realtime import presence
 from realtime.events import publish
 from tickets.events import record_event
 from tickets.messages import post_message
@@ -48,16 +49,19 @@ def _unanswered_chats():
 
 def due_chat_ticket_ids(now=None):
     now = now or timezone.now()
-    nobody_online = not any_agents_available()
+    nobody_online = not presence.available_agent_ids()
+    nobody_accepting = nobody_online or not agents_available()
     rows = (
         _unanswered_chats()
         .order_by("created_at", "pk")
-        .values_list("pk", "created_at", "site__offline_timeout_minutes")
+        .values_list("pk", "created_at", "site__offline_timeout_minutes", "assignee_id")
     )
     return [
         pk
-        for pk, created_at, timeout in rows
-        if nobody_online or created_at + timedelta(minutes=timeout or 0) <= now
+        for pk, created_at, timeout, assignee_id in rows
+        if nobody_online
+        or (nobody_accepting and assignee_id is None)
+        or created_at + timedelta(minutes=timeout or 0) <= now
     ]
 
 

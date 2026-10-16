@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 
 from django.db import transaction
-from django.db.models import Count
 
 from rest_framework.exceptions import ValidationError
 
@@ -33,10 +32,7 @@ def _pick_agent():
     locked_ids = _lock_available_agents()
     if not locked_ids:
         return None
-    agents = User.objects.filter(pk__in=locked_ids).annotate(
-        open_chats=Count("assigned_tickets", filter=presence.OPEN_CHAT_FILTER)
-    )
-    eligible = [agent for agent in agents if agent.open_chats < agent.max_concurrent_chats]
+    eligible = presence.accepting_agents(locked_ids)
     if not eligible:
         return None
     return min(eligible, key=_routing_key)

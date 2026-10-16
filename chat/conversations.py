@@ -2,7 +2,6 @@ from django.db import transaction
 from django.utils.text import Truncator
 
 from chat.assignment import route_new_chat
-from chat.availability import agents_available
 from chat.models import Visitor
 from chat.tasks import convert_to_offline
 from chat.visitors import start_visitor_session
@@ -27,9 +26,7 @@ def active_conversation(visitor):
     )
 
 
-def _schedule_offline_fallback(ticket):
-    if agents_available(ticket.site):
-        return
+def _convert_when_unrouted(ticket):
     transaction.on_commit(lambda: convert_to_offline.delay(ticket.pk), robust=True)
 
 
@@ -54,9 +51,8 @@ def open_conversation(visitor, body, client_msg_id=None):
                 new_value=ticket.status,
             )
         comment, _posted = post_message(ticket, body, visitor=visitor, client_msg_id=client_msg_id)
-        if created:
-            route_new_chat(ticket)
-            _schedule_offline_fallback(ticket)
+        if created and route_new_chat(ticket) is None:
+            _convert_when_unrouted(ticket)
     return ticket, comment, created
 
 

@@ -153,7 +153,7 @@ class ConversationCreateView(WidgetAPIView):
             "token": token,
             "conversation": ticket,
             "message": comment,
-            "agents_available": agents_available(visitor.site),
+            "agents_available": agents_available(),
         }
         body = WidgetConversationStartSerializer(payload, context={"request": request}).data
         return Response(body, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
@@ -176,7 +176,7 @@ class MessageListCreateView(WidgetAPIView):
         payload = {
             "results": rows,
             "has_more": has_more,
-            "agents_available": agents_available(visitor.site),
+            "agents_available": agents_available(),
             "unread_count": unread_count(ticket, visitor=visitor),
         }
         return Response(WidgetMessageListSerializer(payload, context={"request": request}).data)

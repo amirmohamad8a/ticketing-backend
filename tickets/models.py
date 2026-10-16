@@ -141,6 +141,7 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
         ]
         indexes = [
             GinIndex(build_search_vector(*TICKET_SEARCH_FIELDS), name="ticket_search_gin"),
+            models.Index(fields=["-created_at", "-id"], name="ticket_created_id_desc_idx"),
         ]
 
     def clean(self):
@@ -177,6 +178,9 @@ class TicketEvent(AppendOnlyModel):
 
     class Meta:
         ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["created_at", "id"], name="ticketevent_created_id_idx"),
+        ]
 
     def __str__(self):
         return (
@@ -227,6 +231,7 @@ class Comment(TimeStampedModel):
         ]
         indexes = [
             GinIndex(build_search_vector(*COMMENT_SEARCH_FIELDS), name="comment_search_gin"),
+            models.Index(fields=["ticket", "id"], name="comment_ticket_id_idx"),
         ]
 
     def clean(self):

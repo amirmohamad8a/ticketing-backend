@@ -9,6 +9,8 @@ CELERY_RESULT_BACKEND = "cache+memory://"
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
+AGENTS_AVAILABLE_CACHE_SECONDS = 0
+
 REST_FRAMEWORK = {
     **REST_FRAMEWORK,
     "DEFAULT_THROTTLE_RATES": {
