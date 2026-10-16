@@ -23,6 +23,11 @@ class WidgetVisitorThrottle(SimpleRateThrottle):
 class WidgetStartThrottle(WidgetIPThrottle):
     scope = "widget_start"
 
+    def allow_request(self, request, view):
+        if isinstance(request.auth, Visitor):
+            return True
+        return super().allow_request(request, view)
+
 
 class WidgetUploadThrottle(WidgetVisitorThrottle):
     scope = "widget_upload"

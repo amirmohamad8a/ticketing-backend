@@ -46,6 +46,7 @@ MIDDLEWARE = [
     "core.middleware.RequestIdMiddleware",
     "core.metrics.RequestMetricsMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "core.middleware.RequestSizeLimitMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -97,6 +98,10 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+NUM_PROXIES = env.int("NUM_PROXIES", default=0)
+
+MAX_REQUEST_BODY_BYTES = env.int("MAX_REQUEST_BODY_BYTES", default=11 * 1024 * 1024)
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("core.authentication.LoggedJWTAuthentication",),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
@@ -107,22 +112,24 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ),
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "60/min",
+        "anon": "120/min",
         "user": "300/min",
-        "login": "10/min",
-        "register": "10/hour",
+        "login": "30/min",
+        "login_username": "20/hour",
+        "register": "30/hour",
         "password_change": "5/hour",
         "user_management": "60/min",
         "site_management": "60/min",
         "download": "300/min",
         "export": "10/min",
+        "attachment_upload": "60/hour",
         "ws_ticket": "30/min",
-        "widget_ip": "120/min",
+        "widget_ip": "240/min",
         "widget_visitor": "90/min",
-        "widget_start": "20/hour",
+        "widget_start": "60/hour",
         "widget_upload": "30/hour",
     },
-    "NUM_PROXIES": env.int("NUM_PROXIES", default=0),
+    "NUM_PROXIES": NUM_PROXIES,
 }
 
 # Load-testing escape hatch. It is an optional JSON object of
@@ -308,6 +315,14 @@ CELERY_BEAT_SCHEDULE = {
     },
     "chat-purge-stale-visitors": {
         "task": "chat.purge_stale_visitors",
+        "schedule": timedelta(days=1),
+    },
+    "chat-sweep-unanswered-chats": {
+        "task": "chat.sweep_unanswered_chats",
+        "schedule": timedelta(minutes=1),
+    },
+    "accounts-flush-expired-tokens": {
+        "task": "accounts.flush_expired_tokens",
         "schedule": timedelta(days=1),
     },
 }

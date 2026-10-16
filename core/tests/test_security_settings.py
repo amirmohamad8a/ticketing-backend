@@ -17,7 +17,12 @@ PROD_ENV = {
     "JWT_SIGNING_KEY": "a9b8c7" * 12,
     "ALLOWED_HOSTS": "support.example.com",
     "STORAGE_BACKEND": "local",
+    "SECURE_SSL_REDIRECT": "true",
+    "SECURE_HSTS_SECONDS": "31536000",
+    "NUM_PROXIES": "0",
 }
+
+PROD_LOGGER = "config.settings.prod"
 
 
 def _load_prod(**overrides):
@@ -68,12 +73,14 @@ class ProductionSettingsTests(SimpleTestCase):
             "anon",
             "user",
             "login",
+            "login_username",
             "register",
             "password_change",
             "user_management",
             "site_management",
             "download",
             "export",
+            "attachment_upload",
             "ws_ticket",
             "widget_ip",
             "widget_visitor",
@@ -84,6 +91,19 @@ class ProductionSettingsTests(SimpleTestCase):
 
     def test_the_number_of_trusted_proxies_comes_from_the_environment(self):
         self.assertEqual(_load_prod(NUM_PROXIES="2").REST_FRAMEWORK["NUM_PROXIES"], 2)
+
+    def test_a_warning_is_logged_while_no_proxy_is_trusted(self):
+        with self.assertLogs(PROD_LOGGER, level="WARNING") as logs:
+            _load_prod(NUM_PROXIES="0")
+        self.assertIn("NUM_PROXIES", logs.output[0])
+
+    def test_no_warning_is_logged_when_a_proxy_is_trusted(self):
+        with self.assertNoLogs(PROD_LOGGER, level="WARNING"):
+            _load_prod(NUM_PROXIES="1")
+
+    def test_the_request_body_limit_comes_from_the_environment(self):
+        self.assertEqual(self.prod.MAX_REQUEST_BODY_BYTES, 11 * 1024 * 1024)
+        self.assertEqual(_load_prod(MAX_REQUEST_BODY_BYTES="1024").MAX_REQUEST_BODY_BYTES, 1024)
 
     def test_revoking_access_tokens_after_a_password_change_is_enabled(self):
         self.assertTrue(self.prod.SIMPLE_JWT["CHECK_REVOKE_TOKEN"])

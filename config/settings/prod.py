@@ -1,3 +1,5 @@
+import logging
+
 from django.core.exceptions import ImproperlyConfigured
 
 from .base import *
@@ -9,6 +11,13 @@ if JWT_SIGNING_KEY == SECRET_KEY:
     raise ImproperlyConfigured("JWT_SIGNING_KEY must be different from SECRET_KEY.")
 
 SIMPLE_JWT = {**SIMPLE_JWT, "SIGNING_KEY": JWT_SIGNING_KEY}
+
+if NUM_PROXIES == 0:
+    logging.getLogger(__name__).warning(
+        "NUM_PROXIES is 0. Behind a reverse proxy every client shares one throttle bucket "
+        "and the client IP in the logs is the proxy address. Set NUM_PROXIES to the number "
+        "of proxies in front of the app."
+    )
 
 _security_index = MIDDLEWARE.index("django.middleware.security.SecurityMiddleware")
 MIDDLEWARE = [

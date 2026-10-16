@@ -3,7 +3,8 @@ from datetime import timedelta
 from io import StringIO
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.core.management.base import CommandError
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from rest_framework.test import APIClient
@@ -28,7 +29,7 @@ SPECS = (*PORTAL_TICKETS, *CHAT_TICKETS)
 
 def _seed():
     out = StringIO()
-    call_command("seed_demo", stdout=out)
+    call_command("seed_demo", force=True, stdout=out)
     return out.getvalue()
 
 
@@ -348,3 +349,27 @@ class SeedDemoApiTests(TestCase):
         overdue = {ticket["id"] for ticket in response.data["results"]}
         self.assertFalse(overdue & replied)
         self.assertGreaterEqual(timedelta(0), timedelta(0))
+
+
+class DemoGuardTests(TestCase):
+    def test_seeding_is_refused_without_debug_or_force(self):
+        with override_settings(DEBUG=False), self.assertRaises(CommandError):
+            call_command("seed_demo")
+        self.assertFalse(
+            User.objects.filter(username__in=(CUSTOMER_USERNAME, AGENT_USERNAME)).exists()
+        )
+
+    def test_resetting_is_refused_without_debug_or_force(self):
+        with override_settings(DEBUG=False), self.assertRaises(CommandError):
+            call_command("reset_demo")
+        self.assertFalse(Ticket.all_objects.exists())
+
+    def test_debug_allows_seeding_without_force(self):
+        with override_settings(DEBUG=True):
+            call_command("seed_demo", stdout=StringIO())
+        self.assertTrue(User.objects.filter(username=AGENT_USERNAME).exists())
+
+    def test_force_allows_seeding_when_debug_is_off(self):
+        with override_settings(DEBUG=False):
+            call_command("seed_demo", force=True, stdout=StringIO())
+        self.assertTrue(User.objects.filter(username=AGENT_USERNAME).exists())

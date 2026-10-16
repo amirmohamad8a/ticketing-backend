@@ -39,6 +39,7 @@ from accounts.serializers import (
     UserSerializer,
     UserUpdateSerializer,
 )
+from accounts.throttles import LoginUsernameThrottle
 from accounts.tokens import blacklist_user_tokens
 from core.downloads import build_download_link
 from tickets.permissions import IsAgentOrAdmin
@@ -107,7 +108,7 @@ class LogoutView(APIView):
 
 @auth_schema
 class TaggedTokenObtainPairView(TokenObtainPairView):
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [ScopedRateThrottle, LoginUsernameThrottle]
     throttle_scope = "login"
 
 

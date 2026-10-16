@@ -3,6 +3,10 @@ import re
 import time
 import uuid
 
+from django.conf import settings
+from django.http import JsonResponse
+from django.utils.translation import gettext
+
 from rest_framework.throttling import BaseThrottle
 
 from core.logs import request_id_var, scrub, user_id_var
@@ -10,6 +14,7 @@ from core.logs import request_id_var, scrub, user_id_var
 REQUEST_ID_HEADER = "X-Request-ID"
 REQUEST_ID_META_KEY = "HTTP_X_REQUEST_ID"
 QUIET_PATHS = frozenset({"/health/", "/ready/", "/metrics/"})
+REQUEST_TOO_LARGE_CODE = "request_too_large"
 
 _VALID_REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{8,64}")
 
@@ -62,3 +67,30 @@ class RequestIdMiddleware:
                 "client_ip": BaseThrottle().get_ident(request),
             },
         )
+
+
+class RequestSizeLimitMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if self._too_large(request):
+            return JsonResponse(
+                {
+                    "error": {
+                        "code": REQUEST_TOO_LARGE_CODE,
+                        "message": gettext("The request body is too large."),
+                        "details": None,
+                    }
+                },
+                status=413,
+            )
+        return self.get_response(request)
+
+    @staticmethod
+    def _too_large(request):
+        try:
+            length = int(request.META.get("CONTENT_LENGTH") or 0)
+        except ValueError:
+            return False
+        return length > settings.MAX_REQUEST_BODY_BYTES

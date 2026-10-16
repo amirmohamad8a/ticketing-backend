@@ -1,9 +1,10 @@
 import logging
 from contextlib import contextmanager
 from datetime import timedelta
-from unittest import mock
 
+from django.conf import settings
 from django.core.files.storage import default_storage
+from django.core.management.base import CommandError
 from django.db import transaction
 from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
@@ -238,10 +239,23 @@ CHAT_TICKETS = (
 )
 
 
+def ensure_demo_allowed(force=False):
+    if settings.DEBUG or force:
+        return
+    raise CommandError(
+        "Demo data creates accounts with a known password and can only be used while DEBUG "
+        "is true. Pass --force to override."
+    )
+
+
 @contextmanager
 def _clock(moment):
-    with mock.patch("django.utils.timezone.now", return_value=moment):
+    original = timezone.now
+    timezone.now = lambda: moment
+    try:
         yield
+    finally:
+        timezone.now = original
 
 
 def _ensure_user(username):

@@ -161,7 +161,7 @@ class ResetDemoTests(TestCase):
 
     def test_the_commands_report_what_they_did(self):
         out = StringIO()
-        call_command("reset_demo", stdout=out)
+        call_command("reset_demo", force=True, stdout=out)
         self.assertIn(f"{TOTAL} ticket(s) seeded from scratch", out.getvalue())
 
 

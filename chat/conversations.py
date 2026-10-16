@@ -2,8 +2,8 @@ from django.db import transaction
 from django.utils.text import Truncator
 
 from chat.assignment import route_new_chat
+from chat.availability import agents_available
 from chat.models import Visitor
-from chat.offline import fallback_countdown
 from chat.tasks import convert_to_offline
 from chat.visitors import start_visitor_session
 from tickets.events import record_event
@@ -28,11 +28,9 @@ def active_conversation(visitor):
 
 
 def _schedule_offline_fallback(ticket):
-    countdown = fallback_countdown(ticket.site)
-    transaction.on_commit(
-        lambda: convert_to_offline.apply_async(args=[ticket.pk], countdown=countdown),
-        robust=True,
-    )
+    if agents_available(ticket.site):
+        return
+    transaction.on_commit(lambda: convert_to_offline.delay(ticket.pk), robust=True)
 
 
 def open_conversation(visitor, body, client_msg_id=None):

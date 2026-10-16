@@ -9,6 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from accounts.models import User
@@ -49,7 +50,9 @@ from tickets.serializers import (
     TicketRatingSerializer,
     TicketSerializer,
 )
-from tickets.throttles import ExportThrottle
+from tickets.throttles import AttachmentUploadThrottle, ExportThrottle
+
+UPLOAD_THROTTLES = [UserRateThrottle, AttachmentUploadThrottle]
 
 
 @ticket_schema
@@ -220,7 +223,12 @@ class TicketViewSet(viewsets.ModelViewSet):
         return Response(CommentSerializer(comment).data, status=status_code)
 
     @attachments_schema
-    @action(detail=True, methods=["get", "post"], pagination_class=None)
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        pagination_class=None,
+        throttle_classes=UPLOAD_THROTTLES,
+    )
     def attachments(self, request, pk=None):
         ticket = self.get_object()
         return self._attachments_response(request, ticket.attachments.all(), ticket=ticket)
@@ -232,6 +240,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         url_path=r"comments/(?P<comment_id>\d+)/attachments",
         url_name="comment-attachments",
         pagination_class=None,
+        throttle_classes=UPLOAD_THROTTLES,
     )
     def comment_attachments(self, request, pk=None, comment_id=None):
         ticket = self.get_object()

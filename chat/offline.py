@@ -1,36 +1,64 @@
+import logging
+from datetime import timedelta
+
 from django.db import transaction
+from django.db.models import Exists, OuterRef
+from django.utils import timezone
 from django.utils.translation import gettext
 
 from accounts.permissions import STAFF_ROLES
-from chat.availability import agents_available
+from chat.availability import any_agents_available
 from realtime.events import publish
 from tickets.events import record_event
 from tickets.messages import post_message
 from tickets.models import Comment, Ticket
 
+logger = logging.getLogger(__name__)
+
 OFFLINE_EVENT_TYPE = "conversation.offline"
 CHANNEL_FIELD = "channel"
 
 
-def fallback_countdown(site):
-    if agents_available(site):
-        return site.offline_timeout_minutes * 60
-    return 0
-
-
-def _agent_replied(ticket):
+def _public_staff_replies(ticket):
     return Comment.objects.filter(
         ticket=ticket,
         kind=Comment.Kind.MESSAGE,
         is_internal=False,
         author__role__in=STAFF_ROLES,
-    ).exists()
+    )
+
+
+def _agent_replied(ticket):
+    return _public_staff_replies(ticket).exists()
 
 
 def _offline_notice():
     return gettext(
         "No agent is available right now. Leave your contact details and we will get back to you."
     )
+
+
+def _unanswered_chats():
+    return (
+        Ticket.objects.filter(channel=Ticket.Channel.CHAT)
+        .exclude(status__in=Ticket.FINISHED_STATUSES)
+        .filter(~Exists(_public_staff_replies(OuterRef("pk"))))
+    )
+
+
+def due_chat_ticket_ids(now=None):
+    now = now or timezone.now()
+    nobody_online = not any_agents_available()
+    rows = (
+        _unanswered_chats()
+        .order_by("created_at", "pk")
+        .values_list("pk", "created_at", "site__offline_timeout_minutes")
+    )
+    return [
+        pk
+        for pk, created_at, timeout in rows
+        if nobody_online or created_at + timedelta(minutes=timeout or 0) <= now
+    ]
 
 
 def convert_unanswered_chat(ticket_id):
@@ -55,3 +83,16 @@ def convert_unanswered_chat(ticket_id):
         has_contact = bool(visitor is not None and (visitor.phone or visitor.email))
         publish(OFFLINE_EVENT_TYPE, event.pk, ticket.pk, {"has_contact": has_contact})
     return True
+
+
+def convert_due_chats(now=None):
+    converted = 0
+    for ticket_id in due_chat_ticket_ids(now):
+        try:
+            if convert_unanswered_chat(ticket_id):
+                converted += 1
+        except Exception:
+            logger.exception("Failed to convert an unanswered chat", extra={"ticket_id": ticket_id})
+    if converted:
+        logger.info("Offline sweep finished", extra={"converted": converted})
+    return converted
