@@ -23,6 +23,20 @@ ignore = ["E501"]
 "config/settings/prod.py" = ["F403", "F405"]
 "config/settings/test.py" = ["F403", "F405"]
 
+[tool.bandit]
+exclude_dirs = [
+    "*/venv/*",
+    "*/migrations/*",
+    "*/tests/*",
+    "*/tests.py",
+    "*/test_*.py",
+    "*/*_tests.py",
+    "*/staticfiles/*",
+    "*/media/*",
+    "*/backups/*",
+]
+skips = ["B101"]
+
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings.test"
 addopts = "--ds=config.settings.test"
@@ -47,4 +61,4 @@ omit = [
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-fail_under = 85
+fail_under = 92
