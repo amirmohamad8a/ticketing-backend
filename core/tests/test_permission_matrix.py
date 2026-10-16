@@ -12,6 +12,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from chat.models import Site
 from chat.tokens import issue_visitor_token
 from core.downloads import DOWNLOAD_SALT
+from core.tests import read_streaming_body
 from core.tests.factories import (
     AdminFactory,
     AgentFactory,
@@ -39,7 +40,7 @@ def _cases(table, keys):
 
 def _consume(response):
     if response.streaming:
-        b"".join(response)
+        read_streaming_body(response)
 
 
 @pytest.fixture

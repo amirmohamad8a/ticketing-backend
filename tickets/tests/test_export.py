@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from core.tests import read_streaming_body
 from core.tests.factories import (
     AdminFactory,
     AgentFactory,
@@ -51,7 +52,7 @@ def _client_for(user):
 
 
 def _body(response):
-    return b"".join(response)
+    return read_streaming_body(response)
 
 
 def _table(response):
