@@ -14,6 +14,7 @@ from accounts.models import User
 from accounts.tokens import blacklist_user_tokens
 from accounts.validators import normalize_phone, validate_iranian_mobile
 from core.uploads import ensure_content_matches
+from realtime.events import close_user_sockets
 
 logger = logging.getLogger(__name__)
 
@@ -306,14 +307,18 @@ class UserUpdateSerializer(ActorMixin, serializers.ModelSerializer):
 
         events = []
         deactivated = False
+        close_sockets = False
         if "role" in validated_data and validated_data["role"] != instance.role:
             events.append(("role", instance.role, validated_data["role"]))
+            close_sockets = True
         if "is_active" in validated_data and validated_data["is_active"] != instance.is_active:
             new_state = validated_data["is_active"]
             events.append(("is_active", _flag(instance.is_active), _flag(new_state)))
             deactivated = not new_state
+            close_sockets = True
         if password is not None:
             events.append(("password", "", ""))
+            close_sockets = True
 
         with transaction.atomic():
             instance = super().update(instance, validated_data)
@@ -330,6 +335,8 @@ class UserUpdateSerializer(ActorMixin, serializers.ModelSerializer):
                     old_value=old_value,
                     new_value=new_value,
                 )
+            if close_sockets:
+                close_user_sockets(instance.pk)
 
         return instance
 

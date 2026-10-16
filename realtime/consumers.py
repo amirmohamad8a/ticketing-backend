@@ -8,19 +8,28 @@ from accounts.permissions import STAFF_ROLES
 from core.metrics import TICKETS_ENDPOINT, socket_closed, socket_opened
 from realtime.access import can_join_ticket
 from realtime.events import publish_typing
-from realtime.groups import AGENTS_QUEUE_GROUP, ticket_group
+from realtime.groups import AGENTS_QUEUE_GROUP, ticket_group, user_group
 from realtime.limits import MessageRateLimiter, TypingThrottle
 
 CLOSE_UNSUPPORTED_DATA = 1003
 CLOSE_MESSAGE_TOO_BIG = 1009
 CLOSE_UNAUTHENTICATED = 4401
+CLOSE_FORBIDDEN = 4403
 CLOSE_RATE_LIMITED = 4429
 MAX_JOINED_TICKETS = 50
 MAX_ID = 2**63 - 1
+SUPPORT_NAME = "Support"
 
 
 def _is_valid_id(value):
     return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= MAX_ID
+
+
+def _display_name(user, is_staff):
+    full_name = user.get_full_name()
+    if full_name:
+        return full_name
+    return SUPPORT_NAME if is_staff else user.username
 
 
 class RealtimeConsumer(AsyncWebsocketConsumer):
@@ -50,7 +59,7 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         if self.user is not None:
             self.identity = f"user:{self.user.pk}"
             self.sender_type = "agent" if self.is_staff else "customer"
-            self.sender_name = self.user.get_full_name() or self.user.username
+            self.sender_name = _display_name(self.user, self.is_staff)
         else:
             self.identity = f"visitor:{self.visitor.pk}"
             self.sender_type = "visitor"
@@ -59,6 +68,8 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
             settings.WS_RATE_LIMIT_MESSAGES, settings.WS_RATE_LIMIT_WINDOW_SECONDS
         )
         self.typing = TypingThrottle(settings.WS_TYPING_THROTTLE_SECONDS)
+        if self.user is not None:
+            await self.channel_layer.group_add(user_group(self.user.pk), self.channel_name)
         if self.is_staff:
             await self.channel_layer.group_add(AGENTS_QUEUE_GROUP, self.channel_name)
         await self.accept()
@@ -75,6 +86,8 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         for ticket_id in self.ticket_ids:
             await self.channel_layer.group_discard(ticket_group(ticket_id), self.channel_name)
         self.ticket_ids.clear()
+        if self.user is not None:
+            await self.channel_layer.group_discard(user_group(self.user.pk), self.channel_name)
         if self.is_staff:
             await self.channel_layer.group_discard(AGENTS_QUEUE_GROUP, self.channel_name)
             self.is_staff = False
@@ -121,6 +134,9 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         if event["sender"] == self.identity:
             return
         await self._send(event["payload"])
+
+    async def realtime_close(self, event):
+        await self.close(code=CLOSE_FORBIDDEN)
 
     async def _join(self, ticket_id):
         if not _is_valid_id(ticket_id):

@@ -9,6 +9,8 @@ from drf_spectacular.utils import (
 from chat.widget.serializers import (
     ConversationCreateSerializer,
     WidgetConfigSerializer,
+    WidgetContactInputSerializer,
+    WidgetContactSerializer,
     WidgetConversationStartSerializer,
     WidgetMessageInputSerializer,
     WidgetMessageListSerializer,
@@ -89,6 +91,15 @@ conversation_read_schema = extend_schema_view(
         parameters=[ID],
         request=ReadMarkSerializer,
         responses=ReadStateSerializer,
+    )
+)
+
+conversation_contact_schema = extend_schema_view(
+    post=extend_schema(
+        tags=TAGS,
+        parameters=[ID],
+        request=WidgetContactInputSerializer,
+        responses={200: WidgetContactSerializer, 409: CONVERSATION_CLOSED},
     )
 )
 

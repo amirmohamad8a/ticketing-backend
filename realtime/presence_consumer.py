@@ -9,14 +9,15 @@ from accounts.permissions import STAFF_ROLES
 from core.metrics import PRESENCE_ENDPOINT, socket_closed, socket_opened
 from realtime import presence
 from realtime.consumers import (
+    CLOSE_FORBIDDEN,
     CLOSE_MESSAGE_TOO_BIG,
     CLOSE_RATE_LIMITED,
     CLOSE_UNAUTHENTICATED,
     CLOSE_UNSUPPORTED_DATA,
 )
+from realtime.groups import user_group
 from realtime.limits import MessageRateLimiter
 
-CLOSE_FORBIDDEN = 4403
 METRICS_CLIENT = "agent"
 
 
@@ -40,6 +41,7 @@ class PresenceConsumer(AsyncWebsocketConsumer):
         self.limiter = MessageRateLimiter(
             settings.WS_RATE_LIMIT_MESSAGES, settings.WS_RATE_LIMIT_WINDOW_SECONDS
         )
+        await self.channel_layer.group_add(user_group(user.pk), self.channel_name)
         await self.accept()
         socket_opened(PRESENCE_ENDPOINT, METRICS_CLIENT)
         self.counted = True
@@ -50,6 +52,8 @@ class PresenceConsumer(AsyncWebsocketConsumer):
         if self.counted:
             socket_closed(PRESENCE_ENDPOINT, METRICS_CLIENT)
             self.counted = False
+        if self.user is not None:
+            await self.channel_layer.group_discard(user_group(self.user.pk), self.channel_name)
 
     async def receive(self, text_data=None, bytes_data=None):
         if text_data is None:
@@ -77,6 +81,9 @@ class PresenceConsumer(AsyncWebsocketConsumer):
             await self._set_status(content.get("status"))
         else:
             await self._send_error("unknown_type")
+
+    async def realtime_close(self, event):
+        await self.close(code=CLOSE_FORBIDDEN)
 
     async def _heartbeat(self):
         self.status = await sync_to_async(presence.heartbeat)(self.user.pk, self.status)

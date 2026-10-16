@@ -35,7 +35,7 @@ class TicketFilter(django_filters.FilterSet):
 
     class Meta:
         model = Ticket
-        fields = ["status", "priority"]
+        fields = ["status", "priority", "channel"]
 
     def filter_assignee(self, queryset, name, value):
         if value == "me":

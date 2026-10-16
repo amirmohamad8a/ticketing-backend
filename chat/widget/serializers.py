@@ -1,11 +1,12 @@
 from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 
 from rest_framework import serializers
 
 from accounts.serializers import PhoneField
 from accounts.validators import validate_iranian_mobile
 from chat.availability import agents_available
-from chat.models import Site
+from chat.models import Site, Visitor
 from tickets.models import Comment, Ticket
 from tickets.serializers import AttachmentSerializer, CommentSerializer
 
@@ -117,6 +118,31 @@ class ConversationCreateSerializer(serializers.Serializer):
         validators=[validate_iranian_mobile],
     )
     email = serializers.EmailField(required=False, allow_blank=True, max_length=254)
+
+
+class WidgetContactInputSerializer(serializers.Serializer):
+    phone = PhoneField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=32,
+        validators=[validate_iranian_mobile],
+    )
+    email = serializers.EmailField(required=False, allow_blank=True, max_length=254)
+
+    def validate(self, attrs):
+        if not (attrs.get("phone") or attrs.get("email")):
+            raise serializers.ValidationError(
+                {"contact": _("A phone number or an email is required.")}
+            )
+        return attrs
+
+
+class WidgetContactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Visitor
+        fields = ["phone", "email"]
+        read_only_fields = fields
 
 
 class WidgetMessageInputSerializer(serializers.Serializer):

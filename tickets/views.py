@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from accounts.models import User
 from core.downloads import build_download_link
 from tickets.assignment import claim_ticket
-from tickets.events import TAG_FIELD
+from tickets.events import STAFF_ONLY_FIELDS
 from tickets.export import build_export_response
 from tickets.filters import TicketFilter
 from tickets.lifecycle import reopen_on_customer_reply
@@ -75,7 +75,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         if user.role == User.Role.CUSTOMER:
             queryset = queryset.filter(customer=user)
         else:
-            queryset = queryset.prefetch_related("tags")
+            queryset = queryset.select_related("visitor", "site").prefetch_related("tags")
         if self.action == "export":
             return queryset
         return annotate_unread(queryset, user)
@@ -88,6 +88,18 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(customer=self.request.user)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        pk = self.get_object().pk
+        with transaction.atomic():
+            ticket = get_object_or_404(Ticket.objects.select_for_update(), pk=pk)
+            self.check_object_permissions(request, ticket)
+            serializer = self.get_serializer(ticket, data=request.data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+        refreshed = self.get_queryset().get(pk=pk)
+        return Response(self.get_serializer(refreshed).data)
 
     def _attachments_response(self, request, queryset, **parent):
         context = {"request": request}
@@ -171,7 +183,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket = self.get_object()
         events = ticket.events.all()
         if request.user.role == User.Role.CUSTOMER:
-            events = events.exclude(field_changed=TAG_FIELD)
+            events = events.exclude(field_changed__in=STAFF_ONLY_FIELDS)
         serializer = TicketEventSerializer(events, many=True)
         return Response(serializer.data)
 

@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from chat.availability import agents_available
+from chat.contact import save_contact
 from chat.conversations import (
     FINISHED_STATUSES,
     conversations_of,
@@ -25,6 +26,7 @@ from chat.widget.auth import (
 )
 from chat.widget.schema import (
     attachment_upload_schema,
+    conversation_contact_schema,
     conversation_create_schema,
     conversation_rating_schema,
     conversation_read_schema,
@@ -37,6 +39,8 @@ from chat.widget.serializers import (
     ConversationCreateSerializer,
     WidgetAttachmentSerializer,
     WidgetConfigSerializer,
+    WidgetContactInputSerializer,
+    WidgetContactSerializer,
     WidgetConversationStartSerializer,
     WidgetMessageInputSerializer,
     WidgetMessageListSerializer,
@@ -207,6 +211,22 @@ class ConversationReadView(WidgetAPIView):
             visitor=visitor,
         )
         return Response(ReadStateSerializer(state).data)
+
+
+@conversation_contact_schema
+class ConversationContactView(WidgetAPIView):
+    def post(self, request, pk):
+        ticket = _get_conversation(request.auth, pk)
+        serializer = WidgetContactInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        _ensure_open(ticket)
+        data = serializer.validated_data
+        visitor = save_contact(
+            ticket,
+            phone=data.get("phone") or "",
+            email=data.get("email") or "",
+        )
+        return Response(WidgetContactSerializer(visitor).data)
 
 
 @conversation_rating_schema

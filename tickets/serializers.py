@@ -6,16 +6,33 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from accounts.models import User
+from chat.models import Site, Visitor
 from core.uploads import clean_file_name, ensure_content_matches
 from tickets.events import record_event, tag_changes
 from tickets.messages import comment_sender_type
 from tickets.models import Attachment, Comment, Ticket, TicketEvent, TicketRating
 from tickets.validators import MAX_TICKET_TAGS
 
-STAFF_ONLY_RESPONSE_FIELDS = frozenset({"tags", "first_response_due_at"})
+STAFF_ONLY_RESPONSE_FIELDS = frozenset({"tags", "first_response_due_at", "visitor", "site"})
+
+
+class TicketVisitorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Visitor
+        fields = ["id", "name", "phone", "email"]
+        read_only_fields = fields
+
+
+class TicketSiteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Site
+        fields = ["id", "name"]
+        read_only_fields = fields
 
 
 class TicketSerializer(serializers.ModelSerializer):
+    visitor = TicketVisitorSerializer(read_only=True, allow_null=True)
+    site = TicketSiteSerializer(read_only=True, allow_null=True)
     unread_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -26,7 +43,10 @@ class TicketSerializer(serializers.ModelSerializer):
             "description",
             "status",
             "priority",
+            "channel",
             "customer",
+            "visitor",
+            "site",
             "assignee",
             "tags",
             "first_response_due_at",
@@ -36,6 +56,7 @@ class TicketSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "id",
+            "channel",
             "customer",
             "first_response_due_at",
             "created_at",
@@ -112,6 +133,7 @@ class TicketSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         actor = self._get_actor()
+        tags = validated_data.pop("tags", None)
 
         changes = []
         if "status" in validated_data and validated_data["status"] != instance.status:
@@ -126,11 +148,19 @@ class TicketSerializer(serializers.ModelSerializer):
             old_assignee = instance.assignee.username if instance.assignee else ""
             new_assignee = validated_data["assignee"].username if validated_data["assignee"] else ""
             changes.append(("assignee", old_assignee, new_assignee))
-        if "tags" in validated_data:
-            changes.extend(tag_changes(instance.tags.all(), validated_data["tags"]))
+        if tags is not None:
+            changes.extend(tag_changes(instance.tags.all(), tags))
+
+        changed_fields = [
+            attr for attr, value in validated_data.items() if getattr(instance, attr) != value
+        ]
 
         with transaction.atomic():
-            instance = super().update(instance, validated_data)
+            for attr in changed_fields:
+                setattr(instance, attr, validated_data[attr])
+            instance.save(update_fields=[*changed_fields, "updated_at"])
+            if tags is not None:
+                instance.tags.set(tags)
             self._record_changes(instance, actor, changes)
 
         return instance

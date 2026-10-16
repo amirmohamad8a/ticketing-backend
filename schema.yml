@@ -1358,6 +1358,18 @@ paths:
         name: assignee
         schema:
           type: string
+      - in: query
+        name: channel
+        schema:
+          type: string
+          enum:
+          - chat
+          - offline_form
+          - portal
+        description: |-
+          * `portal` - Portal
+          * `chat` - Chat
+          * `offline_form` - Offline form
       - name: cursor
         required: false
         in: query
@@ -2514,6 +2526,18 @@ paths:
         schema:
           type: string
       - in: query
+        name: channel
+        schema:
+          type: string
+          enum:
+          - chat
+          - offline_form
+          - portal
+        description: |-
+          * `portal` - Portal
+          * `chat` - Chat
+          * `offline_form` - Offline form
+      - in: query
         name: is_overdue
         schema:
           type: boolean
@@ -3132,6 +3156,78 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WidgetMessage'
+          description: ''
+        '400':
+          description: The request is malformed or failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication credentials are missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: The caller is not allowed to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: The resource does not exist or is not visible to the caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The conversation is resolved or closed (`conversation_closed`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              description: Seconds to wait before sending the request again.
+              schema:
+                type: integer
+  /api/widget/conversations/{id}/contact/:
+    post:
+      operationId: widget_conversations_contact_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Widget
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WidgetContactInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WidgetContactInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WidgetContactInputRequest'
+      security:
+      - visitorToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetContact'
           description: ''
         '400':
           description: The request is malformed or failed validation.
@@ -4661,8 +4757,22 @@ components:
           $ref: '#/components/schemas/TicketStatusEnum'
         priority:
           $ref: '#/components/schemas/PriorityEnum'
+        channel:
+          allOf:
+          - $ref: '#/components/schemas/ChannelEnum'
+          readOnly: true
         customer:
           type: integer
+          readOnly: true
+          nullable: true
+        visitor:
+          allOf:
+          - $ref: '#/components/schemas/TicketVisitor'
+          readOnly: true
+          nullable: true
+        site:
+          allOf:
+          - $ref: '#/components/schemas/TicketSite'
           readOnly: true
           nullable: true
         assignee:
@@ -4689,14 +4799,17 @@ components:
           format: date-time
           readOnly: true
       required:
+      - channel
       - created_at
       - customer
       - description
       - first_response_due_at
       - id
+      - site
       - title
       - unread_count
       - updated_at
+      - visitor
     TicketEvent:
       type: object
       properties:
@@ -4784,6 +4897,18 @@ components:
       required:
       - description
       - title
+    TicketSite:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - name
     TicketStatusEnum:
       enum:
       - open
@@ -4798,6 +4923,27 @@ components:
         * `waiting_on_customer` - Waiting on Customer
         * `resolved` - Resolved
         * `closed` - Closed
+    TicketVisitor:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+      required:
+      - email
+      - id
+      - name
+      - phone
     TokenObtainPair:
       type: object
       properties:
@@ -5004,6 +5150,33 @@ components:
       - primary_color
       - require_contact
       - require_name
+    WidgetContact:
+      type: object
+      properties:
+        phone:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+      required:
+      - email
+      - phone
+    WidgetContactInputRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          nullable: true
+          maxLength: 32
+        email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
     WidgetConversation:
       type: object
       properties:
