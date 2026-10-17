@@ -11,19 +11,19 @@ A support-ticketing REST API built with Django and Django REST Framework, with a
 - User management for admins at `/api/users/`: list with `role` and `is_active` filters, create users (agents by default), change roles, deactivate and reactivate accounts and reset passwords. Every change writes a row to an append-only `UserEvent` log, deactivation and password resets revoke the user's sessions, and an admin cannot demote or deactivate themselves or reset their own password there
 - Agents list for assignment dropdowns at `GET /api/agents/`: the id, display name and role of every active agent and admin, readable by agents and admins only. It is not paginated and exposes no usernames, phone numbers or other account details
 - Chat sites for admins at `/api/sites/`: a `Site` is a website that will host the chat widget. It has a name, an auto-generated public key, a list of allowed origins, an active flag and the widget settings (greeting, primary color, position, offline timeout, whether a name or a contact is required). Allowed origins are validated, normalized to the form browsers send in the `Origin` header and deduplicated. Sites can be listed (filterable by `key` and `is_active`), created, read and updated, and the key can be rotated at `POST /api/sites/{id}/rotate-key/`. A site is deactivated rather than deleted
-- Chat visitors and ticket ownership: a `Visitor` belongs to a site and has an optional name, phone and email, a `last_seen_at` and a `created_at`. Every ticket has a `channel` (`portal`, `chat` or `offline_form`, `portal` by default) and an optional `site`. A ticket belongs to exactly one owner, either a `customer` or a `visitor`, enforced by a database check constraint and by `Ticket.clean()`. Customers and visitors with tickets cannot be deleted, and neither can sites that have visitors or tickets
+- Chat visitors and ticket ownership: a `Visitor` belongs to a site and has an optional name, phone and email, a `last_seen_at` and a `created_at`. Every ticket has a `channel` (`portal`, `chat` or `offline_form`, `portal` by default) and an optional `site`. A ticket belongs to exactly one owner, either a `customer` or a `visitor`, enforced by a database check constraint and by `Ticket.clean()`. Customers and visitors with tickets cannot be deleted, and neither can sites that have visitors or tickets. The daily retention job deletes visitors that never opened a ticket and clears the contact details of the rest
 - Visitor identity: the first contact issues a signed, expiring visitor token that encodes the visitor and the site. A tampered or expired token is rejected, a returning visitor resolves to the same row, and the token is replaced by a fresh one every time the visitor starts or continues a conversation
 - Messages as comments: a chat message is a `Comment` with a `kind` (`message` or `system`), an optional `visitor` and an optional `client_msg_id`. Every message has exactly one sender, an `author` or a `visitor`, enforced by a database check constraint and by `Comment.clean()`, and system messages have neither. Sending again with the same `client_msg_id` returns the stored comment instead of creating a second row. Comment responses carry a `sender_type` (`customer`, `agent`, `visitor` or `system`), and internal notes stay hidden from customers
-- Public widget API under `/api/widget/`: the public config of a site, starting or resuming a conversation, reading and sending messages, uploading files and getting signed download URLs. Visitors authenticate with the `X-Visitor-Token` header and can only ever reach their own conversation. Every request must come from an origin listed in the site's `allowed_origins` (anything else gets 403), and every route is throttled per IP address and per visitor. Uploads go through the same content checks as every other upload
+- Public widget API under `/api/widget/`: the public config of a site, starting or resuming a conversation, reading and sending messages, uploading files and getting signed download URLs. Visitors authenticate with the `X-Visitor-Token` header and can only ever reach their own conversation. Every request must come from an origin listed in the site's `allowed_origins` (anything else gets 403), and every route is throttled per IP address and per visitor. New conversations also pass an optional proof-of-work challenge, which production turns on by default. Uploads go through the same content checks as every other upload
 - Read state and unread counts: a `ConversationRead` row stores, for each participant (a user or a visitor) and ticket, the id of the last message they have read. Every ticket response carries an `unread_count` for the signed-in user: the messages from other people after that point, without internal notes for customers. Participants mark a conversation read at `POST /api/tickets/{id}/read/` (visitors at `POST /api/widget/conversations/{id}/read/`), and the marker only ever moves forward
 - Missed-message recovery: a client that lost its connection catches up with `GET /api/tickets/{id}/messages/?after=<id>` (visitors use the widget route with the same parameter). Messages come oldest first, 100 at a time, with `has_more`, and the `message.created` WebSocket event carries the message id that serves as the cursor, so nothing is lost and the order is kept
 - WebSocket support: the app runs on ASGI with Django Channels and a Redis channel layer. Clients connect to `/ws/` with a short-lived, single-use ticket obtained over HTTP (users at `POST /api/ws/ticket/`, widget visitors at `POST /api/widget/ws/ticket/`), so no long-lived token ever appears in a URL. Visitors are also checked against the site's allowed origins. A socket can only join the conversations its owner could open over HTTP, and every connection has a message size limit and a message rate limit
 - Live events: ticket changes and new messages are pushed to the sockets that may see them, only after the database transaction commits, so a rolled-back change never reaches a socket
 - Typing indicators: a participant who has joined a ticket can tell the others in it that they started or stopped typing. The signals are relayed over the channel layer only, never stored, and throttled per connection and ticket
 - Agent presence: agents and admins keep a presence socket open at `/ws/presence/`. Presence lives in Redis with a time-to-live that a heartbeat refreshes, so a closed tab goes offline by itself. Each staff member is `available` or `away`, and `GET /api/agents/online/` lists who is online with their open chat count and capacity
-- Chat routing: a new chat is assigned right away to the available agent with the fewest open chats (the one who was assigned a chat longest ago breaks ties), never above `max_concurrent_chats`. The assignment goes through the normal ticket serializer, so the audit event is written and the assignee rules apply, and concurrent new chats are serialized with row locks so one agent is not overloaded. With nobody available the chat stays unassigned in the queue
+- Chat routing: a new chat is assigned right away to the available agent with the fewest open chats (the one who was assigned a chat longest ago breaks ties), never above `max_concurrent_chats`. The assignment goes through the normal ticket serializer, so the audit event is written and the assignee rules apply, and concurrent new chats are serialized with row locks so one agent is not overloaded. With nobody available the chat stays unassigned in the queue, and the minute sweep assigns it once an agent has capacity again
 - Claiming: an agent or admin can take an unassigned ticket with `POST /api/tickets/{id}/claim/`, and two agents claiming at once cannot both win
-- Offline fallback: when a new chat is started, a Celery task is scheduled with a `countdown`. If no agent is online it runs at once, otherwise after the site's `offline_timeout_minutes`. Unless an agent has replied by then, the conversation becomes an `offline_form` ticket, with an audit event, a system message and a push to the widget asking for optional contact details. The task is idempotent
+- Offline fallback: when a new chat starts unassigned, a Celery task is scheduled with a `countdown`. If no agent is online it runs at once, otherwise after the site's `offline_timeout_minutes`. Unless an agent has replied by then, the conversation becomes an `offline_form` ticket, with an audit event, a system message and a push to the widget asking for optional contact details. The task is idempotent, and the minute sweep runs it for chats that passed the timeout
 - JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout. Tokens are signed with their own `JWT_SIGNING_KEY`, so a leaked `SECRET_KEY` cannot be used to forge them
 - Immediate token revocation: a password change or reset invalidates the user's access tokens at once instead of at the end of their 15-minute lifetime, and deactivation does the same
 - Rate limiting: every route is throttled per IP address (anonymous) or per user (signed in), with stricter limits on login, registration, password change, user management, site management, signed downloads and WebSocket tickets. A throttled request gets `429` in the standard error format with a `Retry-After` header. Counters live in Redis, so they are shared between processes
@@ -39,8 +39,9 @@ A support-ticketing REST API built with Django and Django REST Framework, with a
 - Comments with internal notes that customers never receive
 - Attachments on tickets and on comments, with a 10 MB limit and a content-type allowlist. Customers cannot see or reach the attachments of internal comments, and only a comment's author can attach files to it
 - File safety: the real content type of every upload is read from its magic bytes with a pure-Python library (`filetype`), so the Docker image needs no system packages. The detected type must be on the allowlist and must match the declared `content_type`, so a script renamed to `.png` or a PNG labelled as a PDF is rejected. DOCX and plain ZIP files, both ZIP containers, are told apart by reading the archive's file list, and archives are never extracted. Attachments are stored under random names with the extension taken from the verified type, and the original name is kept in `original_name` for display. Avatars go through the same check
+- File cleanup: deleting an `Attachment` row removes its stored file after the transaction commits. `python manage.py report_orphan_files` lists files no attachment or avatar references, and a daily Celery task logs the same report
 - Pluggable file storage: local disk by default, or any S3-compatible bucket (MinIO for local testing) selected with `STORAGE_BACKEND`
-- Protected downloads: `/media/` is never served. Attachments and avatars are reached only through `GET /api/attachments/{id}/download/` and `GET /api/avatars/{id}/download/`, which check access first and return a short-lived signed URL as `{url, expires_in}`. With local storage the URL points to an API route that verifies the signature and streams the file, with S3 it is a presigned URL, and the bucket is never public. Attachment responses carry a `download_url` pointing at that endpoint instead of a file URL
+- Protected downloads: `/media/` is never served. Attachments and avatars are reached only through `GET /api/attachments/{id}/download/` and `GET /api/avatars/{id}/download/`, which check access first and return a short-lived signed URL as `{url, expires_in}`. With local storage the URL points to an API route that verifies the signature and streams the file in 64 KB chunks through an async iterator, so a large download does not load the file into memory. With S3 it is a presigned URL, and the bucket is never public. Attachment responses carry a `download_url` pointing at that endpoint instead of a file URL
 - Forced downloads: every file is served with `Content-Disposition: attachment` and its original name. Local downloads also carry `X-Content-Type-Options: nosniff`, and S3 presigned URLs override the response content type and disposition
 - Avatar visibility: users can get their own avatar, staff can get any avatar, everyone signed in can get a staff member's avatar, and a customer's avatar is visible only to that customer and to staff
 - Filtering by status, priority and assignee (including `assignee=me`) and cursor pagination
@@ -193,8 +194,8 @@ The embeddable widget talks to these routes. They need no staff account.
 
 - Authentication: send the token from the first `POST /api/widget/conversations/` in an `X-Visitor-Token` header. A missing, tampered or expired token, and the token of a deactivated site, get `401`. A token is valid for `VISITOR_TOKEN_LIFETIME_DAYS` days
 - Origin: the `Origin` header must be one of the site's `allowed_origins`. A missing header, an unlisted origin or a site with no origins gets `403`, so add the host page's origin to the site before embedding the widget. The routes send CORS headers to any origin so the browser can read that `403`, and the origin check is what enforces access
-- Starting a conversation: `body` (up to 4000 characters) is the first message and is always required. Without a token, `site_key` is required, a visitor is created and `name`, `phone` and `email` are stored (the site's `require_name` and `require_contact` are enforced). With a token, the token is replaced by a fresh one, and the message goes into the visitor's current conversation (one that is not resolved or closed) or opens a new one. The response is `201` when a conversation was created and `200` otherwise, and carries `token`, `conversation`, `message` and `agents_available`
-- A conversation is a ticket with `channel` `chat`. Its title is the start of the first message and its description is empty, because the messages are the content. A new conversation is routed to an available agent when it is created (see Chat routing), and an offline fallback is scheduled for it (see Offline fallback)
+- Starting a conversation: `body` (up to 4000 characters) is the first message and is always required. Without a token, `site_key` is required, a visitor is created and `name`, `phone` and `email` are stored (the site's `require_name` and `require_contact` are enforced). When `WIDGET_POW_DIFFICULTY` is nonzero, the client first reads `GET /api/widget/challenge/?key=<site key>` and sends the returned `challenge` and a valid `nonce` as `pow_challenge` and `pow_nonce`. With a token, the token is replaced by a fresh one, and the message goes into the visitor's current conversation (one that is not resolved or closed) or opens a new one. A message into a `waiting_on_customer` conversation moves it back to `in_progress`, the same as `POST /api/widget/conversations/{id}/messages/` and the attachment route. The response is `201` when a conversation was created and `200` otherwise, and carries `token`, `conversation`, `message` and `agents_available`
+- A conversation is a ticket with `channel` `chat`. Its title is the start of the first message and its description is empty, because the messages are the content. A new conversation is routed to an available agent when it is created (see Chat routing). When no agent can take it, an offline fallback is scheduled for it (see Offline fallback)
 - Messages: responses never contain internal notes. `GET` returns at most 100 messages as `{results, has_more, agents_available, unread_count}`, so a client that reconnects calls it with the last id it saw until `has_more` is `false` (see Missed-message recovery). `unread_count` is the number of staff messages the visitor has not marked as read
 - Closed conversations: sending a message or a file into a resolved or closed conversation gets `409` with the code `conversation_closed`. Start a new conversation with `POST /api/widget/conversations/` instead
 - Attachments: the file becomes a message of its own, so it appears in order in the thread. It must pass the same size, type and magic-byte checks as every other upload
@@ -346,7 +347,7 @@ When a visitor starts a new conversation, the backend tries to assign it to an a
 4. Pick the agent with the fewest open chats. On a tie, pick the one who was assigned a chat longest ago (agents never assigned one go first), and then the lowest id
 5. Assign through the normal ticket serializer, so the assignee rules apply (an active agent or admin) and an `assignee` audit event is written with no actor
 
-- With no available agent the conversation stays unassigned in the queue. Later messages in the same conversation do not trigger routing again. The offline fallback decides what happens to a chat that stays unanswered (see Offline fallback)
+- With no available agent the conversation stays unassigned in the queue. Later messages in the same conversation do not trigger routing again. The minute sweep assigns queued chats in creation order whenever an agent has free capacity, and the offline fallback decides what happens to a chat that stays unanswered (see Offline fallback)
 - `last_chat_assigned_at` on the user is updated whenever routing or a claim assigns a chat, and it drives the round-robin tie-break
 - The assignee audit event reaches staff sockets only, never customers or visitors
 
@@ -364,10 +365,12 @@ When a visitor starts a new conversation, the backend tries to assign it to an a
 
 A chat that nobody answers becomes an offline ticket, so the visitor can leave contact details and be answered later. The Celery worker must be running (`docker compose up` starts it).
 
-When a visitor starts a new conversation, `chat.convert_to_offline` is scheduled with a `countdown`, after the transaction commits:
+When a visitor starts a new conversation that routing cannot assign, `chat.convert_to_offline` is scheduled with a `countdown`, after the transaction commits:
 
-- Nobody online (no active agent or admin with the presence status `available`): countdown `0`
-- Someone online: the site's `offline_timeout_minutes`, counted from the start of the conversation
+- Nobody online (no active agent or admin with a live presence entry): countdown `0`
+- Someone online, even if every agent is away or at capacity: the site's `offline_timeout_minutes`, counted from the start of the conversation
+
+The `chat.sweep_unanswered_chats` task runs every minute. It also converts any chat that has passed its timeout without a public staff reply, and then drains the unassigned queue: the oldest chats are assigned to agents that now have free capacity.
 
 The task changes nothing, and returns `false`, when:
 
@@ -474,21 +477,27 @@ Throttling needs Redis, because the counters are kept in Django's cache. A throt
 
 | Scope | Applies to | Counted per | Limit |
 | --- | --- | --- | --- |
-| `anon` | Every route, signed out | IP address | 60/min |
+| `anon` | Every route, signed out | IP address | 120/min |
 | `user` | Every route, signed in | User | 300/min |
-| `login` | `POST /api/token/` | IP address | 10/min |
-| `register` | `POST /api/auth/register/` | IP address | 10/hour |
+| `login` | `POST /api/token/` | IP address | 30/min |
+| `login_username` | `POST /api/token/` | Username + IP address | 20/hour |
+| `login_username_global` | `POST /api/token/` | Username | 120/hour |
+| `register` | `POST /api/auth/register/` | IP address | 30/hour |
 | `password_change` | `POST /api/auth/password/change/` | User | 5/hour |
 | `user_management` | `/api/users/` | User | 60/min |
 | `site_management` | `/api/sites/` | User | 60/min |
 | `download` | `/api/downloads/{token}/` | IP address | 300/min |
+| `export` | `GET /api/tickets/export/` | User | 10/min |
+| `attachment_upload` | Attachment upload routes | User | 60/hour |
 | `ws_ticket` | `POST /api/ws/ticket/` | User | 30/min |
-| `widget_ip` | Every `/api/widget/` route | IP address | 120/min |
+| `widget_ip` | Every `/api/widget/` route | IP address | 240/min |
 | `widget_visitor` | Widget routes called with a visitor token | Visitor | 90/min |
-| `widget_start` | `POST /api/widget/conversations/` | IP address | 20/hour |
+| `widget_start` | `POST /api/widget/conversations/` | IP address | 60/hour |
 | `widget_upload` | `POST /api/widget/conversations/{id}/attachments/` | Visitor | 30/hour |
 
-The limits live in `REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]` in `config/settings/base.py`. Behind a reverse proxy, set `NUM_PROXIES` to the number of proxies in front of the app, so the real client address is read from `X-Forwarded-For`. With the default `0` the header is ignored, which stops clients from spoofing it to dodge the limits. To reset the counters while testing by hand, run `docker compose exec redis redis-cli FLUSHDB`.
+When the per-username global budget is spent, a login is delayed by `LOGIN_USERNAME_SLOWDOWN_SECONDS` instead of being rejected, so a botnet cannot lock the account out. The per-username + IP and per-IP budgets still return `429`.
+
+The limits live in `REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]` in `config/settings/base.py`. Behind a reverse proxy, set `NUM_PROXIES` to the number of proxies in front of the app, so the real client address is read from `X-Forwarded-For`. With `0` the header is ignored, which stops clients from spoofing it to dodge the limits. Production refuses to start without `NUM_PROXIES`; a deliberate `ALLOW_ZERO_PROXIES=true` is needed for the direct-access case. To reset the counters while testing by hand, run `docker compose exec redis redis-cli FLUSHDB`.
 
 WebSocket connections have their own limits, described under Limits in the WebSockets section.
 
@@ -528,6 +537,8 @@ docker compose exec \
   -e SECRET_KEY=local-deploy-check-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz \
   -e JWT_SIGNING_KEY=local-deploy-check-jwt-key-9876543210-zyxwvutsrqponmlkjihgfedcba \
   -e ALLOWED_HOSTS=localhost \
+  -e DATABASE_URL=postgres://ticketing:ticketing@db:5432/ticketing \
+  -e NUM_PROXIES=1 \
   web python manage.py check --deploy --fail-level WARNING
 ```
 
@@ -562,12 +573,15 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `JWT_SIGNING_KEY` | Production | `SECRET_KEY` | Key that signs JWTs and visitor tokens. Production refuses to start without one that differs from `SECRET_KEY` |
 | `DEBUG` | No | `False` | Debug mode. Development settings force it on |
 | `ALLOWED_HOSTS` | No | empty | Comma-separated host names. Include `web` when Prometheus scrapes the app |
-| `DATABASE_URL` | No | SQLite file | Database connection URL |
+| `DATABASE_URL` | Yes | none | PostgreSQL connection URL. Startup fails for any other scheme |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | With prod | `ticketing` | Credentials the production Compose database container creates. `DATABASE_URL` must match them |
 | `DJANGO_SETTINGS_MODULE` | No | `config.settings.dev` | `config.settings.prod` in the production image |
 | `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend, Django's cache (throttle counters, WebSocket tickets, presence) and the Channels layer |
-| `NUM_PROXIES` | No | `0` | Number of reverse proxies in front of the app, used to read the client IP for throttling and logging |
-| `MAX_REQUEST_BODY_BYTES` | No | `11534336` | Largest request body the ASGI layer accepts. A bigger one gets `413` before Django spools it to disk |
+| `NUM_PROXIES` | Production | `0` in dev | Number of reverse proxies in front of the app, used to read the client IP for throttling and logging. Production refuses to start unless it is set |
+| `ALLOW_ZERO_PROXIES` | No | `false` | Production only. Allows `NUM_PROXIES=0` for a deliberate direct-access deployment and logs a warning |
+| `MAX_REQUEST_BODY_BYTES` | No | `65536` | Largest body for normal routes. The ASGI layer answers `413` before Django spools it to disk |
+| `MAX_UPLOAD_BODY_BYTES` | No | `11534336` | Largest body on `/attachments/` and `/api/auth/me/`, where multipart uploads go |
+| `LOGIN_USERNAME_SLOWDOWN_SECONDS` | No | `0.5` | Delay added when the per-username global login budget is spent |
 | `ADMIN_LOGIN_MAX_ATTEMPTS` | No | `10` | Django admin login attempts per IP address per window. `0` disables the limiter |
 | `ADMIN_LOGIN_WINDOW_SECONDS` | No | `300` | Length of the Django admin login attempt window |
 | `LOG_LEVEL` | No | `INFO` | Verbosity of the JSON logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
@@ -578,10 +592,16 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `SECURE_SSL_REDIRECT` | No | `true` | Production only. Redirect HTTP to HTTPS (`/health/` and `/metrics/` are exempt). Set `false` when you reach the container over plain HTTP without a proxy |
 | `SECURE_HSTS_SECONDS` | No | `31536000` | Production only. Lifetime of the HSTS header. Once a browser has seen it over HTTPS it insists on HTTPS for that host for this long |
 | `PORT` | No | `8000` | Port Daphne listens on |
-| `WEB_PORT` | No | `8000` | Host port the production Compose file publishes. Set `127.0.0.1:8000` to expose the app to a local reverse proxy only |
+| `WEB_PORT` | No | `127.0.0.1:8000` | Host address and port the production Compose file publishes, so only a local reverse proxy reaches the app |
 | `STORAGE_BACKEND` | No | `local` | `local` for disk or `s3` for an S3-compatible bucket |
 | `DOWNLOAD_URL_TTL_SECONDS` | No | `300` | Lifetime of signed download URLs |
 | `VISITOR_TOKEN_LIFETIME_DAYS` | No | `30` | Lifetime of a widget visitor token |
+| `VISITOR_RETENTION_DAYS` | No | `30` | Age after which visitors without tickets are deleted and finished-conversation contact details are cleared |
+| `WIDGET_POW_DIFFICULTY` | No | `0` in dev, `16` in prod | Leading zero bits a widget conversation challenge must satisfy. `0` disables proof of work |
+| `WIDGET_POW_TTL_SECONDS` | No | `300` | Lifetime of a widget proof-of-work challenge |
+| `WIDGET_SITE_START_LIMIT_PER_HOUR` | No | `300` | New conversations per site per hour |
+| `WIDGET_SITE_MAX_UNASSIGNED_CHATS` | No | `200` | Recent unassigned chats a site may have before new starts get `429` |
+| `WIDGET_SITE_UNASSIGNED_WINDOW_MINUTES` | No | `60` | How far back the unassigned-chat cap counts |
 | `WS_TICKET_TTL_SECONDS` | No | `30` | Lifetime of a single-use WebSocket ticket |
 | `WS_MAX_MESSAGE_BYTES` | No | `4096` | Largest message a client may send over a WebSocket. A bigger one closes the connection |
 | `WS_RATE_LIMIT_MESSAGES` | No | `30` | Messages a single connection may send per window |
@@ -605,8 +625,12 @@ Every push and pull request runs linting, the test suite and `check --deploy` on
 
 ### Fronting the app with a reverse proxy
 
-- Cap the request body at the proxy first (`client_max_body_size` in nginx or the equivalent in Caddy). The ASGI layer also enforces `MAX_REQUEST_BODY_BYTES` and answers `413` before Django spools an oversized or chunked body to disk, but the proxy should reject it without waking the app.
+- Cap the request body at the proxy first (`client_max_body_size` in nginx or the equivalent in Caddy). The ASGI layer enforces `MAX_REQUEST_BODY_BYTES` (64 KB by default) on normal routes and `MAX_UPLOAD_BODY_BYTES` (11 MB) on upload routes, and answers `413` before Django spools an oversized or chunked body to disk. Set the proxy upload cap to `MAX_UPLOAD_BODY_BYTES` and keep a smaller cap everywhere else, so the proxy rejects oversized JSON without waking the app.
 - Do not expose `/admin/` to the public internet. Put it behind an allowlist or a VPN. Django admin logins are not covered by the DRF throttles, so a small per-IP attempt limiter (`ADMIN_LOGIN_MAX_ATTEMPTS` attempts per `ADMIN_LOGIN_WINDOW_SECONDS`, `10` per `300` by default) answers `429` as a safety net, but it is not a substitute for keeping the route private.
+
+The development `docker-compose.yml` publishes PostgreSQL, Redis, MinIO, Prometheus and the app on `127.0.0.1` only. The production Compose file defaults `WEB_PORT` to `127.0.0.1:8000`, so a reverse proxy on the same host is the only way in.
+
+The scripts under `scripts/` default to the production Compose file. Export `COMPOSE` to target another stack, for example `COMPOSE="docker compose -f docker-compose.yml" sh scripts/backup_db.sh`. `backup_db.sh` prints the Compose command and database it targets, and `backup_media.sh` prints the volume it archives.
 
 [`docs/self-hosting.md`](docs/self-hosting.md) walks through running that Compose file on any machine or VPS: generating secrets, putting Caddy or nginx with HTTPS and `wss://` in front, and setting hosts, CORS, CSRF and widget origins. The frontend is a separate application; this repository is the API only.
 

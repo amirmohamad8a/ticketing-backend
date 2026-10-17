@@ -235,3 +235,9 @@ class WidgetReplyReopenTests(TestCase):
         )
         self.assertEqual(res.status_code, 201)
         self.assertEqual(Ticket.objects.get(pk=self.ticket_id).status, Ticket.Status.IN_PROGRESS)
+
+    def test_the_conversation_endpoint_moves_a_waiting_conversation_to_in_progress(self):
+        self._make_waiting()
+        res = self.client.post(CONVERSATIONS_URL, {"body": "Still there?"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(Ticket.objects.get(pk=self.ticket_id).status, Ticket.Status.IN_PROGRESS)

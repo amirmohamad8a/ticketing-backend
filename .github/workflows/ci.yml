@@ -101,6 +101,8 @@ jobs:
           SECRET_KEY: ci-deploy-check-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz
           JWT_SIGNING_KEY: ci-deploy-check-jwt-signing-key-9876543210-zyxwvutsrqponmlk
           ALLOWED_HOSTS: support.example.com
+          DATABASE_URL: postgres://ticketing:ticketing@localhost:5432/ticketing
+          NUM_PROXIES: "1"
 
   security:
     runs-on: ubuntu-latest

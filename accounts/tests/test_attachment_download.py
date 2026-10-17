@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from core.tests import read_streaming_body
 from core.tests.factories import (
     AdminFactory,
     AgentFactory,
@@ -60,7 +61,7 @@ class AttachmentDownloadTests(TestCase):
     def _fetch(self, link):
         response = APIClient().get(link["url"])
         self.assertEqual(response.status_code, 200)
-        return b"".join(response.streaming_content)
+        return read_streaming_body(response)
 
     def test_unauthenticated_request_is_rejected(self):
         response = APIClient().get(_url(self.ticket_attachment))

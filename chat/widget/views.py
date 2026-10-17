@@ -149,7 +149,9 @@ class ConversationCreateView(WidgetAPIView):
 
         if visitor is not None:
             ensure_origin_allowed(request, visitor.site)
-            ticket, comment, created = open_conversation(visitor, data["body"], client_msg_id)
+            ticket, comment, created = open_conversation(
+                visitor, data["body"], client_msg_id, request=request
+            )
             token = issue_visitor_token(visitor)
         else:
             site = _find_site(data.get("site_key"), "site_key")

@@ -4,6 +4,7 @@ import zipfile
 
 from django.test import TestCase
 
+from core.tests import read_streaming_body
 from core.tests.factories import CommentFactory, TicketFactory, UserFactory
 from core.tests.security_support import (
     PDF_BYTES,
@@ -116,7 +117,7 @@ class TicketUploadAbuseTests(TestCase):
         self.assertEqual(link.status_code, 200)
         download = self.client_without_login().get(link.data["url"])
         self.assertEqual(download.status_code, 200)
-        b"".join(download.streaming_content)
+        read_streaming_body(download)
         self.assertEqual(download["Content-Type"], "text/plain")
         self.assertTrue(download["Content-Disposition"].startswith("attachment;"))
         self.assertEqual(download["X-Content-Type-Options"], "nosniff")

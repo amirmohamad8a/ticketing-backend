@@ -13,6 +13,8 @@ case "$BACKUP_RETENTION_DAYS" in
         ;;
 esac
 
+echo "Backing up media volume $MEDIA_VOLUME"
+
 if ! docker volume inspect "$MEDIA_VOLUME" > /dev/null 2>&1; then
     echo "Docker volume not found: $MEDIA_VOLUME" >&2
     exit 1

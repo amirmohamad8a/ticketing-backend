@@ -38,8 +38,8 @@ def _run(scope, messages, app):
     return sent
 
 
-def _http_scope(headers=None):
-    return {"type": "http", "headers": headers or []}
+def _http_scope(headers=None, path="/api/tickets/"):
+    return {"type": "http", "headers": headers or [], "path": path}
 
 
 class BodySizeLimitASGITests(SimpleTestCase):
@@ -101,3 +101,32 @@ class BodySizeLimitASGITests(SimpleTestCase):
         self.assertEqual(app.calls, 1)
         self.assertEqual(app.scope_type, "websocket")
         self.assertEqual(sent, [])
+
+    def test_a_body_over_the_default_limit_is_rejected_on_a_normal_route(self):
+        app = _RecordingApp()
+        messages = [{"type": "http.request", "body": b"x" * 100, "more_body": False}]
+        with override_settings(MAX_REQUEST_BODY_BYTES=10, MAX_UPLOAD_BODY_BYTES=200):
+            sent = _run(_http_scope(path="/api/widget/conversations/"), messages, app)
+        self.assertEqual(app.calls, 0)
+        self.assertEqual(sent[0]["status"], 413)
+
+    def test_an_attachment_route_uses_the_upload_limit(self):
+        app = _RecordingApp()
+        messages = [{"type": "http.request", "body": b"x" * 100, "more_body": False}]
+        with override_settings(MAX_REQUEST_BODY_BYTES=10, MAX_UPLOAD_BODY_BYTES=200):
+            sent = _run(
+                _http_scope(path="/api/widget/conversations/1/attachments/"),
+                messages,
+                app,
+            )
+        self.assertEqual(app.calls, 1)
+        self.assertEqual(app.body, b"x" * 100)
+        self.assertEqual(sent[0]["status"], 200)
+
+    def test_the_profile_route_uses_the_upload_limit(self):
+        app = _RecordingApp()
+        messages = [{"type": "http.request", "body": b"x" * 100, "more_body": False}]
+        with override_settings(MAX_REQUEST_BODY_BYTES=10, MAX_UPLOAD_BODY_BYTES=200):
+            sent = _run(_http_scope(path="/api/auth/me/"), messages, app)
+        self.assertEqual(app.calls, 1)
+        self.assertEqual(sent[0]["status"], 200)

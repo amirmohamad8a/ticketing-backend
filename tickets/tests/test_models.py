@@ -99,6 +99,27 @@ class TicketAdminRegistrationTests(TestCase):
         for field in ("status", "priority", "customer", "assignee"):
             self.assertIn(field, admin_instance.list_display)
 
+    def test_sensitive_fields_are_read_only_in_the_admin(self):
+        admin_instance = site._registry[Ticket]
+        for field in (
+            "title",
+            "description",
+            "status",
+            "priority",
+            "channel",
+            "customer",
+            "visitor",
+            "site",
+            "assignee",
+            "tags",
+        ):
+            self.assertIn(field, admin_instance.readonly_fields)
+
+    def test_the_admin_cannot_add_or_delete_tickets(self):
+        admin_instance = site._registry[Ticket]
+        self.assertFalse(admin_instance.has_add_permission(request=None))
+        self.assertFalse(admin_instance.has_delete_permission(request=None))
+
 
 class TicketEventModelTests(TestCase):
     def setUp(self):
@@ -414,6 +435,11 @@ class AttachmentAdminRegistrationTests(TestCase):
         admin_instance = site._registry[Attachment]
         for field in ("ticket", "comment", "uploaded_by", "content_type", "size"):
             self.assertIn(field, admin_instance.list_display)
+
+    def test_the_admin_cannot_add_change_or_delete_attachments(self):
+        admin_instance = site._registry[Attachment]
+        self.assertFalse(admin_instance.has_add_permission(request=None))
+        self.assertFalse(admin_instance.has_delete_permission(request=None))
 
 
 class RecurringQueryIndexTests(TestCase):

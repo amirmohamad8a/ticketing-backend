@@ -78,6 +78,13 @@ class ReadinessLeakTests(TestCase):
         )
         self.assertNotIn("hunter2", response.content.decode())
 
+    def test_ready_warns_when_forwarded_for_is_present_but_ignored(self):
+        with patch("core.health.CHECKS", ()), override_settings(NUM_PROXIES=0):
+            with self.assertLogs("core.views", level="WARNING"):
+                response = self.client.get("/ready/", HTTP_X_FORWARDED_FOR="203.0.113.9")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("NUM_PROXIES", response.json()["warnings"][0])
+
 
 class AccountEnumerationTests(TestCase):
     def test_login_failures_look_identical_for_every_cause(self):

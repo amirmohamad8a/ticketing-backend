@@ -44,20 +44,35 @@ class TicketAdmin(admin.ModelAdmin):
         "visitor__name",
         "assignee__username",
     )
-    autocomplete_fields = ("customer", "visitor", "site", "tags")
     readonly_fields = (
+        "title",
+        "description",
         "status",
         "priority",
-        "assignee",
         "channel",
+        "customer",
+        "visitor",
+        "site",
+        "assignee",
+        "tags",
+        "first_response_due_at",
+        "first_response_at",
+        "resolved_at",
         "is_deleted",
         "deleted_at",
-        "first_response_due_at",
+        "created_at",
+        "updated_at",
     )
     actions = ["restore_selected"]
 
     def get_queryset(self, request):
         return Ticket.all_objects.all()
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
     @admin.action(description="Restore selected tickets")
     def restore_selected(self, request, queryset):
@@ -150,7 +165,23 @@ class AttachmentAdmin(admin.ModelAdmin):
     )
     list_filter = ("content_type",)
     search_fields = ("file", "original_name", "ticket__title", "uploaded_by__username")
-    autocomplete_fields = ("ticket", "comment", "uploaded_by")
+    readonly_fields = (
+        "ticket",
+        "comment",
+        "file",
+        "original_name",
+        "uploaded_by",
+        "size",
+        "content_type",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(CannedReply)

@@ -8,6 +8,7 @@ from accounts.models import User
 from accounts.permissions import STAFF_ROLES
 from realtime import presence
 from tickets.assignment import assign_ticket
+from tickets.models import Ticket
 
 EPOCH = datetime.min.replace(tzinfo=timezone.utc)
 
@@ -48,3 +49,34 @@ def route_new_chat(ticket):
         except ValidationError:
             return None
         return agent
+
+
+def route_queued_chats():
+    ticket_ids = list(
+        Ticket.objects.filter(
+            channel=Ticket.Channel.CHAT,
+            assignee__isnull=True,
+        )
+        .exclude(status__in=Ticket.FINISHED_STATUSES)
+        .order_by("created_at", "pk")
+        .values_list("pk", flat=True)
+    )
+    assigned = 0
+    for ticket_id in ticket_ids:
+        with transaction.atomic():
+            ticket = (
+                Ticket.objects.select_for_update()
+                .filter(
+                    pk=ticket_id,
+                    channel=Ticket.Channel.CHAT,
+                    assignee__isnull=True,
+                )
+                .exclude(status__in=Ticket.FINISHED_STATUSES)
+                .first()
+            )
+            if ticket is None:
+                continue
+            if route_new_chat(ticket) is None:
+                break
+            assigned += 1
+    return assigned

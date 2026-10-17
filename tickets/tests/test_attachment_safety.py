@@ -1,15 +1,22 @@
 import io
+import os
 import shutil
 import tempfile
 import zipfile
+from io import StringIO
 
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from core.tests.factories import CommentFactory, TicketFactory, UserFactory
+from core.tests import read_streaming_body
+from core.tests.factories import AttachmentFactory, CommentFactory, TicketFactory, UserFactory
+from core.tests.security_support import use_temp_media
 from core.uploads import DOCX_CONTENT_TYPE, ZIP_CONTENT_TYPE
 from tickets.models import Attachment
 
@@ -173,7 +180,7 @@ class AttachmentDownloadNameTests(AttachmentSafetyFixture):
         self.assertEqual(link.status_code, 200)
         download = APIClient().get(link.data["url"])
         self.assertEqual(download.status_code, 200)
-        b"".join(download.streaming_content)
+        read_streaming_body(download)
         return download
 
     def test_download_is_forced_and_carries_the_original_name(self):
@@ -194,3 +201,34 @@ class AttachmentDownloadNameTests(AttachmentSafetyFixture):
         self.assertEqual(response.data["original_name"], "گزارش.txt")
         download = self._download(response)
         self.assertTrue(download["Content-Disposition"].startswith("attachment; filename*=utf-8''"))
+
+
+class AttachmentFileCleanupTests(AttachmentSafetyFixture):
+    def test_deleting_an_attachment_removes_its_file_after_commit(self):
+        attachment = self._stored(self._post(b"hello", name="note.txt"))
+        path = attachment.file.path
+        self.assertTrue(os.path.exists(path))
+        with self.captureOnCommitCallbacks(execute=True):
+            attachment.delete()
+        self.assertFalse(os.path.exists(path))
+
+
+class OrphanFileReportTests(TestCase):
+    def setUp(self):
+        use_temp_media(self)
+
+    def test_the_report_lists_unreferenced_files_and_keeps_referenced_ones(self):
+        attachment = AttachmentFactory()
+        orphan = default_storage.save("attachments/orphan.txt", ContentFile(b"orphan"))
+        output = StringIO()
+        call_command("report_orphan_files", stdout=output)
+        text = output.getvalue()
+        self.assertIn(orphan, text)
+        self.assertNotIn(attachment.file.name, text)
+        self.assertIn("1 orphan file(s) found.", text)
+
+    def test_the_report_says_when_there_is_nothing_to_report(self):
+        AttachmentFactory()
+        output = StringIO()
+        call_command("report_orphan_files", stdout=output)
+        self.assertIn("No orphan files found.", output.getvalue())

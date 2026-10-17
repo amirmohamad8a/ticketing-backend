@@ -78,7 +78,13 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 
-DATABASES = {"default": env.db("DATABASE_URL", default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')}
+DATABASE_URL = env("DATABASE_URL", default="")
+if not DATABASE_URL:
+    raise ImproperlyConfigured("DATABASE_URL must be set.")
+if not DATABASE_URL.startswith(("postgres://", "postgresql://")):
+    raise ImproperlyConfigured("DATABASE_URL must point to PostgreSQL.")
+
+DATABASES = {"default": env.db("DATABASE_URL")}
 
 AUTH_USER_MODEL = "accounts.User"
 
@@ -101,7 +107,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 NUM_PROXIES = env.int("NUM_PROXIES", default=0)
 
-MAX_REQUEST_BODY_BYTES = env.int("MAX_REQUEST_BODY_BYTES", default=11 * 1024 * 1024)
+MAX_REQUEST_BODY_BYTES = env.int("MAX_REQUEST_BODY_BYTES", default=64 * 1024)
+MAX_UPLOAD_BODY_BYTES = env.int("MAX_UPLOAD_BODY_BYTES", default=11 * 1024 * 1024)
+LOGIN_USERNAME_SLOWDOWN_SECONDS = env.float("LOGIN_USERNAME_SLOWDOWN_SECONDS", default=0.5)
 
 ADMIN_LOGIN_PATH = "/admin/login/"
 ADMIN_LOGIN_MAX_ATTEMPTS = env.int("ADMIN_LOGIN_MAX_ATTEMPTS", default=10)
@@ -121,6 +129,7 @@ REST_FRAMEWORK = {
         "user": "300/min",
         "login": "30/min",
         "login_username": "20/hour",
+        "login_username_global": "120/hour",
         "register": "30/hour",
         "password_change": "5/hour",
         "user_management": "60/min",
@@ -154,6 +163,7 @@ VISITOR_TOKEN_LIFETIME_DAYS = env.int("VISITOR_TOKEN_LIFETIME_DAYS", default=30)
 
 WIDGET_SITE_START_LIMIT_PER_HOUR = env.int("WIDGET_SITE_START_LIMIT_PER_HOUR", default=300)
 WIDGET_SITE_MAX_UNASSIGNED_CHATS = env.int("WIDGET_SITE_MAX_UNASSIGNED_CHATS", default=200)
+WIDGET_SITE_UNASSIGNED_WINDOW_MINUTES = env.int("WIDGET_SITE_UNASSIGNED_WINDOW_MINUTES", default=60)
 WIDGET_POW_DIFFICULTY = env.int("WIDGET_POW_DIFFICULTY", default=0)
 WIDGET_POW_TTL_SECONDS = env.int("WIDGET_POW_TTL_SECONDS", default=300)
 
@@ -328,6 +338,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     "accounts-flush-expired-tokens": {
         "task": "accounts.flush_expired_tokens",
+        "schedule": timedelta(days=1),
+    },
+    "tickets-report-orphan-files": {
+        "task": "tickets.report_orphan_files",
         "schedule": timedelta(days=1),
     },
 }

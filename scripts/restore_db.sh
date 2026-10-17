@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-COMPOSE="${COMPOSE:-docker compose}"
+COMPOSE="${COMPOSE:-docker compose -f docker-compose.prod.yml}"
 DB_SERVICE="${DB_SERVICE:-db}"
 POSTGRES_USER="${POSTGRES_USER:-ticketing}"
 POSTGRES_DB="${POSTGRES_DB:-ticketing}"
@@ -13,6 +13,7 @@ fi
 
 dump="$1"
 target_db="${2:-${POSTGRES_DB}_restore}"
+echo "Restoring $dump into $target_db with: $COMPOSE"
 
 if [ ! -f "$dump" ]; then
     echo "Dump file not found: $dump" >&2

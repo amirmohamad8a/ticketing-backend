@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.core.cache import cache
+from django.utils import timezone
 
 from rest_framework.exceptions import Throttled
 
@@ -20,8 +23,16 @@ def _count_start(site):
 
 
 def _unassigned_chats(site):
+    window_start = timezone.now() - timedelta(
+        minutes=settings.WIDGET_SITE_UNASSIGNED_WINDOW_MINUTES
+    )
     return (
-        Ticket.objects.filter(site=site, channel=Ticket.Channel.CHAT, assignee__isnull=True)
+        Ticket.objects.filter(
+            site=site,
+            channel=Ticket.Channel.CHAT,
+            assignee__isnull=True,
+            created_at__gte=window_start,
+        )
         .exclude(status__in=Ticket.FINISHED_STATUSES)
         .count()
     )

@@ -10,6 +10,7 @@ from PIL import Image
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from core.tests import read_streaming_body
 from core.tests.factories import UserFactory
 
 URL = "/api/auth/me/"
@@ -67,4 +68,4 @@ class AvatarContentVerificationTests(TestCase):
             response["Content-Disposition"], r'^attachment; filename="[0-9a-f]{32}\.png"$'
         )
         self.assertEqual(response["X-Content-Type-Options"], "nosniff")
-        b"".join(response.streaming_content)
+        read_streaming_body(response)

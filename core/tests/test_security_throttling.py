@@ -1,13 +1,15 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.conf import settings
 from django.core.cache import cache
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from rest_framework.test import APIClient
 from rest_framework.throttling import SimpleRateThrottle
 
-from core.tests.factories import SiteFactory, UserFactory
+from core.tests.factories import SiteFactory, UserFactory, VisitorFactory
 from core.tests.security_support import (
     ORIGIN,
     client_for,
@@ -176,3 +178,44 @@ class SignedDownloadThrottleTests(ThrottleTestCase):
             other = APIClient().get(self.URL, REMOTE_ADDR="10.9.9.9")
         self.assertEqual(statuses, [403, 403, 429])
         self.assertEqual(other.status_code, 403)
+
+
+class WidgetCapacityTests(ThrottleTestCase):
+    def _chat(self, site, age=timedelta()):
+        ticket = Ticket.objects.create(
+            title="chat",
+            description="",
+            channel=Ticket.Channel.CHAT,
+            site=site,
+            visitor=VisitorFactory(site=site),
+        )
+        Ticket.objects.filter(pk=ticket.pk).update(created_at=timezone.now() - age)
+        return ticket
+
+    def _start(self, site):
+        return APIClient().post(
+            START_URL,
+            {"site_key": site.key, "body": "hello"},
+            format="json",
+            HTTP_ORIGIN=ORIGIN,
+        )
+
+    def test_old_unassigned_chats_do_not_block_new_starts(self):
+        site = SiteFactory(allowed_origins=[ORIGIN])
+        self._chat(site, age=timedelta(hours=2))
+        with override_settings(
+            WIDGET_SITE_MAX_UNASSIGNED_CHATS=1,
+            WIDGET_SITE_UNASSIGNED_WINDOW_MINUTES=60,
+        ):
+            response = self._start(site)
+        self.assertEqual(response.status_code, 201)
+
+    def test_recent_unassigned_chats_still_block_new_starts(self):
+        site = SiteFactory(allowed_origins=[ORIGIN])
+        self._chat(site)
+        with override_settings(
+            WIDGET_SITE_MAX_UNASSIGNED_CHATS=1,
+            WIDGET_SITE_UNASSIGNED_WINDOW_MINUTES=60,
+        ):
+            response = self._start(site)
+        self.assertEqual(response.status_code, 429)

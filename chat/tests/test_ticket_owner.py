@@ -243,10 +243,11 @@ class TicketAdminOwnerTests(TestCase):
         self.assertIn("visitor", admin_instance.list_display)
         self.assertIn("channel", admin_instance.list_filter)
 
-    def test_the_admin_can_pick_a_visitor_and_a_site(self):
+    def test_the_admin_treats_ownership_fields_as_read_only(self):
         admin_instance = admin_site._registry[Ticket]
-        self.assertIn("visitor", admin_instance.autocomplete_fields)
-        self.assertIn("site", admin_instance.autocomplete_fields)
+        self.assertIn("visitor", admin_instance.readonly_fields)
+        self.assertIn("site", admin_instance.readonly_fields)
+        self.assertIn("customer", admin_instance.readonly_fields)
 
     def test_the_admin_queryset_includes_visitor_tickets(self):
         ticket = TicketFactory(from_visitor=True)

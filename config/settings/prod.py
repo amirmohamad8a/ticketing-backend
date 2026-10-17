@@ -37,12 +37,34 @@ for _name, _value in (
 if METRICS_TOKEN and _is_example_secret(METRICS_TOKEN):
     raise ImproperlyConfigured("METRICS_TOKEN is still an example value. Generate a real secret.")
 
+_num_proxies_raw = env("NUM_PROXIES", default=None)
+if _num_proxies_raw in (None, ""):
+    raise ImproperlyConfigured(
+        "NUM_PROXIES must be set explicitly in production. Use 0 only when clients reach "
+        "the app directly and set ALLOW_ZERO_PROXIES=true to opt in."
+    )
+try:
+    NUM_PROXIES = int(_num_proxies_raw)
+except (TypeError, ValueError):
+    raise ImproperlyConfigured("NUM_PROXIES must be a whole number.")
+if NUM_PROXIES < 0:
+    raise ImproperlyConfigured("NUM_PROXIES cannot be negative.")
+REST_FRAMEWORK["NUM_PROXIES"] = NUM_PROXIES
+
+ALLOW_ZERO_PROXIES = env.bool("ALLOW_ZERO_PROXIES", default=False)
 if NUM_PROXIES == 0:
+    if not ALLOW_ZERO_PROXIES:
+        raise ImproperlyConfigured(
+            "NUM_PROXIES is 0. Set it to the number of proxies in front of the app, or set "
+            "ALLOW_ZERO_PROXIES=true when clients reach the app directly."
+        )
     logging.getLogger(__name__).warning(
         "NUM_PROXIES is 0. Behind a reverse proxy every client shares one throttle bucket "
         "and the client IP in the logs is the proxy address. Set NUM_PROXIES to the number "
         "of proxies in front of the app."
     )
+
+WIDGET_POW_DIFFICULTY = env.int("WIDGET_POW_DIFFICULTY", default=16)
 
 _security_index = MIDDLEWARE.index("django.middleware.security.SecurityMiddleware")
 MIDDLEWARE = [

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-COMPOSE="${COMPOSE:-docker compose}"
+COMPOSE="${COMPOSE:-docker compose -f docker-compose.prod.yml}"
 DB_SERVICE="${DB_SERVICE:-db}"
 POSTGRES_USER="${POSTGRES_USER:-ticketing}"
 POSTGRES_DB="${POSTGRES_DB:-ticketing}"
@@ -16,6 +16,7 @@ case "$BACKUP_RETENTION_DAYS" in
 esac
 
 mkdir -p "$BACKUP_DIR"
+echo "Backing up database $POSTGRES_DB from $DB_SERVICE with: $COMPOSE"
 
 stamp="${BACKUP_STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
 target="$BACKUP_DIR/$POSTGRES_DB-$stamp.dump"

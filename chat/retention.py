@@ -63,3 +63,51 @@ def redact_stale_visitors(days=None, now=None, batch_size=BATCH_SIZE):
         extra={"redacted": redacted, "cutoff": cutoff.isoformat()},
     )
     return redacted
+
+
+def deletable_visitors(cutoff):
+    has_ticket = Exists(Ticket.objects.filter(visitor=OuterRef("pk")))
+    return (
+        Visitor.objects.filter(last_seen_at__lt=cutoff)
+        .annotate(has_ticket=has_ticket)
+        .filter(has_ticket=False)
+    )
+
+
+def count_deletable_visitors(days=None, now=None):
+    return deletable_visitors(retention_cutoff(days, now)).count()
+
+
+def _delete_batch(cutoff, batch_size):
+    with transaction.atomic():
+        ids = list(
+            deletable_visitors(cutoff)
+            .select_for_update(skip_locked=True, of=("self",))
+            .order_by("pk")
+            .values_list("pk", flat=True)[:batch_size]
+        )
+        if not ids:
+            return 0
+        Visitor.objects.filter(pk__in=ids).delete()
+    return len(ids)
+
+
+def delete_stale_visitors(days=None, now=None, batch_size=BATCH_SIZE):
+    cutoff = retention_cutoff(days, now)
+    deleted = 0
+    while True:
+        removed = _delete_batch(cutoff, batch_size)
+        deleted += removed
+        if removed < batch_size:
+            break
+    logger.info(
+        "Orphan visitor purge finished",
+        extra={"deleted": deleted, "cutoff": cutoff.isoformat()},
+    )
+    return deleted
+
+
+def purge_stale_visitors(days=None, now=None, batch_size=BATCH_SIZE):
+    deleted = delete_stale_visitors(days, now, batch_size)
+    redacted = redact_stale_visitors(days, now, batch_size)
+    return {"deleted": deleted, "redacted": redacted}

@@ -13,6 +13,7 @@ from django.test import RequestFactory, SimpleTestCase, TestCase, override_setti
 from rest_framework.test import APIClient
 
 from core.downloads import DOWNLOAD_SALT, build_download_link
+from core.tests import read_streaming_body
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
 
@@ -44,7 +45,8 @@ class SignedDownloadTests(TestCase):
     def test_link_streams_the_file_with_the_signed_content_type(self):
         response = APIClient().get(self._link()["url"])
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(b"".join(response.streaming_content), b"hello world")
+        self.assertEqual(read_streaming_body(response), b"hello world")
+        self.assertTrue(response.is_async)
         self.assertEqual(response["Content-Type"], "text/plain")
         self.assertIn("no-store", response["Cache-Control"])
 
@@ -54,18 +56,18 @@ class SignedDownloadTests(TestCase):
         stored_name = os.path.basename(self.name)
         self.assertEqual(response["Content-Disposition"], f'attachment; filename="{stored_name}"')
         self.assertEqual(response["X-Content-Type-Options"], "nosniff")
-        b"".join(response.streaming_content)
+        read_streaming_body(response)
 
     def test_link_carries_the_given_file_name(self):
         response = APIClient().get(self._link(filename="report 2026.txt")["url"])
         self.assertEqual(response["Content-Disposition"], 'attachment; filename="report 2026.txt"')
-        b"".join(response.streaming_content)
+        read_streaming_body(response)
 
     def test_links_signed_without_a_file_name_fall_back_to_the_stored_name(self):
         response = APIClient().get(self._token_url())
         stored_name = os.path.basename(self.name)
         self.assertEqual(response["Content-Disposition"], f'attachment; filename="{stored_name}"')
-        b"".join(response.streaming_content)
+        read_streaming_body(response)
 
     def test_the_signature_is_the_only_credential_needed(self):
         url = self._link()["url"]

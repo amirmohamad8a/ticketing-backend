@@ -5,7 +5,9 @@ from chat.assignment import route_new_chat
 from chat.models import Visitor
 from chat.tasks import convert_to_offline
 from chat.visitors import start_visitor_session
+from realtime import presence
 from tickets.events import record_event
+from tickets.lifecycle import reopen_on_customer_reply
 from tickets.messages import post_message
 from tickets.models import Ticket
 
@@ -26,11 +28,17 @@ def active_conversation(visitor):
     )
 
 
-def _convert_when_unrouted(ticket):
-    transaction.on_commit(lambda: convert_to_offline.delay(ticket.pk), robust=True)
+def _schedule_offline_conversion(ticket):
+    countdown = 0
+    if presence.online_agent_ids():
+        countdown = (ticket.site.offline_timeout_minutes if ticket.site_id else 0) * 60
+    transaction.on_commit(
+        lambda: convert_to_offline.apply_async(args=[ticket.pk], countdown=countdown),
+        robust=True,
+    )
 
 
-def open_conversation(visitor, body, client_msg_id=None):
+def open_conversation(visitor, body, client_msg_id=None, request=None):
     with transaction.atomic():
         Visitor.objects.select_for_update().get(pk=visitor.pk)
         ticket = active_conversation(visitor)
@@ -50,9 +58,11 @@ def open_conversation(visitor, body, client_msg_id=None):
                 old_value="",
                 new_value=ticket.status,
             )
-        comment, _posted = post_message(ticket, body, visitor=visitor, client_msg_id=client_msg_id)
+        comment, posted = post_message(ticket, body, visitor=visitor, client_msg_id=client_msg_id)
         if created and route_new_chat(ticket) is None:
-            _convert_when_unrouted(ticket)
+            _schedule_offline_conversion(ticket)
+        if not created and posted:
+            reopen_on_customer_reply(ticket.pk, request)
     return ticket, comment, created
 
 

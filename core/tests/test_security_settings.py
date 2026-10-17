@@ -16,10 +16,11 @@ PROD_ENV = {
     "SECRET_KEY": "x1y2z3" * 12,
     "JWT_SIGNING_KEY": "a9b8c7" * 12,
     "ALLOWED_HOSTS": "support.example.com",
+    "DATABASE_URL": "postgres://ticketing:ticketing@localhost:5432/ticketing",
     "STORAGE_BACKEND": "local",
     "SECURE_SSL_REDIRECT": "true",
     "SECURE_HSTS_SECONDS": "31536000",
-    "NUM_PROXIES": "0",
+    "NUM_PROXIES": "1",
 }
 
 PROD_LOGGER = "config.settings.prod"
@@ -27,6 +28,14 @@ PROD_LOGGER = "config.settings.prod"
 
 def _load_prod(**overrides):
     with patch.dict(os.environ, {**PROD_ENV, **overrides}), patch.dict(sys.modules):
+        sys.modules.pop("config.settings.base", None)
+        sys.modules.pop("config.settings.prod", None)
+        return importlib.import_module("config.settings.prod")
+
+
+def _load_prod_without(*names):
+    environment = {key: value for key, value in PROD_ENV.items() if key not in names}
+    with patch.dict(os.environ, environment, clear=True), patch.dict(sys.modules):
         sys.modules.pop("config.settings.base", None)
         sys.modules.pop("config.settings.prod", None)
         return importlib.import_module("config.settings.prod")
@@ -74,6 +83,7 @@ class ProductionSettingsTests(SimpleTestCase):
             "user",
             "login",
             "login_username",
+            "login_username_global",
             "register",
             "password_change",
             "user_management",
@@ -92,18 +102,30 @@ class ProductionSettingsTests(SimpleTestCase):
     def test_the_number_of_trusted_proxies_comes_from_the_environment(self):
         self.assertEqual(_load_prod(NUM_PROXIES="2").REST_FRAMEWORK["NUM_PROXIES"], 2)
 
-    def test_a_warning_is_logged_while_no_proxy_is_trusted(self):
-        with self.assertLogs(PROD_LOGGER, level="WARNING") as logs:
+    def test_production_refuses_to_start_without_a_proxy_count(self):
+        with self.assertRaises(ImproperlyConfigured):
+            _load_prod_without("NUM_PROXIES")
+
+    def test_zero_proxies_needs_an_explicit_opt_in(self):
+        with self.assertRaises(ImproperlyConfigured):
             _load_prod(NUM_PROXIES="0")
+        with self.assertLogs(PROD_LOGGER, level="WARNING") as logs:
+            self.assertEqual(_load_prod(NUM_PROXIES="0", ALLOW_ZERO_PROXIES="true").NUM_PROXIES, 0)
         self.assertIn("NUM_PROXIES", logs.output[0])
 
     def test_no_warning_is_logged_when_a_proxy_is_trusted(self):
         with self.assertNoLogs(PROD_LOGGER, level="WARNING"):
             _load_prod(NUM_PROXIES="1")
 
-    def test_the_request_body_limit_comes_from_the_environment(self):
-        self.assertEqual(self.prod.MAX_REQUEST_BODY_BYTES, 11 * 1024 * 1024)
+    def test_the_request_body_limits_come_from_the_environment(self):
+        self.assertEqual(self.prod.MAX_REQUEST_BODY_BYTES, 64 * 1024)
+        self.assertEqual(self.prod.MAX_UPLOAD_BODY_BYTES, 11 * 1024 * 1024)
         self.assertEqual(_load_prod(MAX_REQUEST_BODY_BYTES="1024").MAX_REQUEST_BODY_BYTES, 1024)
+        self.assertEqual(_load_prod(MAX_UPLOAD_BODY_BYTES="2048").MAX_UPLOAD_BODY_BYTES, 2048)
+
+    def test_proof_of_work_is_on_by_default_in_production(self):
+        self.assertGreater(self.prod.WIDGET_POW_DIFFICULTY, 0)
+        self.assertEqual(_load_prod(WIDGET_POW_DIFFICULTY="0").WIDGET_POW_DIFFICULTY, 0)
 
     def test_revoking_access_tokens_after_a_password_change_is_enabled(self):
         self.assertTrue(self.prod.SIMPLE_JWT["CHECK_REVOKE_TOKEN"])

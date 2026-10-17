@@ -6,7 +6,13 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from chat.models import Visitor
-from chat.retention import count_redactable_visitors, redact_stale_visitors
+from chat.retention import (
+    count_deletable_visitors,
+    count_redactable_visitors,
+    delete_stale_visitors,
+    purge_stale_visitors,
+    redact_stale_visitors,
+)
 from core.tests.factories import TicketFactory, VisitorFactory
 from tickets.models import Ticket
 
@@ -104,6 +110,58 @@ class PurgeVisitorsCommandTests(TestCase):
         visitor = VisitorFactory(last_seen_at=timezone.now() - timedelta(days=5), name="Ali")
         output = StringIO()
         call_command("purge_visitors", "--days", "1", stdout=output)
-        self.assertIn("Cleared the contact details of 1", output.getvalue())
-        visitor.refresh_from_db()
-        self.assertEqual(visitor.name, "")
+        self.assertIn("Deleted 1 visitor(s)", output.getvalue())
+        self.assertFalse(Visitor.objects.filter(pk=visitor.pk).exists())
+
+
+@override_settings(VISITOR_RETENTION_DAYS=30)
+class VisitorDeletionTests(TestCase):
+    def test_a_stale_visitor_without_tickets_is_deleted(self):
+        visitor = VisitorFactory(last_seen_at=OLD, name="Sara")
+        self.assertEqual(delete_stale_visitors(), 1)
+        self.assertFalse(Visitor.objects.filter(pk=visitor.pk).exists())
+
+    def test_a_recent_visitor_without_tickets_is_kept(self):
+        visitor = VisitorFactory(last_seen_at=timezone.now() - timedelta(days=1))
+        self.assertEqual(delete_stale_visitors(), 0)
+        self.assertTrue(Visitor.objects.filter(pk=visitor.pk).exists())
+
+    def test_a_visitor_with_any_ticket_is_kept(self):
+        visitor = VisitorFactory(last_seen_at=OLD)
+        _chat_ticket(visitor, Ticket.Status.CLOSED)
+        self.assertEqual(delete_stale_visitors(), 0)
+        self.assertTrue(Visitor.objects.filter(pk=visitor.pk).exists())
+
+    def test_the_count_helper_matches_the_deletion(self):
+        VisitorFactory(last_seen_at=OLD)
+        self.assertEqual(count_deletable_visitors(), 1)
+        delete_stale_visitors()
+        self.assertEqual(count_deletable_visitors(), 0)
+
+    def test_the_combined_purge_deletes_and_redacts(self):
+        visitor = VisitorFactory(last_seen_at=OLD, name="Sara")
+        with_ticket = VisitorFactory(
+            last_seen_at=OLD, name="Ali", phone="09123456789", email="ali@example.com"
+        )
+        _chat_ticket(with_ticket, Ticket.Status.CLOSED)
+        result = purge_stale_visitors()
+        self.assertEqual(result, {"deleted": 1, "redacted": 1})
+        self.assertFalse(Visitor.objects.filter(pk=visitor.pk).exists())
+        with_ticket.refresh_from_db()
+        self.assertEqual(with_ticket.name, "")
+
+
+class PurgeVisitorsDeletionCommandTests(TestCase):
+    def test_the_command_deletes_stale_visitors_without_tickets(self):
+        visitor = VisitorFactory(last_seen_at=OLD, name="Sara")
+        output = StringIO()
+        call_command("purge_visitors", stdout=output)
+        self.assertIn("Deleted 1 visitor(s)", output.getvalue())
+        self.assertFalse(Visitor.objects.filter(pk=visitor.pk).exists())
+
+    def test_the_dry_run_counts_visitors_to_delete(self):
+        VisitorFactory(last_seen_at=OLD, name="Sara")
+        output = StringIO()
+        call_command("purge_visitors", "--dry-run", stdout=output)
+        self.assertIn("would be deleted", output.getvalue())
+        self.assertTrue(Visitor.objects.filter(name="Sara").exists())

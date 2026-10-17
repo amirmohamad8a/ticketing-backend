@@ -1,12 +1,15 @@
 import hmac
+import logging
 import os
 
 from django.conf import settings
 from django.core.files.storage import default_storage
-from django.http import FileResponse, Http404, HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
+from django.utils.http import content_disposition_header
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
+from asgiref.sync import sync_to_async
 from drf_spectacular.utils import extend_schema
 from prometheus_client import CONTENT_TYPE_LATEST
 from rest_framework.permissions import AllowAny
@@ -16,6 +19,14 @@ from rest_framework.views import APIView
 from core.downloads import read_download_token
 from core.health import all_passed, run_checks
 from core.metrics import render_metrics
+
+DOWNLOAD_CHUNK_SIZE = 64 * 1024
+PROXY_WARNING = (
+    "X-Forwarded-For is present but NUM_PROXIES is 0, so every client shares one "
+    "throttle bucket."
+)
+
+logger = logging.getLogger(__name__)
 
 
 @require_http_methods(["GET", "HEAD"])
@@ -30,6 +41,9 @@ def ready(request):
     checks = run_checks()
     passed = all_passed(checks)
     body = {"status": "ok" if passed else "unavailable", "checks": checks}
+    if settings.NUM_PROXIES == 0 and request.META.get("HTTP_X_FORWARDED_FOR"):
+        logger.warning(PROXY_WARNING)
+        body["warnings"] = [PROXY_WARNING]
     return JsonResponse(body, status=200 if passed else 503)
 
 
@@ -54,6 +68,18 @@ def metrics(request):
     return HttpResponse(render_metrics(), content_type=CONTENT_TYPE_LATEST)
 
 
+async def _stream_file(name):
+    handle = await sync_to_async(default_storage.open)(name, "rb")
+    try:
+        while True:
+            chunk = await sync_to_async(handle.read)(DOWNLOAD_CHUNK_SIZE)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        await sync_to_async(handle.close)()
+
+
 @extend_schema(exclude=True)
 class SignedDownloadView(APIView):
     authentication_classes = []
@@ -63,17 +89,14 @@ class SignedDownloadView(APIView):
 
     def get(self, request, token):
         payload = read_download_token(token)
-        try:
-            handle = default_storage.open(payload["name"], "rb")
-        except FileNotFoundError:
+        if not default_storage.exists(payload["name"]):
             raise Http404
         filename = payload.get("filename") or os.path.basename(payload["name"])
-        response = FileResponse(
-            handle,
+        response = StreamingHttpResponse(
+            _stream_file(payload["name"]),
             content_type=payload["content_type"],
-            as_attachment=True,
-            filename=filename,
         )
+        response["Content-Disposition"] = content_disposition_header(True, filename)
         response["Cache-Control"] = "private, no-store"
         response["X-Content-Type-Options"] = "nosniff"
         return response

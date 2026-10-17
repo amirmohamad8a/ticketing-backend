@@ -18,8 +18,17 @@ REQUEST_ID_META_KEY = "HTTP_X_REQUEST_ID"
 QUIET_PATHS = frozenset({"/health/", "/ready/", "/metrics/"})
 REQUEST_TOO_LARGE_CODE = "request_too_large"
 ADMIN_LOGIN_CACHE_PREFIX = "admin_login_attempt"
+UPLOAD_PATH_SUFFIXES = ("/attachments/",)
+UPLOAD_PATHS = frozenset({"/api/auth/me/"})
 
 _VALID_REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{8,64}")
+
+
+def limit_for_path(path):
+    if path in UPLOAD_PATHS or path.endswith(UPLOAD_PATH_SUFFIXES):
+        return settings.MAX_UPLOAD_BODY_BYTES
+    return settings.MAX_REQUEST_BODY_BYTES
+
 
 access_logger = logging.getLogger("core.access")
 
@@ -96,7 +105,7 @@ class RequestSizeLimitMiddleware:
             length = int(request.META.get("CONTENT_LENGTH") or 0)
         except ValueError:
             return False
-        return length > settings.MAX_REQUEST_BODY_BYTES
+        return length > limit_for_path(request.path_info or request.path)
 
 
 class AdminLoginThrottleMiddleware:
@@ -152,7 +161,7 @@ class BodySizeLimitASGI:
             await self.app(scope, receive, send)
             return
 
-        limit = settings.MAX_REQUEST_BODY_BYTES
+        limit = limit_for_path(scope.get("path", ""))
         if self._declared_too_large(scope, limit):
             await self._send_too_large(send)
             return

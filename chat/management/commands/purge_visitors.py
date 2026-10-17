@@ -1,14 +1,20 @@
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from chat.retention import count_redactable_visitors, redact_stale_visitors
+from chat.retention import (
+    count_deletable_visitors,
+    count_redactable_visitors,
+    delete_stale_visitors,
+    redact_stale_visitors,
+)
 
 
 class Command(BaseCommand):
     help = (
-        "Clear the name, phone and email of visitors whose conversations are all finished and "
-        "who have not been seen for the retention period (VISITOR_RETENTION_DAYS). The visitor "
-        "rows are kept, only the contact details are removed. Safe to run more than once."
+        "Delete visitors without tickets and clear the name, phone and email of visitors whose "
+        "conversations are all finished, once they have not been seen for the retention period "
+        "(VISITOR_RETENTION_DAYS). Visitors with tickets are kept, only their contact details "
+        "are removed. Safe to run more than once."
     )
 
     def add_arguments(self, parser):
@@ -31,14 +37,26 @@ class Command(BaseCommand):
         effective_days = settings.VISITOR_RETENTION_DAYS if days is None else days
 
         if options["dry_run"]:
-            total = count_redactable_visitors(days)
+            deletable = count_deletable_visitors(days)
+            redactable = count_redactable_visitors(days)
             self.stdout.write(
-                f"{total} visitor(s) with finished conversations, not seen for "
+                f"{deletable} visitor(s) without tickets, not seen for {effective_days} days, "
+                "would be deleted."
+            )
+            self.stdout.write(
+                f"{redactable} visitor(s) with finished conversations, not seen for "
                 f"{effective_days} days, would have their contact details cleared."
             )
             return
 
+        deleted = delete_stale_visitors(days)
         redacted = redact_stale_visitors(days)
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Deleted {deleted} visitor(s) without tickets, not seen for "
+                f"{effective_days} days."
+            )
+        )
         self.stdout.write(
             self.style.SUCCESS(
                 f"Cleared the contact details of {redacted} visitor(s) with finished "

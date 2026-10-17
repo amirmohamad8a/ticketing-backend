@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext
 
 from accounts.permissions import STAFF_ROLES
-from chat.availability import agents_available
+from chat.assignment import route_queued_chats
 from realtime import presence
 from realtime.events import publish
 from tickets.events import record_event
@@ -59,7 +59,7 @@ def _confirm_early(candidate_ids):
 def due_chat_ticket_ids(now=None):
     now = now or timezone.now()
     online_ids = set(presence.online_agent_ids())
-    nobody_accepting = not online_ids or not agents_available()
+    nobody_online = not online_ids
     rows = list(
         _unanswered_chats()
         .order_by("created_at", "pk")
@@ -71,7 +71,7 @@ def due_chat_ticket_ids(now=None):
         if created_at + timedelta(minutes=timeout or 0) <= now:
             expired.add(pk)
         elif assignee_id is None:
-            if nobody_accepting:
+            if nobody_online:
                 early.add(pk)
         elif assignee_id not in online_ids:
             early.add(pk)
@@ -111,6 +111,10 @@ def convert_due_chats(now=None):
                 converted += 1
         except Exception:
             logger.exception("Failed to convert an unanswered chat", extra={"ticket_id": ticket_id})
-    if converted:
-        logger.info("Offline sweep finished", extra={"converted": converted})
+    drained = route_queued_chats()
+    if converted or drained:
+        logger.info(
+            "Offline sweep finished",
+            extra={"converted": converted, "drained": drained},
+        )
     return converted

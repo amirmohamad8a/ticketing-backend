@@ -1,7 +1,7 @@
 from celery import shared_task
 
 from chat.offline import convert_due_chats, convert_unanswered_chat
-from chat.retention import redact_stale_visitors
+from chat.retention import purge_stale_visitors as purge_visitors
 
 
 @shared_task(name="chat.convert_to_offline", ignore_result=True)
@@ -16,4 +16,4 @@ def sweep_unanswered_chats():
 
 @shared_task(name="chat.purge_stale_visitors", ignore_result=True)
 def purge_stale_visitors():
-    return redact_stale_visitors()
+    return purge_visitors()

@@ -155,3 +155,47 @@ class DefaultThrottleTests(ThrottleTestCase):
         with _rates(download="2/min"):
             statuses = [client.get("/api/downloads/garbage/").status_code for _ in range(3)]
         self.assertEqual(statuses, [403, 403, 429])
+
+
+class LoginUsernameGlobalThrottleTests(ThrottleTestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = UserFactory()
+
+    def _login(self, password="wrong-pass-1", ip="10.0.0.1"):
+        return APIClient().post(
+            "/api/token/",
+            {"username": self.user.username, "password": password},
+            REMOTE_ADDR=ip,
+        )
+
+    def test_a_botnet_from_many_addresses_hits_one_per_username_bucket(self):
+        with (
+            _rates(
+                login="100/min",
+                login_username="100/hour",
+                login_username_global="1/hour",
+            ),
+            patch("accounts.throttles.time.sleep") as sleep,
+        ):
+            first = self._login(ip="10.0.0.1")
+            second = self._login(ip="10.0.0.2")
+            third = self._login(ip="10.0.0.3")
+        self.assertEqual(
+            (first.status_code, second.status_code, third.status_code), (401, 401, 401)
+        )
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_the_global_bucket_slows_down_instead_of_locking_the_account(self):
+        with (
+            _rates(
+                login="100/min",
+                login_username="100/hour",
+                login_username_global="1/hour",
+            ),
+            patch("accounts.throttles.time.sleep") as sleep,
+        ):
+            self._login(ip="10.0.0.1")
+            response = self._login(password="pass12345", ip="10.0.0.2")
+        self.assertEqual(response.status_code, 200)
+        sleep.assert_called_once()

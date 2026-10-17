@@ -10,6 +10,7 @@ from PIL import Image
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from core.tests import read_streaming_body
 from core.tests.factories import AdminFactory, AgentFactory, UserFactory
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
@@ -90,7 +91,7 @@ class AvatarDownloadTests(TestCase):
         response = APIClient().get(link["url"])
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "image/png")
-        self.assertEqual(b"".join(response.streaming_content), IMAGE_BYTES)
+        self.assertEqual(read_streaming_body(response), IMAGE_BYTES)
 
     def test_user_without_an_avatar_returns_404(self):
         for viewer in (self.agent_without_avatar, self.admin, self.customer):
@@ -112,13 +113,13 @@ class AvatarDownloadTests(TestCase):
         old_link = client.get(_url(user)).data["url"]
         old_response = APIClient().get(old_link)
         self.assertEqual(old_response.status_code, 200)
-        b"".join(old_response.streaming_content)
+        read_streaming_body(old_response)
         client.patch("/api/auth/me/", {"avatar": _png()})
         self.assertEqual(APIClient().get(old_link).status_code, 404)
         new_link = client.get(_url(user)).data["url"]
         new_response = APIClient().get(new_link)
         self.assertEqual(new_response.status_code, 200)
-        b"".join(new_response.streaming_content)
+        read_streaming_body(new_response)
 
 
 class AvatarDownloadSchemaTests(TestCase):

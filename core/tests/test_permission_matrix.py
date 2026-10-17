@@ -210,7 +210,7 @@ def test_signed_links_work_for_everyone_who_holds_them(role, people, media):
     client = _client_for_role(role, people)
     response = client.get(f"/api/downloads/{token}/")
     assert response.status_code == 200
-    assert b"".join(response.streaming_content) == b"hello"
+    assert read_streaming_body(response) == b"hello"
 
 
 @pytest.mark.parametrize("role", ROLES)
