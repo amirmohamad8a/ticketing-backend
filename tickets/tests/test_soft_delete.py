@@ -9,7 +9,6 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from core.demo import CHAT_TICKETS, PORTAL_TICKETS
 from core.tests.factories import (
     AdminFactory,
     AgentFactory,
@@ -18,6 +17,7 @@ from core.tests.factories import (
     TicketFactory,
     UserFactory,
 )
+from demo.demo import CHAT_TICKETS, PORTAL_TICKETS
 from tickets.models import Comment, Ticket, TicketEvent
 
 

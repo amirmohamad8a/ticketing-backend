@@ -13,6 +13,7 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from accounts.models import User
+from accounts.permissions import IsAgentOrAdmin
 from core.downloads import build_download_link
 from tickets.assignment import claim_ticket
 from tickets.events import DELETED_FIELD, RESTORED_FIELD, STAFF_ONLY_EVENT_FIELDS, record_event
@@ -25,7 +26,6 @@ from tickets.pagination import TicketCursorPagination
 from tickets.permissions import (
     AdminOnlyDeleteAndRestore,
     CustomerFieldRestrictions,
-    IsAgentOrAdmin,
     IsCustomerOwnerOrReadOwn,
 )
 from tickets.ratings import rate_ticket

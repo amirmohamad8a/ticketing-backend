@@ -11,7 +11,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import User
 from chat.models import Site, Visitor
-from core.demo import (
+from demo.demo import (
     AGENT_USERNAME,
     CANNED_REPLIES,
     CHAT_TICKETS,

@@ -15,7 +15,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import User
 from chat.conversations import start_conversation
 from chat.models import Site, Visitor
-from core.demo import (
+from core.tests.factories import AttachmentFactory, CommentFactory, TicketFactory, UserFactory
+from demo.demo import (
     AGENT_USERNAME,
     CANNED_SHORTCUTS,
     CHAT_TICKETS,
@@ -29,7 +30,6 @@ from core.demo import (
     reset_demo_data,
     seed_demo_data,
 )
-from core.tests.factories import AttachmentFactory, CommentFactory, TicketFactory, UserFactory
 from tickets.models import CannedReply, Comment, Tag, Ticket, TicketEvent, TicketRating
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
@@ -197,13 +197,13 @@ class ResetDemoFilesTests(TestCase):
 
 class DiscardFilesTests(TestCase):
     def test_a_file_that_cannot_be_deleted_is_logged_and_skipped(self):
-        with patch("core.demo.default_storage") as storage:
+        with patch("demo.demo.default_storage") as storage:
             storage.delete.side_effect = [OSError("locked"), None]
-            with self.assertLogs("core.demo", level="WARNING"):
+            with self.assertLogs("demo.demo", level="WARNING"):
                 _discard_files(["a.png", "b.png"])
         self.assertEqual(storage.delete.call_count, 2)
 
     def test_blank_and_repeated_names_are_ignored(self):
-        with patch("core.demo.default_storage") as storage:
+        with patch("demo.demo.default_storage") as storage:
             _discard_files(["a.png", "", None, "a.png"])
         storage.delete.assert_called_once_with("a.png")

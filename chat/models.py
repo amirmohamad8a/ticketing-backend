@@ -4,9 +4,9 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
-from accounts.validators import validate_iranian_mobile
 from chat.validators import validate_hex_color, validate_origin_list
 from core.models import TimeStampedModel
+from core.phone import validate_iranian_mobile
 
 
 def generate_site_key():

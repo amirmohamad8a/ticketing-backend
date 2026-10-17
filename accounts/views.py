@@ -19,7 +19,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from accounts.models import User
 from accounts.pagination import UserCursorPagination
-from accounts.permissions import STAFF_ROLES, IsAdmin, can_view_avatar
+from accounts.permissions import STAFF_ROLES, IsAdmin, IsAgentOrAdmin, can_view_avatar
 from accounts.schema import (
     agent_schema,
     auth_schema,
@@ -43,7 +43,6 @@ from accounts.throttles import LoginUsernameThrottle
 from accounts.tokens import blacklist_user_tokens
 from core.downloads import build_download_link
 from realtime.events import close_user_sockets
-from tickets.permissions import IsAgentOrAdmin
 
 AVATAR_MIME_TYPES = {
     extension: content_type for content_type, extension in User.AVATAR_CONTENT_TYPES.items()

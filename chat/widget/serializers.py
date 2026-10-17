@@ -3,10 +3,9 @@ from django.utils.translation import gettext_lazy as _
 
 from rest_framework import serializers
 
-from accounts.serializers import PhoneField
-from accounts.validators import validate_iranian_mobile
 from chat.availability import agents_available
 from chat.models import Site, Visitor
+from core.phone import PhoneField, validate_iranian_mobile
 from tickets.models import Comment, Ticket
 from tickets.serializers import AttachmentSerializer, CommentSerializer
 

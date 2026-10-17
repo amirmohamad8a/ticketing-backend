@@ -3,11 +3,11 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from accounts.permissions import IsAgentOrAdmin
 from realtime.presence import online_agents
 from realtime.schema import online_agents_schema, socket_ticket_schema
 from realtime.serializers import OnlineAgentSerializer
 from realtime.tickets import issue_ticket
-from tickets.permissions import IsAgentOrAdmin
 
 
 @socket_ticket_schema

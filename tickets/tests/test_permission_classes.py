@@ -3,8 +3,9 @@ from types import SimpleNamespace
 from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase
 
+from accounts.permissions import IsAgentOrAdmin
 from core.tests.factories import AdminFactory, AgentFactory, TicketFactory, UserFactory
-from tickets.permissions import IsAgentOrAdmin, IsCustomerOwnerOrReadOwn
+from tickets.permissions import IsCustomerOwnerOrReadOwn
 
 
 def _request(user):

@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "stats",
     "audit",
     "core",
+    "demo",
 ]
 
 MIDDLEWARE = [

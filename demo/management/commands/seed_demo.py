@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from core.demo import (
+from demo.demo import (
     AGENT_USERNAME,
     CUSTOMER_USERNAME,
     DEMO_PASSWORD,

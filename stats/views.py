@@ -1,10 +1,10 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import IsAgentOrAdmin
 from stats.queries import build_stats
 from stats.schema import stats_schema
 from stats.serializers import StatsQuerySerializer, StatsSerializer
-from tickets.permissions import IsAgentOrAdmin
 
 
 @stats_schema

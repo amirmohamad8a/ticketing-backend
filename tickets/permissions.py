@@ -22,15 +22,6 @@ def _staff_only_fields_in(data):
     return STAFF_ONLY_WRITE_FIELDS.intersection(data.keys())
 
 
-class IsAgentOrAdmin(BasePermission):
-    def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.role in (User.Role.AGENT, User.Role.ADMIN)
-        )
-
-
 class IsAdminOrAgentReadOnly(BasePermission):
     def has_permission(self, request, view):
         user = request.user

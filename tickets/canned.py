@@ -3,8 +3,8 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers, viewsets
 from rest_framework.validators import UniqueValidator
 
+from accounts.permissions import IsAgentOrAdmin
 from tickets.models import CannedReply
-from tickets.permissions import IsAgentOrAdmin
 from tickets.schema import canned_reply_schema
 from tickets.validators import MAX_SHORTCUT_LENGTH, normalize_shortcut, validate_shortcut
 

@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from core.demo import ensure_demo_allowed, reset_demo_data
+from demo.demo import ensure_demo_allowed, reset_demo_data
 
 
 class Command(BaseCommand):

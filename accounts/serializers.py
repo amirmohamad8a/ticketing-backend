@@ -7,38 +7,16 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from rest_framework import serializers
-from rest_framework.validators import UniqueValidator
 
 from accounts.events import UserEventField, flag, record_user_event
 from accounts.models import User
 from accounts.tokens import blacklist_user_tokens
-from accounts.validators import normalize_phone, validate_iranian_mobile
+from core.phone import build_phone_field
 from core.uploads import ensure_content_matches
 from realtime.events import close_user_sockets
 from tickets.assignment import release_tickets
 
 logger = logging.getLogger(__name__)
-
-
-class PhoneField(serializers.CharField):
-    def to_internal_value(self, data):
-        return normalize_phone(super().to_internal_value(data))
-
-
-def build_phone_field():
-    return PhoneField(
-        required=False,
-        allow_null=True,
-        allow_blank=True,
-        max_length=32,
-        validators=[
-            validate_iranian_mobile,
-            UniqueValidator(
-                queryset=User.objects.all(),
-                message=_("A user with that phone number already exists."),
-            ),
-        ],
-    )
 
 
 class ActorMixin:
