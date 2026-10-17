@@ -47,6 +47,7 @@ MIDDLEWARE = [
     "core.metrics.RequestMetricsMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "core.middleware.RequestSizeLimitMiddleware",
+    "core.middleware.AdminLoginThrottleMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -101,6 +102,10 @@ AUTH_PASSWORD_VALIDATORS = [
 NUM_PROXIES = env.int("NUM_PROXIES", default=0)
 
 MAX_REQUEST_BODY_BYTES = env.int("MAX_REQUEST_BODY_BYTES", default=11 * 1024 * 1024)
+
+ADMIN_LOGIN_PATH = "/admin/login/"
+ADMIN_LOGIN_MAX_ATTEMPTS = env.int("ADMIN_LOGIN_MAX_ATTEMPTS", default=10)
+ADMIN_LOGIN_WINDOW_SECONDS = env.int("ADMIN_LOGIN_WINDOW_SECONDS", default=300)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("core.authentication.LoggedJWTAuthentication",),

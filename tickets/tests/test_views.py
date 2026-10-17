@@ -5,6 +5,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import User
 from tickets.models import Ticket
+from tickets.validators import MAX_BODY_LENGTH
 
 
 class TicketQuerysetScopingTests(TestCase):
@@ -78,6 +79,25 @@ class TicketQuerysetScopingTests(TestCase):
         )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["customer"], self.customer1.id)
+
+    def test_oversized_description_is_rejected(self):
+        self._auth(self.customer1)
+        response = self.client.post(
+            "/api/tickets/",
+            {"title": "New ticket", "description": "x" * (MAX_BODY_LENGTH + 1)},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "validation_error")
+        self.assertIn("description", response.data["error"]["details"])
+
+    def test_oversized_description_is_rejected_on_update(self):
+        self._auth(self.customer1)
+        response = self.client.patch(
+            f"/api/tickets/{self.ticket1.id}/",
+            {"description": "x" * (MAX_BODY_LENGTH + 1)},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("description", response.data["error"]["details"])
 
 
 class TicketListPaginationTests(TestCase):

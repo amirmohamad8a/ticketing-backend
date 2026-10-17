@@ -2,13 +2,15 @@ from types import SimpleNamespace
 
 from django.contrib.admin.sites import site
 from django.contrib.auth.models import Group, Permission
-from django.test import TestCase
+from django.core.cache import cache
+from django.test import TestCase, override_settings
 
 from accounts.admin import _join, _m2m_labels
 from accounts.models import User, UserEvent
 from core.tests.factories import AgentFactory, TicketFactory
 
 NEW_PASSWORD = "Reset-pass-6074"
+ADMIN_LOGIN_URL = "/admin/login/"
 
 
 class _FakeForm:
@@ -135,3 +137,37 @@ class UserAdminPasswordChangeTests(TestCase):
         self.assertTrue(
             self.target.__class__.objects.get(pk=self.target.pk).check_password(NEW_PASSWORD)
         )
+
+
+class AdminLoginThrottleTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def _attempt(self, **extra):
+        payload = {"username": "ghost", "password": "wrong-pass"}
+        return self.client.post(ADMIN_LOGIN_URL, payload, **extra)
+
+    @override_settings(ADMIN_LOGIN_MAX_ATTEMPTS=2, ADMIN_LOGIN_WINDOW_SECONDS=300)
+    def test_repeated_attempts_are_throttled(self):
+        statuses = [self._attempt().status_code for _ in range(3)]
+        self.assertEqual(statuses, [200, 200, 429])
+
+    @override_settings(ADMIN_LOGIN_MAX_ATTEMPTS=2)
+    def test_the_login_page_is_never_limited(self):
+        for _ in range(5):
+            self.assertEqual(self.client.get(ADMIN_LOGIN_URL).status_code, 200)
+
+    @override_settings(ADMIN_LOGIN_MAX_ATTEMPTS=1)
+    def test_each_address_has_its_own_budget(self):
+        first = self._attempt()
+        blocked = self._attempt()
+        other = self._attempt(REMOTE_ADDR="10.9.9.9")
+        self.assertEqual(
+            (first.status_code, blocked.status_code, other.status_code), (200, 429, 200)
+        )
+
+    @override_settings(ADMIN_LOGIN_MAX_ATTEMPTS=0)
+    def test_the_limiter_can_be_disabled(self):
+        statuses = [self._attempt().status_code for _ in range(5)]
+        self.assertEqual(statuses, [200] * 5)

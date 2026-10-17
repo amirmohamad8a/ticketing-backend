@@ -567,6 +567,9 @@ Settings are read from environment variables. Copy `.env.example` to `.env` for 
 | `DJANGO_SETTINGS_MODULE` | No | `config.settings.dev` | `config.settings.prod` in the production image |
 | `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend, Django's cache (throttle counters, WebSocket tickets, presence) and the Channels layer |
 | `NUM_PROXIES` | No | `0` | Number of reverse proxies in front of the app, used to read the client IP for throttling and logging |
+| `MAX_REQUEST_BODY_BYTES` | No | `11534336` | Largest request body the ASGI layer accepts. A bigger one gets `413` before Django spools it to disk |
+| `ADMIN_LOGIN_MAX_ATTEMPTS` | No | `10` | Django admin login attempts per IP address per window. `0` disables the limiter |
+| `ADMIN_LOGIN_WINDOW_SECONDS` | No | `300` | Length of the Django admin login attempt window |
 | `LOG_LEVEL` | No | `INFO` | Verbosity of the JSON logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `METRICS_TOKEN` | No | empty | Bearer token for `GET /metrics/`. Empty disables the endpoint |
 | `PROMETHEUS_MULTIPROC_DIR` | No | unset | Directory for metric files when several server processes run. Must exist and be empty at start |
@@ -599,6 +602,11 @@ Every push and pull request runs linting, the test suite and `check --deploy` on
 `Dockerfile.prod` is a multi-stage build: it installs the runtime dependencies into a virtualenv, runs `collectstatic` at build time and drops to a non-root user. It runs Daphne, the ASGI server, so one process serves both HTTP and WebSocket. Daphne's access log is switched off because the app writes its own JSON access line (see Logging). The base image and the pip index can be pointed at mirrors that work from inside Iran with the optional `PYTHON_IMAGE` and `PIP_INDEX_URL` build arguments, which default to upstream.
 
 `docker-compose.prod.yml` runs the whole stack: `web` (Daphne), `worker` and `beat` (Celery), a one-shot `migrate` service that runs before the app services start, PostgreSQL and Redis. Migrations are a separate service, not part of the entrypoint. `.env.prod.example` lists everything the stack needs.
+
+### Fronting the app with a reverse proxy
+
+- Cap the request body at the proxy first (`client_max_body_size` in nginx or the equivalent in Caddy). The ASGI layer also enforces `MAX_REQUEST_BODY_BYTES` and answers `413` before Django spools an oversized or chunked body to disk, but the proxy should reject it without waking the app.
+- Do not expose `/admin/` to the public internet. Put it behind an allowlist or a VPN. Django admin logins are not covered by the DRF throttles, so a small per-IP attempt limiter (`ADMIN_LOGIN_MAX_ATTEMPTS` attempts per `ADMIN_LOGIN_WINDOW_SECONDS`, `10` per `300` by default) answers `429` as a safety net, but it is not a substitute for keeping the route private.
 
 [`docs/self-hosting.md`](docs/self-hosting.md) walks through running that Compose file on any machine or VPS: generating secrets, putting Caddy or nginx with HTTPS and `wss://` in front, and setting hosts, CORS, CSRF and widget origins. The frontend is a separate application; this repository is the API only.
 

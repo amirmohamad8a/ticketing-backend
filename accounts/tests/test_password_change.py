@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -104,6 +105,13 @@ class PasswordChangeTests(TestCase):
         client = _authenticated_client(response.data["access"])
         self.assertEqual(client.get("/api/tickets/").status_code, 200)
         self.assertEqual(_refresh_status(response.data["refresh"]), 200)
+
+    def test_the_change_closes_the_users_live_sockets(self):
+        with patch("accounts.views.close_user_sockets") as close_sockets:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self._change()
+        self.assertEqual(response.status_code, 200)
+        close_sockets.assert_called_once_with(self.user.pk)
 
     def test_other_users_sessions_are_untouched(self):
         other = UserFactory(password=OLD_PASSWORD)

@@ -11,7 +11,7 @@ from core.uploads import clean_file_name, ensure_content_matches
 from tickets.events import record_event, tag_changes
 from tickets.messages import comment_sender_type
 from tickets.models import Attachment, Comment, Ticket, TicketEvent, TicketRating
-from tickets.validators import MAX_TICKET_TAGS
+from tickets.validators import MAX_BODY_LENGTH, MAX_TICKET_TAGS
 
 STAFF_ONLY_RESPONSE_FIELDS = frozenset({"tags", "first_response_due_at", "visitor", "site"})
 
@@ -62,6 +62,7 @@ class TicketSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        extra_kwargs = {"description": {"max_length": MAX_BODY_LENGTH}}
 
     def get_unread_count(self, obj) -> int:
         return getattr(obj, "unread_count", 0)
@@ -227,6 +228,7 @@ class CommentSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        extra_kwargs = {"body": {"max_length": MAX_BODY_LENGTH}}
 
     def get_sender_type(self, obj) -> str:
         return comment_sender_type(obj)

@@ -42,6 +42,7 @@ from accounts.serializers import (
 from accounts.throttles import LoginUsernameThrottle
 from accounts.tokens import blacklist_user_tokens
 from core.downloads import build_download_link
+from realtime.events import close_user_sockets
 from tickets.permissions import IsAgentOrAdmin
 
 AVATAR_MIME_TYPES = {
@@ -86,6 +87,7 @@ class PasswordChangeView(APIView):
         with transaction.atomic():
             user = serializer.save()
             blacklist_user_tokens(user)
+            close_user_sockets(user.pk)
             refresh = RefreshToken.for_user(user)
         return Response({"refresh": str(refresh), "access": str(refresh.access_token)})
 
@@ -100,7 +102,9 @@ class LogoutView(APIView):
             raise ValidationError({"refresh": _("Refresh token is required.")})
         try:
             token = RefreshToken(refresh_token)
-            token.blacklist()
+            with transaction.atomic():
+                token.blacklist()
+                close_user_sockets(request.user.pk)
         except TokenError:
             raise ValidationError({"refresh": _("Invalid or expired token.")})
         return Response(status=status.HTTP_205_RESET_CONTENT)

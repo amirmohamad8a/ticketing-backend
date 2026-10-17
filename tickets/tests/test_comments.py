@@ -5,6 +5,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import User
 from tickets.models import Comment, Ticket
+from tickets.validators import MAX_BODY_LENGTH
 
 
 def _auth(client, user):
@@ -144,3 +145,23 @@ class CommentCreationTests(TestCase):
         self._auth(self.customer)
         response = self.client.post(f"/api/tickets/{self.ticket.id}/comments/", {})
         self.assertEqual(response.status_code, 400)
+
+    def test_oversized_body_is_rejected(self):
+        self._auth(self.customer)
+        response = self.client.post(
+            f"/api/tickets/{self.ticket.id}/comments/",
+            {"body": "x" * (MAX_BODY_LENGTH + 1)},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "validation_error")
+        self.assertIn("body", response.data["error"]["details"])
+        self.assertFalse(Comment.objects.filter(ticket=self.ticket, body__startswith="x").exists())
+
+    def test_a_body_at_the_limit_is_accepted(self):
+        self._auth(self.customer)
+        response = self.client.post(
+            f"/api/tickets/{self.ticket.id}/comments/",
+            {"body": "x" * MAX_BODY_LENGTH},
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(response.data["body"]), MAX_BODY_LENGTH)

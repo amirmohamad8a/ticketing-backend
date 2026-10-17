@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.admin.sites import site
 from django.test import TestCase
 
@@ -105,3 +107,14 @@ class TokenAuthTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
         response = self.client.post("/api/auth/logout/", {})
         self.assertEqual(response.status_code, 400)
+
+    def test_logout_closes_the_users_live_sockets(self):
+        obtain = self.client.post("/api/token/", {"username": "tokenuser", "password": "pass12345"})
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {obtain.data['access']}")
+        with patch("accounts.views.close_user_sockets") as close_sockets:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    "/api/auth/logout/", {"refresh": obtain.data["refresh"]}
+                )
+        self.assertEqual(response.status_code, 205)
+        close_sockets.assert_called_once_with(self.user.pk)
