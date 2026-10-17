@@ -67,10 +67,11 @@ class UserEventModelTests(TestCase):
             self.target.delete()
         self.assertTrue(UserEvent.objects.filter(pk=self.event.pk).exists())
 
-    def test_deleting_the_actor_keeps_the_event_and_clears_the_actor(self):
-        self.admin.delete()
+    def test_a_user_who_acted_on_an_event_cannot_be_deleted(self):
+        with self.assertRaises(ProtectedError):
+            self.admin.delete()
         self.event.refresh_from_db()
-        self.assertIsNone(self.event.actor)
+        self.assertEqual(self.event.actor, self.admin)
 
 
 class UserEventAdminTests(TestCase):

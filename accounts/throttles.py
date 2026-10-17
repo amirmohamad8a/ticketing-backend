@@ -13,7 +13,8 @@ class LoginUsernameThrottle(SimpleRateThrottle):
         username = self._username(request)
         if not username:
             return None
-        ident = hashlib.sha256(username.encode("utf-8")).hexdigest()
+        raw = f"{username}|{self.get_ident(request)}"
+        ident = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
     @staticmethod

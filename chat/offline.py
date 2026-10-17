@@ -1,6 +1,7 @@
 import logging
 from datetime import timedelta
 
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Exists, OuterRef
 from django.utils import timezone
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 OFFLINE_EVENT_TYPE = "conversation.offline"
 CHANNEL_FIELD = "channel"
+EARLY_CANDIDATES_KEY = "chat:offline-early-candidates"
+EARLY_CANDIDATES_TTL_SECONDS = 180
 
 
 def _public_staff_replies(ticket):
@@ -47,22 +50,33 @@ def _unanswered_chats():
     )
 
 
+def _confirm_early(candidate_ids):
+    previous = set(cache.get(EARLY_CANDIDATES_KEY) or ())
+    cache.set(EARLY_CANDIDATES_KEY, list(candidate_ids), timeout=EARLY_CANDIDATES_TTL_SECONDS)
+    return previous.intersection(candidate_ids)
+
+
 def due_chat_ticket_ids(now=None):
     now = now or timezone.now()
-    nobody_online = not presence.available_agent_ids()
-    nobody_accepting = nobody_online or not agents_available()
-    rows = (
+    online_ids = set(presence.online_agent_ids())
+    nobody_accepting = not online_ids or not agents_available()
+    rows = list(
         _unanswered_chats()
         .order_by("created_at", "pk")
         .values_list("pk", "created_at", "site__offline_timeout_minutes", "assignee_id")
     )
-    return [
-        pk
-        for pk, created_at, timeout, assignee_id in rows
-        if nobody_online
-        or (nobody_accepting and assignee_id is None)
-        or created_at + timedelta(minutes=timeout or 0) <= now
-    ]
+    expired = set()
+    early = set()
+    for pk, created_at, timeout, assignee_id in rows:
+        if created_at + timedelta(minutes=timeout or 0) <= now:
+            expired.add(pk)
+        elif assignee_id is None:
+            if nobody_accepting:
+                early.add(pk)
+        elif assignee_id not in online_ids:
+            early.add(pk)
+    due = expired | _confirm_early(early)
+    return [pk for pk, *_rest in rows if pk in due]
 
 
 def convert_unanswered_chat(ticket_id):

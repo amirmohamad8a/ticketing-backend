@@ -48,12 +48,19 @@ def get_statuses(user_ids):
     return {keys[key]: state["status"] for key, state in found.items()}
 
 
-def available_agent_ids():
+def _staff_statuses():
     staff_ids = list(
         User.objects.filter(is_active=True, role__in=STAFF_ROLES).values_list("pk", flat=True)
     )
-    statuses = get_statuses(staff_ids)
-    return [user_id for user_id, status in statuses.items() if status == STATUS_AVAILABLE]
+    return get_statuses(staff_ids)
+
+
+def online_agent_ids():
+    return list(_staff_statuses())
+
+
+def available_agent_ids():
+    return [user_id for user_id, status in _staff_statuses().items() if status == STATUS_AVAILABLE]
 
 
 def accepting_agents(user_ids=None):

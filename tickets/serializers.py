@@ -117,6 +117,7 @@ class TicketSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         actor = self._get_actor()
+        validated_data.pop("status", None)
 
         with transaction.atomic():
             ticket = super().create(validated_data)

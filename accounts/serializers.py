@@ -15,6 +15,7 @@ from accounts.tokens import blacklist_user_tokens
 from accounts.validators import normalize_phone, validate_iranian_mobile
 from core.uploads import ensure_content_matches
 from realtime.events import close_user_sockets
+from tickets.assignment import release_tickets
 
 logger = logging.getLogger(__name__)
 
@@ -307,9 +308,11 @@ class UserUpdateSerializer(ActorMixin, serializers.ModelSerializer):
 
         events = []
         deactivated = False
+        demoted = False
         close_sockets = False
         if "role" in validated_data and validated_data["role"] != instance.role:
             events.append(("role", instance.role, validated_data["role"]))
+            demoted = validated_data["role"] == User.Role.CUSTOMER
             close_sockets = True
         if "is_active" in validated_data and validated_data["is_active"] != instance.is_active:
             new_state = validated_data["is_active"]
@@ -327,6 +330,8 @@ class UserUpdateSerializer(ActorMixin, serializers.ModelSerializer):
                 instance.save(update_fields=["password"])
             if password is not None or deactivated:
                 blacklist_user_tokens(instance)
+            if deactivated or demoted:
+                release_tickets(instance, actor)
             for field_changed, old_value, new_value in events:
                 record_user_event(
                     user=instance,

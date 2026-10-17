@@ -8,12 +8,14 @@ from chat.widget.views import (
     ConversationReadView,
     MessageListCreateView,
     WidgetAttachmentDownloadView,
+    WidgetChallengeView,
     WidgetConfigView,
     WidgetSocketTicketView,
 )
 
 urlpatterns = [
     path("widget/config/", WidgetConfigView.as_view(), name="widget-config"),
+    path("widget/challenge/", WidgetChallengeView.as_view(), name="widget-challenge"),
     path(
         "widget/conversations/",
         ConversationCreateView.as_view(),

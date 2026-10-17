@@ -193,7 +193,9 @@ class TagDeletionTests(TestCase):
         tag = TagFactory()
         ticket = TicketFactory(tags=[tag])
         client = _client_for(self.admin, raise_request_exception=False)
-        with patch("tickets.tags.record_event", side_effect=RuntimeError("boom")):
+        with patch(
+            "tickets.tags.TicketEvent.objects.bulk_create", side_effect=RuntimeError("boom")
+        ):
             response = client.delete(f"{URL}{tag.id}/")
         self.assertEqual(response.status_code, 500)
         self.assertTrue(Tag.objects.filter(pk=tag.pk).exists())

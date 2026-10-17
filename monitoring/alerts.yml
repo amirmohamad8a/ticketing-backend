@@ -1,0 +1,11 @@
+groups:
+  - name: ticketing
+    rules:
+      - alert: TicketQueueGrowing
+        expr: ticketing_queue_size > 50 and delta(ticketing_queue_size[10m]) > 25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Unassigned ticket queue is growing fast
+          description: The queue holds {{ $value }} tickets and grew by more than 25 in 10 minutes. Check the widget for a flood.

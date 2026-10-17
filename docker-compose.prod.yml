@@ -9,8 +9,10 @@ x-app: &app
 services:
   db:
     image: postgres:16-alpine
-    env_file:
-      - .env.prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ticketing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ticketing}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

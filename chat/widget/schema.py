@@ -8,6 +8,7 @@ from drf_spectacular.utils import (
 
 from chat.widget.serializers import (
     ConversationCreateSerializer,
+    WidgetChallengeSerializer,
     WidgetConfigSerializer,
     WidgetContactInputSerializer,
     WidgetContactSerializer,
@@ -49,6 +50,18 @@ widget_config_schema = extend_schema_view(
         parameters=[OpenApiParameter("key", str, OpenApiParameter.QUERY, required=True)],
         responses={
             200: WidgetConfigSerializer,
+            403: OpenApiResponse(description="The request origin is not allowed for the site."),
+            404: OpenApiResponse(description="No active site has this key."),
+        },
+    )
+)
+
+widget_challenge_schema = extend_schema_view(
+    get=extend_schema(
+        tags=TAGS,
+        parameters=[OpenApiParameter("key", str, OpenApiParameter.QUERY, required=True)],
+        responses={
+            200: WidgetChallengeSerializer,
             403: OpenApiResponse(description="The request origin is not allowed for the site."),
             404: OpenApiResponse(description="No active site has this key."),
         },

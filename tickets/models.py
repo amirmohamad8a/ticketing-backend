@@ -166,7 +166,7 @@ class TicketEvent(AppendOnlyModel):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="events")
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="ticket_events",

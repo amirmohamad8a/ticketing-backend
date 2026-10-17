@@ -138,11 +138,17 @@ class TicketSoftDeleteApiTests(TestCase):
                 with self.subTest(role=user.role, suffix=suffix):
                     self.assertEqual(client.get(f"{self.url}{suffix}").status_code, 404)
 
-    def test_delete_keeps_every_audit_row_and_writes_no_new_one(self):
+    def test_delete_keeps_every_audit_row_and_appends_a_deleted_event(self):
         before = self._event_ids()
         self.assertTrue(before)
-        self.admin_client.delete(self.url)
-        self.assertEqual(self._event_ids(), before)
+        self.assertEqual(self.admin_client.delete(self.url).status_code, 204)
+        after = self._event_ids()
+        self.assertEqual(after[: len(before)], before)
+        self.assertEqual(len(after), len(before) + 1)
+        deleted = TicketEvent.objects.get(field_changed="deleted")
+        self.assertEqual(deleted.ticket_id, self.ticket.id)
+        self.assertEqual(deleted.actor, self.admin)
+        self.assertEqual((deleted.old_value, deleted.new_value), ("", ""))
         self.assertEqual(Comment.objects.filter(ticket=self.ticket).count(), 1)
 
     def test_deleted_ticket_is_missing_from_every_list(self):
@@ -175,7 +181,7 @@ class TicketSoftDeleteApiTests(TestCase):
         self.assertIsNone(restored.deleted_at)
         self.assertEqual(_client_for(self.customer).get(self.url).status_code, 200)
 
-    def test_restore_keeps_status_priority_and_assignee_and_writes_no_event(self):
+    def test_restore_keeps_status_priority_and_assignee_and_records_an_event(self):
         ticket = TicketFactory(
             customer=self.customer,
             assignee=self.agent,
@@ -191,7 +197,11 @@ class TicketSoftDeleteApiTests(TestCase):
         self.assertEqual(restored.status, Ticket.Status.IN_PROGRESS)
         self.assertEqual(restored.priority, Ticket.Priority.HIGH)
         self.assertEqual(restored.assignee, self.agent)
-        self.assertEqual(TicketEvent.objects.filter(ticket=ticket).count(), before)
+        events = TicketEvent.objects.filter(ticket=ticket)
+        self.assertEqual(events.count(), before + 1)
+        recorded = events.order_by("-id").first()
+        self.assertEqual(recorded.field_changed, "restored")
+        self.assertEqual(recorded.actor, self.admin)
 
     def test_only_admins_can_restore(self):
         self.ticket.delete()

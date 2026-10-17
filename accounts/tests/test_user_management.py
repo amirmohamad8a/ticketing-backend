@@ -8,6 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import User, UserEvent
 from accounts.pagination import UserCursorPagination
 from core.tests.factories import AdminFactory, AgentFactory, TicketFactory, UserFactory
+from tickets.models import Ticket
 
 URL = "/api/users/"
 PASSWORD = "S3cure-pass-91"
@@ -361,11 +362,29 @@ class UserUpdateTests(TestCase):
         self.assertEqual(event.new_value, "false")
         self.assertEqual(event.actor, self.admin)
 
-    def test_deactivating_leaves_assigned_tickets_alone(self):
+    def test_deactivating_releases_open_assigned_tickets(self):
         ticket = TicketFactory(assignee=self.target)
         self._patch({"is_active": False})
         ticket.refresh_from_db()
+        self.assertIsNone(ticket.assignee)
+
+    def test_deactivating_keeps_finished_assigned_tickets(self):
+        ticket = TicketFactory(assignee=self.target, status=Ticket.Status.RESOLVED)
+        self._patch({"is_active": False})
+        ticket.refresh_from_db()
         self.assertEqual(ticket.assignee, self.target)
+
+    def test_demoting_releases_open_assigned_tickets(self):
+        ticket = TicketFactory(assignee=self.target)
+        self._patch({"role": User.Role.CUSTOMER})
+        ticket.refresh_from_db()
+        self.assertIsNone(ticket.assignee)
+
+    def test_deactivating_releases_assigned_chat_tickets(self):
+        ticket = TicketFactory(from_visitor=True, assignee=self.target)
+        self._patch({"is_active": False})
+        ticket.refresh_from_db()
+        self.assertIsNone(ticket.assignee)
 
     def test_reactivating_restores_login_and_writes_an_audit_row(self):
         inactive = AgentFactory(is_active=False)

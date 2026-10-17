@@ -159,7 +159,7 @@ class TicketEventModelTests(TestCase):
         self.ticket.delete()
         self.assertTrue(TicketEvent.objects.filter(id=event.id).exists())
 
-    def test_deleting_actor_sets_null(self):
+    def test_deleting_an_actor_is_protected(self):
         event = TicketEvent.objects.create(
             ticket=self.ticket,
             actor=self.agent,
@@ -167,9 +167,10 @@ class TicketEventModelTests(TestCase):
             old_value=Ticket.Status.OPEN,
             new_value=Ticket.Status.IN_PROGRESS,
         )
-        self.agent.delete()
+        with self.assertRaises(ProtectedError):
+            self.agent.delete()
         event.refresh_from_db()
-        self.assertIsNone(event.actor)
+        self.assertEqual(event.actor, self.agent)
 
     def test_str_representation(self):
         event = TicketEvent.objects.create(

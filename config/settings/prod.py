@@ -6,6 +6,9 @@ from .base import *
 
 DEBUG = False
 
+if env("LOADTEST_THROTTLE_RATES", default=""):
+    raise ImproperlyConfigured("LOADTEST_THROTTLE_RATES must not be set in production.")
+
 JWT_SIGNING_KEY = env("JWT_SIGNING_KEY")
 if JWT_SIGNING_KEY == SECRET_KEY:
     raise ImproperlyConfigured("JWT_SIGNING_KEY must be different from SECRET_KEY.")

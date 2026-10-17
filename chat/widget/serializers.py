@@ -38,6 +38,12 @@ class WidgetConfigSerializer(serializers.ModelSerializer):
         return agents_available()
 
 
+class WidgetChallengeSerializer(serializers.Serializer):
+    challenge = serializers.CharField(read_only=True, allow_null=True)
+    difficulty = serializers.IntegerField(read_only=True)
+    expires_in = serializers.IntegerField(read_only=True)
+
+
 class WidgetAttachmentSerializer(AttachmentSerializer):
     class Meta(AttachmentSerializer.Meta):
         fields = [
@@ -118,6 +124,8 @@ class ConversationCreateSerializer(serializers.Serializer):
         validators=[validate_iranian_mobile],
     )
     email = serializers.EmailField(required=False, allow_blank=True, max_length=254)
+    pow_challenge = serializers.CharField(required=False, allow_blank=True, max_length=512)
+    pow_nonce = serializers.CharField(required=False, allow_blank=True, max_length=64)
 
 
 class WidgetContactInputSerializer(serializers.Serializer):

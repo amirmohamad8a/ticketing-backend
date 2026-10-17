@@ -3008,6 +3008,55 @@ paths:
               description: Seconds to wait before sending the request again.
               schema:
                 type: integer
+  /api/widget/challenge/:
+    get:
+      operationId: widget_challenge_retrieve
+      parameters:
+      - in: query
+        name: key
+        schema:
+          type: string
+        required: true
+      tags:
+      - Widget
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetChallenge'
+          description: ''
+        '400':
+          description: The request is malformed or failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: The request origin is not allowed for the site.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No active site has this key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              description: Seconds to wait before sending the request again.
+              schema:
+                type: integer
   /api/widget/config/:
     get:
       operationId: widget_config_retrieve
@@ -4018,6 +4067,12 @@ components:
             maxLength: 254
           - type: string
             maxLength: 0
+        pow_challenge:
+          type: string
+          maxLength: 512
+        pow_nonce:
+          type: string
+          maxLength: 64
       required:
       - body
     DailyCount:
@@ -5113,6 +5168,23 @@ components:
       - id
       - original_name
       - size
+    WidgetChallenge:
+      type: object
+      properties:
+        challenge:
+          type: string
+          readOnly: true
+          nullable: true
+        difficulty:
+          type: integer
+          readOnly: true
+        expires_in:
+          type: integer
+          readOnly: true
+      required:
+      - challenge
+      - difficulty
+      - expires_in
     WidgetConfig:
       type: object
       properties:

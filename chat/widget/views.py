@@ -24,6 +24,8 @@ from chat.widget.auth import (
     VisitorTokenAuthentication,
     ensure_origin_allowed,
 )
+from chat.widget.limits import ensure_site_capacity
+from chat.widget.pow import issue_challenge, verify_solution
 from chat.widget.schema import (
     attachment_upload_schema,
     conversation_contact_schema,
@@ -31,6 +33,7 @@ from chat.widget.schema import (
     conversation_rating_schema,
     conversation_read_schema,
     message_schema,
+    widget_challenge_schema,
     widget_config_schema,
     widget_download_schema,
     widget_socket_ticket_schema,
@@ -38,6 +41,7 @@ from chat.widget.schema import (
 from chat.widget.serializers import (
     ConversationCreateSerializer,
     WidgetAttachmentSerializer,
+    WidgetChallengeSerializer,
     WidgetConfigSerializer,
     WidgetContactInputSerializer,
     WidgetContactSerializer,
@@ -119,6 +123,17 @@ class WidgetConfigView(WidgetAPIView):
         return Response(WidgetConfigSerializer(site).data)
 
 
+@widget_challenge_schema
+class WidgetChallengeView(WidgetAPIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        site = _find_site(request.query_params.get("key"), "key")
+        ensure_origin_allowed(request, site)
+        return Response(WidgetChallengeSerializer(issue_challenge(site)).data)
+
+
 @conversation_create_schema
 class ConversationCreateView(WidgetAPIView):
     permission_classes = [AllowAny]
@@ -139,6 +154,8 @@ class ConversationCreateView(WidgetAPIView):
             site = _find_site(data.get("site_key"), "site_key")
             ensure_origin_allowed(request, site)
             _check_required_fields(site, data)
+            verify_solution(site, data.get("pow_challenge"), data.get("pow_nonce"))
+            ensure_site_capacity(site)
             session, ticket, comment = start_conversation(
                 site,
                 data["body"],

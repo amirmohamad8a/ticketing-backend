@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 from accounts.models import User
 from core.downloads import build_download_link
 from tickets.assignment import claim_ticket
-from tickets.events import STAFF_ONLY_FIELDS
+from tickets.events import DELETED_FIELD, RESTORED_FIELD, STAFF_ONLY_FIELDS, record_event
 from tickets.export import build_export_response
 from tickets.filters import TicketFilter
 from tickets.lifecycle import reopen_on_customer_reply
@@ -92,6 +92,17 @@ class TicketViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(customer=self.request.user)
 
+    def perform_destroy(self, instance):
+        with transaction.atomic():
+            instance.delete()
+            record_event(
+                ticket=instance,
+                actor=self.request.user,
+                field_changed=DELETED_FIELD,
+                old_value="",
+                new_value="",
+            )
+
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
         pk = self.get_object().pk
@@ -130,7 +141,15 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def restore(self, request, pk=None):
         ticket = self.get_object()
-        ticket.restore()
+        with transaction.atomic():
+            ticket.restore()
+            record_event(
+                ticket=ticket,
+                actor=request.user,
+                field_changed=RESTORED_FIELD,
+                old_value="",
+                new_value="",
+            )
         return Response(self.get_serializer(ticket).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAgentOrAdmin])

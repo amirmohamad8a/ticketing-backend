@@ -61,7 +61,7 @@ class UserEvent(AppendOnlyModel):
     )
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="user_events_made",

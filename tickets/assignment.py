@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -37,3 +39,27 @@ def claim_ticket(ticket_id, claimer, request=None):
         if ticket.assignee_id is not None:
             raise TicketAlreadyAssigned
         return assign_ticket(ticket, claimer, request)
+
+
+def release_tickets(user, actor=None):
+    from chat.assignment import route_new_chat
+
+    context = {"request": SimpleNamespace(user=actor)}
+    with transaction.atomic():
+        tickets = list(
+            Ticket.objects.select_for_update()
+            .filter(assignee=user)
+            .exclude(status__in=Ticket.FINISHED_STATUSES)
+            .order_by("pk")
+        )
+        released = []
+        for ticket in tickets:
+            serializer = TicketSerializer(
+                ticket, data={"assignee": None}, partial=True, context=context
+            )
+            serializer.is_valid(raise_exception=True)
+            released.append(serializer.save())
+        for ticket in released:
+            if ticket.channel == Ticket.Channel.CHAT:
+                route_new_chat(ticket)
+    return released

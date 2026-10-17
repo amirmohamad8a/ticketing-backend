@@ -4,7 +4,9 @@ from tickets.models import TicketEvent
 TICKET_EVENT_TYPE = "ticket.event"
 TAG_FIELD = "tag"
 CONTACT_FIELD = "contact"
-STAFF_ONLY_FIELDS = frozenset({"assignee", TAG_FIELD, CONTACT_FIELD})
+DELETED_FIELD = "deleted"
+RESTORED_FIELD = "restored"
+STAFF_ONLY_FIELDS = frozenset({"assignee", TAG_FIELD, CONTACT_FIELD, DELETED_FIELD, RESTORED_FIELD})
 
 
 def tag_changes(old_tags, new_tags):
