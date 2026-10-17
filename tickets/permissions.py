@@ -5,7 +5,7 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 from accounts.models import User
 from tickets.models import Ticket
 
-STAFF_ONLY_FIELDS = frozenset({"status", "priority", "assignee", "tags"})
+STAFF_ONLY_WRITE_FIELDS = frozenset({"status", "priority", "assignee", "tags"})
 
 
 def _is_customer(user):
@@ -19,7 +19,7 @@ def _is_admin(user):
 def _staff_only_fields_in(data):
     if not hasattr(data, "keys"):
         return set()
-    return STAFF_ONLY_FIELDS.intersection(data.keys())
+    return STAFF_ONLY_WRITE_FIELDS.intersection(data.keys())
 
 
 class IsAgentOrAdmin(BasePermission):

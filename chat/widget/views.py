@@ -3,7 +3,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 
 from rest_framework import status
-from rest_framework.exceptions import APIException, NotFound, ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -11,12 +11,8 @@ from rest_framework.views import APIView
 
 from chat.availability import agents_available
 from chat.contact import save_contact
-from chat.conversations import (
-    FINISHED_STATUSES,
-    conversations_of,
-    open_conversation,
-    start_conversation,
-)
+from chat.conversations import conversations_of, open_conversation, start_conversation
+from chat.exceptions import ConversationClosed
 from chat.models import Site, Visitor
 from chat.tokens import issue_visitor_token
 from chat.widget.auth import (
@@ -62,16 +58,10 @@ from core.downloads import build_download_link
 from realtime.tickets import issue_ticket
 from tickets.lifecycle import reopen_on_customer_reply
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
-from tickets.models import Attachment, TicketRating
+from tickets.models import Attachment, Ticket, TicketRating
 from tickets.ratings import rate_ticket
 from tickets.reads import mark_conversation_read, unread_count, visible_comments
 from tickets.serializers import ReadMarkSerializer, ReadStateSerializer, TicketRatingSerializer
-
-
-class ConversationClosed(APIException):
-    status_code = status.HTTP_409_CONFLICT
-    default_detail = _("This conversation is closed.")
-    default_code = "conversation_closed"
 
 
 def _find_site(key, field):
@@ -88,7 +78,7 @@ def _get_conversation(visitor, pk):
 
 
 def _ensure_open(ticket):
-    if ticket.status in FINISHED_STATUSES:
+    if ticket.status in Ticket.FINISHED_STATUSES:
         raise ConversationClosed
 
 

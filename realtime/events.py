@@ -5,14 +5,18 @@ from django.db import transaction
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
+from realtime import protocol
 from realtime.groups import AGENTS_QUEUE_GROUP, ticket_group, user_group
 
 logger = logging.getLogger(__name__)
 
-CHANNEL_EVENT_TYPE = "realtime.event"
-CHANNEL_TYPING_TYPE = "realtime.typing"
-CHANNEL_CLOSE_TYPE = "realtime.close"
-TYPING_EVENT_TYPE = "typing"
+CHANNEL_EVENT_TYPE = protocol.CHANNEL_EVENT_TYPE
+CHANNEL_TYPING_TYPE = protocol.CHANNEL_TYPING_TYPE
+CHANNEL_CLOSE_TYPE = protocol.CHANNEL_CLOSE_TYPE
+TYPING_EVENT_TYPE = protocol.EVENT_TYPING
+TICKET_EVENT_TYPE = protocol.TICKET_EVENT_TYPE
+MESSAGE_EVENT_TYPE = protocol.MESSAGE_EVENT_TYPE
+OFFLINE_EVENT_TYPE = protocol.OFFLINE_EVENT_TYPE
 
 
 async def _send_to_groups(layer, payload, staff_only, public_payload=None):

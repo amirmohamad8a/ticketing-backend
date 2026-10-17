@@ -6,6 +6,7 @@ from drf_spectacular.utils import (
     extend_schema_view,
 )
 
+from chat.exceptions import ConversationClosed
 from chat.widget.serializers import (
     ConversationCreateSerializer,
     WidgetChallengeSerializer,
@@ -20,18 +21,26 @@ from chat.widget.serializers import (
 )
 from core.serializers import DownloadLinkSerializer
 from realtime.serializers import SocketTicketSerializer
+from tickets.exceptions import TicketAlreadyRated, TicketNotResolved
 from tickets.serializers import ReadMarkSerializer, ReadStateSerializer, TicketRatingSerializer
 
 TAGS = ["Widget"]
 ID = OpenApiParameter("id", int, OpenApiParameter.PATH)
 
+
+def _describe_codes(*exceptions):
+    return ", ".join(f"`{exception.default_code}`" for exception in exceptions)
+
+
 CONVERSATION_CLOSED = OpenApiResponse(
-    description="The conversation is resolved or closed (`conversation_closed`)."
+    description=(
+        "The conversation is resolved or closed " f"({_describe_codes(ConversationClosed)})."
+    )
 )
 RATING_CONFLICT = OpenApiResponse(
     description=(
         "The conversation is not resolved yet or was already rated "
-        "(`ticket_not_resolved`, `ticket_already_rated`)."
+        f"({_describe_codes(TicketNotResolved, TicketAlreadyRated)})."
     )
 )
 

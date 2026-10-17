@@ -1,21 +1,14 @@
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Count, Q
 
 from accounts.models import User
 from accounts.permissions import STAFF_ROLES
-from tickets.models import Ticket
+from tickets.selectors import annotate_open_chats
 
 CACHE_PREFIX = "presence:"
 STATUS_AVAILABLE = "available"
 STATUS_AWAY = "away"
 STATUSES = (STATUS_AVAILABLE, STATUS_AWAY)
-ACTIVE_STATUSES = [value for value in Ticket.Status.values if value not in Ticket.FINISHED_STATUSES]
-OPEN_CHAT_FILTER = Q(
-    assigned_tickets__channel=Ticket.Channel.CHAT,
-    assigned_tickets__is_deleted=False,
-    assigned_tickets__status__in=ACTIVE_STATUSES,
-)
 
 
 def _key(user_id):
@@ -67,17 +60,17 @@ def accepting_agents(user_ids=None):
     candidate_ids = available_agent_ids() if user_ids is None else list(user_ids)
     if not candidate_ids:
         return []
-    agents = User.objects.filter(
-        pk__in=candidate_ids, is_active=True, role__in=STAFF_ROLES
-    ).annotate(open_chats=Count("assigned_tickets", filter=OPEN_CHAT_FILTER))
+    agents = annotate_open_chats(
+        User.objects.filter(pk__in=candidate_ids, is_active=True, role__in=STAFF_ROLES)
+    )
     return [agent for agent in agents if agent.open_chats < agent.max_concurrent_chats]
 
 
 def online_agents():
     agents = list(
-        User.objects.filter(is_active=True, role__in=STAFF_ROLES)
-        .annotate(open_chats=Count("assigned_tickets", filter=OPEN_CHAT_FILTER))
-        .order_by("first_name", "last_name", "username", "id")
+        annotate_open_chats(User.objects.filter(is_active=True, role__in=STAFF_ROLES)).order_by(
+            "first_name", "last_name", "username", "id"
+        )
     )
     statuses = get_statuses([agent.pk for agent in agents])
     rows = []

@@ -5,21 +5,20 @@ from rest_framework.exceptions import ValidationError
 
 from accounts.models import User
 from accounts.permissions import STAFF_ROLES
-from realtime.events import publish
-from tickets.models import Comment, Ticket
+from realtime.events import MESSAGE_EVENT_TYPE, publish
+from tickets.models import Comment, SenderType, Ticket
 
-MESSAGE_EVENT_TYPE = "message.created"
 MESSAGES_PAGE_SIZE = 100
 
 
 def comment_sender_type(comment):
     if comment.kind == Comment.Kind.SYSTEM:
-        return "system"
+        return SenderType.SYSTEM
     if comment.visitor_id:
-        return "visitor"
+        return SenderType.VISITOR
     if comment.author_id and comment.author.role == User.Role.CUSTOMER:
-        return "customer"
-    return "agent"
+        return SenderType.CUSTOMER
+    return SenderType.AGENT
 
 
 def message_page(queryset, after, page_size):

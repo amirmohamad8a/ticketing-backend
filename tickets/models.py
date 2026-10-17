@@ -1,15 +1,24 @@
 import uuid
+from enum import StrEnum
 
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxLengthValidator, MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Exists, OuterRef
 from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models import AppendOnlyModel, SoftDeleteModel, TimeStampedModel
+from core.models import (
+    ActiveRowsManager,
+    AllRowsManager,
+    AppendOnlyModel,
+    SoftDeleteModel,
+    SoftDeleteQuerySet,
+    TimeStampedModel,
+)
 from core.search import build_search_vector
 from tickets.sla import compute_first_response_due_at
 from tickets.validators import (
@@ -27,9 +36,55 @@ RATING_MAX_SCORE = 5
 RATING_MAX_COMMENT_LENGTH = 1000
 
 
+class SenderType(StrEnum):
+    CUSTOMER = "customer"
+    AGENT = "agent"
+    VISITOR = "visitor"
+    SYSTEM = "system"
+
+
 def attachment_upload_path(instance, filename):
     extension = Attachment.CONTENT_TYPE_EXTENSIONS.get(instance.content_type, "")
     return f"attachments/{timezone.localdate():%Y/%m/%d}/{uuid.uuid4().hex}{extension}"
+
+
+class TicketQuerySet(SoftDeleteQuerySet):
+    def unfinished(self):
+        return self.exclude(status__in=Ticket.FINISHED_STATUSES)
+
+    def finished(self):
+        return self.filter(status__in=Ticket.FINISHED_STATUSES)
+
+    def chat(self):
+        return self.filter(channel=Ticket.Channel.CHAT)
+
+    def unassigned(self):
+        return self.filter(assignee__isnull=True)
+
+    def assigned_to(self, user):
+        return self.filter(assignee=user)
+
+    def overdue(self, now=None):
+        from accounts.permissions import STAFF_ROLES
+
+        now = now or timezone.now()
+        staff_replies = Comment.objects.filter(
+            ticket=OuterRef("pk"),
+            kind=Comment.Kind.MESSAGE,
+            is_internal=False,
+            author__role__in=STAFF_ROLES,
+        )
+        return (
+            self.filter(first_response_due_at__lt=now).unfinished().filter(~Exists(staff_replies))
+        )
+
+
+class TicketActiveManager(ActiveRowsManager.from_queryset(TicketQuerySet)):
+    pass
+
+
+class TicketAllRowsManager(AllRowsManager.from_queryset(TicketQuerySet)):
+    pass
 
 
 class Tag(TimeStampedModel):
@@ -87,6 +142,9 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
         Status.CLOSED: {Status.IN_PROGRESS},
     }
     FINISHED_STATUSES = (Status.RESOLVED, Status.CLOSED)
+
+    objects = TicketActiveManager()
+    all_objects = TicketAllRowsManager()
 
     title = models.CharField(max_length=255)
     description = models.TextField()

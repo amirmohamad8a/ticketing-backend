@@ -10,15 +10,14 @@ from django.utils.translation import gettext
 from accounts.permissions import STAFF_ROLES
 from chat.assignment import route_queued_chats
 from realtime import presence
-from realtime.events import publish
-from tickets.events import record_event
+from realtime.events import OFFLINE_EVENT_TYPE, publish
+from tickets.events import TicketEventField, record_event
 from tickets.messages import post_message
 from tickets.models import Comment, Ticket
 
 logger = logging.getLogger(__name__)
 
-OFFLINE_EVENT_TYPE = "conversation.offline"
-CHANNEL_FIELD = "channel"
+CHANNEL_FIELD = TicketEventField.CHANNEL
 EARLY_CANDIDATES_KEY = "chat:offline-early-candidates"
 EARLY_CANDIDATES_TTL_SECONDS = 180
 
@@ -43,11 +42,7 @@ def _offline_notice():
 
 
 def _unanswered_chats():
-    return (
-        Ticket.objects.filter(channel=Ticket.Channel.CHAT)
-        .exclude(status__in=Ticket.FINISHED_STATUSES)
-        .filter(~Exists(_public_staff_replies(OuterRef("pk"))))
-    )
+    return Ticket.objects.chat().unfinished().filter(~Exists(_public_staff_replies(OuterRef("pk"))))
 
 
 def _confirm_early(candidate_ids):

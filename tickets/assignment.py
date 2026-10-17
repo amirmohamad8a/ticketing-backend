@@ -3,20 +3,11 @@ from types import SimpleNamespace
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
-
-from rest_framework import status
-from rest_framework.exceptions import APIException
 
 from accounts.models import User
+from tickets.exceptions import TicketAlreadyAssigned
 from tickets.models import Ticket
 from tickets.serializers import TicketSerializer
-
-
-class TicketAlreadyAssigned(APIException):
-    status_code = status.HTTP_409_CONFLICT
-    default_detail = _("This ticket is already assigned to someone else.")
-    default_code = "ticket_already_assigned"
 
 
 def assign_ticket(ticket, assignee, request=None):
@@ -47,10 +38,7 @@ def release_tickets(user, actor=None):
     context = {"request": SimpleNamespace(user=actor)}
     with transaction.atomic():
         tickets = list(
-            Ticket.objects.select_for_update()
-            .filter(assignee=user)
-            .exclude(status__in=Ticket.FINISHED_STATUSES)
-            .order_by("pk")
+            Ticket.objects.select_for_update().assigned_to(user).unfinished().order_by("pk")
         )
         released = []
         for ticket in tickets:

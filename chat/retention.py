@@ -21,9 +21,7 @@ def retention_cutoff(days=None, now=None):
 
 
 def redactable_visitors(cutoff):
-    has_unfinished_ticket = Exists(
-        Ticket.objects.filter(visitor=OuterRef("pk")).exclude(status__in=Ticket.FINISHED_STATUSES)
-    )
+    has_unfinished_ticket = Exists(Ticket.objects.filter(visitor=OuterRef("pk")).unfinished())
     return (
         Visitor.objects.filter(last_seen_at__lt=cutoff)
         .annotate(has_unfinished_ticket=has_unfinished_ticket)

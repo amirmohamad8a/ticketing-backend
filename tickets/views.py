@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 from accounts.models import User
 from core.downloads import build_download_link
 from tickets.assignment import claim_ticket
-from tickets.events import DELETED_FIELD, RESTORED_FIELD, STAFF_ONLY_FIELDS, record_event
+from tickets.events import DELETED_FIELD, RESTORED_FIELD, STAFF_ONLY_EVENT_FIELDS, record_event
 from tickets.export import build_export_response
 from tickets.filters import TicketFilter
 from tickets.lifecycle import reopen_on_customer_reply
@@ -205,7 +205,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket = self.get_object()
         events = ticket.events.all()
         if request.user.role == User.Role.CUSTOMER:
-            events = events.exclude(field_changed__in=STAFF_ONLY_FIELDS)
+            events = events.exclude(field_changed__in=STAFF_ONLY_EVENT_FIELDS)
         serializer = TicketEventSerializer(events, many=True)
         return Response(serializer.data)
 

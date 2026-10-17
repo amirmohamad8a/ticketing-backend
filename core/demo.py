@@ -14,7 +14,7 @@ from accounts.models import User
 from chat.conversations import TITLE_MAX_LENGTH
 from chat.models import Site, Visitor
 from chat.offline import convert_unanswered_chat
-from tickets.events import TAG_FIELD
+from tickets.events import TicketEventField
 from tickets.models import Attachment, CannedReply, Comment, Tag, Ticket, TicketEvent, TicketRating
 
 logger = logging.getLogger(__name__)
@@ -378,7 +378,13 @@ class DemoSeeder:
     def _assign(self, ticket, actor_key):
         ticket.assignee = self.agent
         ticket.save(update_fields=["assignee", "updated_at"])
-        self._event(ticket, self.senders.get(actor_key), "assignee", "", self.agent.username)
+        self._event(
+            ticket,
+            self.senders.get(actor_key),
+            TicketEventField.ASSIGNEE,
+            "",
+            self.agent.username,
+        )
 
     def _set_status(self, ticket, status):
         old_status = ticket.status
@@ -392,7 +398,7 @@ class DemoSeeder:
             ticket.resolved_at = None
             update_fields.append("resolved_at")
         ticket.save(update_fields=update_fields)
-        self._event(ticket, self.agent, "status", old_status, status)
+        self._event(ticket, self.agent, TicketEventField.STATUS, old_status, status)
 
     def _post_message(self, ticket, sender, body, internal=False):
         author = self.senders.get(sender)
@@ -413,7 +419,7 @@ class DemoSeeder:
         if ticket.tags.filter(pk=tag.pk).exists():
             return
         ticket.tags.add(tag)
-        self._event(ticket, self.agent, TAG_FIELD, "", tag.name)
+        self._event(ticket, self.agent, TicketEventField.TAG, "", tag.name)
 
     def _convert(self, ticket):
         convert_unanswered_chat(ticket.pk)

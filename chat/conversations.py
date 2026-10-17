@@ -6,12 +6,11 @@ from chat.models import Visitor
 from chat.tasks import convert_to_offline
 from chat.visitors import start_visitor_session
 from realtime import presence
-from tickets.events import record_event
+from tickets.events import TicketEventField, record_event
 from tickets.lifecycle import reopen_on_customer_reply
 from tickets.messages import post_message
 from tickets.models import Ticket
 
-FINISHED_STATUSES = Ticket.FINISHED_STATUSES
 TITLE_MAX_LENGTH = 100
 
 
@@ -20,12 +19,7 @@ def conversations_of(visitor):
 
 
 def active_conversation(visitor):
-    return (
-        conversations_of(visitor)
-        .exclude(status__in=FINISHED_STATUSES)
-        .order_by("-created_at", "-id")
-        .first()
-    )
+    return conversations_of(visitor).unfinished().order_by("-created_at", "-id").first()
 
 
 def _schedule_offline_conversion(ticket):
@@ -54,7 +48,7 @@ def open_conversation(visitor, body, client_msg_id=None, request=None):
             record_event(
                 ticket=ticket,
                 actor=None,
-                field_changed="created",
+                field_changed=TicketEventField.CREATED,
                 old_value="",
                 new_value=ticket.status,
             )

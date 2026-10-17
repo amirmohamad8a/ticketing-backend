@@ -3,12 +3,13 @@ from datetime import datetime, time
 from django.db.models import Q
 from django.utils import timezone
 
+from accounts.events import UserEventField
 from accounts.models import UserEvent
 from audit.cursors import KINDS, TICKET_KIND, USER_KIND, encode_cursor
 from tickets.models import TicketEvent
 
 AUDIT_PAGE_SIZE = 50
-SENSITIVE_FIELDS = frozenset({"password"})
+SENSITIVE_FIELDS = frozenset({UserEventField.PASSWORD})
 MODELS = {TICKET_KIND: TicketEvent, USER_KIND: UserEvent}
 
 

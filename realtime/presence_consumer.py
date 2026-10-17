@@ -8,15 +8,24 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from accounts.permissions import STAFF_ROLES
 from core.metrics import PRESENCE_ENDPOINT, socket_closed, socket_opened
 from realtime import presence
-from realtime.consumers import (
+from realtime.groups import user_group
+from realtime.limits import MessageRateLimiter
+from realtime.protocol import (
+    CLIENT_PING,
+    CLIENT_SET_STATUS,
     CLOSE_FORBIDDEN,
     CLOSE_MESSAGE_TOO_BIG,
     CLOSE_RATE_LIMITED,
     CLOSE_UNAUTHENTICATED,
     CLOSE_UNSUPPORTED_DATA,
+    ERROR_INVALID_JSON,
+    ERROR_INVALID_MESSAGE,
+    ERROR_INVALID_STATUS,
+    ERROR_UNKNOWN_TYPE,
+    EVENT_ERROR,
+    EVENT_PONG,
+    EVENT_PRESENCE,
 )
-from realtime.groups import user_group
-from realtime.limits import MessageRateLimiter
 
 METRICS_CLIENT = "agent"
 
@@ -68,19 +77,19 @@ class PresenceConsumer(AsyncWebsocketConsumer):
         try:
             content = json.loads(text_data)
         except (ValueError, RecursionError):
-            await self._send_error("invalid_json")
+            await self._send_error(ERROR_INVALID_JSON)
             return
         if not isinstance(content, dict):
-            await self._send_error("invalid_message")
+            await self._send_error(ERROR_INVALID_MESSAGE)
             return
         message_type = content.get("type")
-        if message_type == "ping":
+        if message_type == CLIENT_PING:
             await self._heartbeat()
-            await self._send({"type": "pong", "status": self.status})
-        elif message_type == "set_status":
+            await self._send({"type": EVENT_PONG, "status": self.status})
+        elif message_type == CLIENT_SET_STATUS:
             await self._set_status(content.get("status"))
         else:
-            await self._send_error("unknown_type")
+            await self._send_error(ERROR_UNKNOWN_TYPE)
 
     async def realtime_close(self, event):
         await self.close(code=CLOSE_FORBIDDEN)
@@ -90,17 +99,17 @@ class PresenceConsumer(AsyncWebsocketConsumer):
 
     async def _set_status(self, status):
         if status not in presence.STATUSES:
-            await self._send_error("invalid_status")
+            await self._send_error(ERROR_INVALID_STATUS)
             return
         await sync_to_async(presence.set_status)(self.user.pk, status)
         self.status = status
         await self._send_state()
 
     async def _send_state(self):
-        await self._send({"type": "presence", "status": self.status})
+        await self._send({"type": EVENT_PRESENCE, "status": self.status})
 
     async def _send(self, payload):
         await self.send(text_data=json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
     async def _send_error(self, code):
-        await self._send({"type": "error", "code": code})
+        await self._send({"type": EVENT_ERROR, "code": code})

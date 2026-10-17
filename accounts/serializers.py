@@ -9,7 +9,7 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from accounts.events import record_user_event
+from accounts.events import UserEventField, flag, record_user_event
 from accounts.models import User
 from accounts.tokens import blacklist_user_tokens
 from accounts.validators import normalize_phone, validate_iranian_mobile
@@ -39,10 +39,6 @@ def build_phone_field():
             ),
         ],
     )
-
-
-def _flag(value):
-    return "true" if value else "false"
 
 
 class ActorMixin:
@@ -264,7 +260,7 @@ class UserCreateSerializer(ActorMixin, RegisterSerializer):
                 record_user_event(
                     user=user,
                     actor=actor,
-                    field_changed="created",
+                    field_changed=UserEventField.CREATED,
                     old_value="",
                     new_value=user.role,
                 )
@@ -326,16 +322,16 @@ class UserUpdateSerializer(ActorMixin, serializers.ModelSerializer):
         demoted = False
         close_sockets = False
         if "role" in validated_data and validated_data["role"] != instance.role:
-            events.append(("role", instance.role, validated_data["role"]))
+            events.append((UserEventField.ROLE, instance.role, validated_data["role"]))
             demoted = validated_data["role"] == User.Role.CUSTOMER
             close_sockets = True
         if "is_active" in validated_data and validated_data["is_active"] != instance.is_active:
             new_state = validated_data["is_active"]
-            events.append(("is_active", _flag(instance.is_active), _flag(new_state)))
+            events.append((UserEventField.IS_ACTIVE, flag(instance.is_active), flag(new_state)))
             deactivated = not new_state
             close_sockets = True
         if password is not None:
-            events.append(("password", "", ""))
+            events.append((UserEventField.PASSWORD, "", ""))
             close_sockets = True
 
         with transaction.atomic():

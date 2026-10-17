@@ -8,13 +8,17 @@ from rest_framework import serializers
 from accounts.models import User
 from chat.models import Site, Visitor
 from core.uploads import clean_file_name, ensure_content_matches
-from tickets.events import record_event, tag_changes
+from tickets.events import TicketEventField, record_event, tag_changes
 from tickets.messages import comment_sender_type
 from tickets.models import Attachment, Comment, Ticket, TicketEvent, TicketRating
 from tickets.validators import MAX_BODY_LENGTH, MAX_TICKET_TAGS
 
 STAFF_ONLY_RESPONSE_FIELDS = frozenset({"tags", "first_response_due_at", "visitor", "site"})
-AUDITED_TEXT_FIELDS = ("priority", "title", "description")
+AUDITED_TEXT_FIELDS = (
+    TicketEventField.PRIORITY,
+    TicketEventField.TITLE,
+    TicketEventField.DESCRIPTION,
+)
 MAX_EVENT_VALUE_LENGTH = 255
 
 
@@ -132,7 +136,7 @@ class TicketSerializer(serializers.ModelSerializer):
             record_event(
                 ticket=ticket,
                 actor=actor,
-                field_changed="created",
+                field_changed=TicketEventField.CREATED,
                 old_value="",
                 new_value=ticket.status,
             )
@@ -140,7 +144,7 @@ class TicketSerializer(serializers.ModelSerializer):
                 record_event(
                     ticket=ticket,
                     actor=actor,
-                    field_changed="assignee",
+                    field_changed=TicketEventField.ASSIGNEE,
                     old_value="",
                     new_value=assignee.username,
                 )
@@ -155,7 +159,7 @@ class TicketSerializer(serializers.ModelSerializer):
         changes = []
         if "status" in validated_data and validated_data["status"] != instance.status:
             new_status = validated_data["status"]
-            changes.append(("status", instance.status, new_status))
+            changes.append((TicketEventField.STATUS, instance.status, new_status))
             if new_status in Ticket.FINISHED_STATUSES:
                 if instance.resolved_at is None:
                     validated_data["resolved_at"] = timezone.now()
@@ -164,7 +168,7 @@ class TicketSerializer(serializers.ModelSerializer):
         if "assignee" in validated_data and validated_data["assignee"] != instance.assignee:
             old_assignee = instance.assignee.username if instance.assignee else ""
             new_assignee = validated_data["assignee"].username if validated_data["assignee"] else ""
-            changes.append(("assignee", old_assignee, new_assignee))
+            changes.append((TicketEventField.ASSIGNEE, old_assignee, new_assignee))
         for field in AUDITED_TEXT_FIELDS:
             if field in validated_data and validated_data[field] != getattr(instance, field):
                 changes.append(

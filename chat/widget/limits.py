@@ -27,13 +27,10 @@ def _unassigned_chats(site):
         minutes=settings.WIDGET_SITE_UNASSIGNED_WINDOW_MINUTES
     )
     return (
-        Ticket.objects.filter(
-            site=site,
-            channel=Ticket.Channel.CHAT,
-            assignee__isnull=True,
-            created_at__gte=window_start,
-        )
-        .exclude(status__in=Ticket.FINISHED_STATUSES)
+        Ticket.objects.filter(site=site, created_at__gte=window_start)
+        .chat()
+        .unassigned()
+        .unfinished()
         .count()
     )
 

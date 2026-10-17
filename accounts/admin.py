@@ -4,22 +4,18 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.db import transaction
 from django.http import HttpResponseRedirect
 
-from accounts.events import record_user_event
+from accounts.events import UserEventField, flag, record_user_event
 from accounts.models import User, UserEvent
 from accounts.tokens import blacklist_user_tokens
 from realtime.events import close_user_sockets
 from tickets.assignment import release_tickets
 
-M2M_FIELDS = ("groups", "user_permissions")
+M2M_FIELDS = (UserEventField.GROUPS, UserEventField.USER_PERMISSIONS)
 VALUE_MAX_LENGTH = 255
 
 
-def _flag(value):
-    return "true" if value else "false"
-
-
 def _m2m_labels(user, field):
-    if field == "groups":
+    if field == UserEventField.GROUPS:
         return set(user.groups.values_list("name", flat=True))
     rows = user.user_permissions.values_list("content_type__app_label", "codename")
     return {f"{app_label}.{codename}" for app_label, codename in rows}
@@ -49,7 +45,7 @@ class UserAdmin(DjangoUserAdmin):
                 record_user_event(
                     user=obj,
                     actor=actor,
-                    field_changed="created",
+                    field_changed=UserEventField.CREATED,
                     old_value="",
                     new_value=obj.role,
                 )
@@ -58,13 +54,19 @@ class UserAdmin(DjangoUserAdmin):
         previous = User.objects.only("role", "is_active", "is_staff", "is_superuser").get(pk=obj.pk)
         events = []
         if previous.role != obj.role:
-            events.append(("role", previous.role, obj.role))
+            events.append((UserEventField.ROLE, previous.role, obj.role))
         if previous.is_active != obj.is_active:
-            events.append(("is_active", _flag(previous.is_active), _flag(obj.is_active)))
+            events.append((UserEventField.IS_ACTIVE, flag(previous.is_active), flag(obj.is_active)))
         if previous.is_staff != obj.is_staff:
-            events.append(("is_staff", _flag(previous.is_staff), _flag(obj.is_staff)))
+            events.append((UserEventField.IS_STAFF, flag(previous.is_staff), flag(obj.is_staff)))
         if previous.is_superuser != obj.is_superuser:
-            events.append(("is_superuser", _flag(previous.is_superuser), _flag(obj.is_superuser)))
+            events.append(
+                (
+                    UserEventField.IS_SUPERUSER,
+                    flag(previous.is_superuser),
+                    flag(obj.is_superuser),
+                )
+            )
         deactivated = previous.is_active and not obj.is_active
         demoted = previous.role != obj.role and obj.role == User.Role.CUSTOMER
 
@@ -120,7 +122,7 @@ class UserAdmin(DjangoUserAdmin):
             record_user_event(
                 user=user,
                 actor=request.user,
-                field_changed="password",
+                field_changed=UserEventField.PASSWORD,
                 old_value="",
                 new_value="",
             )

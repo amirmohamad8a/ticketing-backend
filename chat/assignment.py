@@ -53,11 +53,9 @@ def route_new_chat(ticket):
 
 def route_queued_chats():
     ticket_ids = list(
-        Ticket.objects.filter(
-            channel=Ticket.Channel.CHAT,
-            assignee__isnull=True,
-        )
-        .exclude(status__in=Ticket.FINISHED_STATUSES)
+        Ticket.objects.chat()
+        .unassigned()
+        .unfinished()
         .order_by("created_at", "pk")
         .values_list("pk", flat=True)
     )
@@ -66,12 +64,10 @@ def route_queued_chats():
         with transaction.atomic():
             ticket = (
                 Ticket.objects.select_for_update()
-                .filter(
-                    pk=ticket_id,
-                    channel=Ticket.Channel.CHAT,
-                    assignee__isnull=True,
-                )
-                .exclude(status__in=Ticket.FINISHED_STATUSES)
+                .filter(pk=ticket_id)
+                .chat()
+                .unassigned()
+                .unfinished()
                 .first()
             )
             if ticket is None:

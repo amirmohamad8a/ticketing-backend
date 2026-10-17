@@ -7,6 +7,7 @@ from drf_spectacular.utils import (
 )
 
 from core.serializers import DownloadLinkSerializer
+from tickets.exceptions import TicketAlreadyAssigned, TicketAlreadyRated, TicketNotResolved
 from tickets.serializers import (
     AttachmentSerializer,
     CommentSerializer,
@@ -22,13 +23,20 @@ TAGS = ["Tickets"]
 COMMENT_ID = OpenApiParameter("comment_id", int, OpenApiParameter.PATH)
 MULTIPART_ATTACHMENT = {"multipart/form-data": AttachmentSerializer}
 
+
+def _describe_codes(*exceptions):
+    return ", ".join(f"`{exception.default_code}`" for exception in exceptions)
+
+
 ALREADY_ASSIGNED = OpenApiResponse(
-    description="The ticket is assigned to someone else (`ticket_already_assigned`)."
+    description=(
+        f"The ticket is assigned to someone else ({_describe_codes(TicketAlreadyAssigned)})."
+    )
 )
 RATING_CONFLICT = OpenApiResponse(
     description=(
         "The ticket is not resolved yet or was already rated "
-        "(`ticket_not_resolved`, `ticket_already_rated`)."
+        f"({_describe_codes(TicketNotResolved, TicketAlreadyRated)})."
     )
 )
 

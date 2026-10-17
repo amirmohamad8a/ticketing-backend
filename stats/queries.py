@@ -6,8 +6,8 @@ from django.utils import timezone
 
 from accounts.models import User
 from accounts.permissions import STAFF_ROLES
-from realtime.presence import OPEN_CHAT_FILTER
 from tickets.models import Ticket, TicketRating
+from tickets.selectors import annotate_open_chats
 
 
 def _bounds(date_from, date_to):
@@ -28,19 +28,13 @@ def _seconds(value):
 
 
 def queue_size():
-    return (
-        Ticket.objects.filter(assignee__isnull=True)
-        .exclude(status__in=Ticket.FINISHED_STATUSES)
-        .count()
-    )
+    return Ticket.objects.unassigned().unfinished().count()
 
 
 def _open_chats_per_agent():
-    agents = (
+    agents = annotate_open_chats(
         User.objects.filter(is_active=True, role__in=STAFF_ROLES)
-        .annotate(open_chats=Count("assigned_tickets", filter=OPEN_CHAT_FILTER))
-        .order_by("first_name", "last_name", "username", "id")
-    )
+    ).order_by("first_name", "last_name", "username", "id")
     return [
         {
             "id": agent.pk,

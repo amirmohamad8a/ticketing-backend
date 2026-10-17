@@ -10,12 +10,30 @@ from realtime.access import can_join_ticket
 from realtime.events import publish_typing
 from realtime.groups import AGENTS_QUEUE_GROUP, ticket_group, user_group
 from realtime.limits import MessageRateLimiter, TypingThrottle
+from realtime.protocol import (
+    CLIENT_JOIN,
+    CLIENT_LEAVE,
+    CLIENT_PING,
+    CLIENT_TYPING,
+    CLOSE_FORBIDDEN,
+    CLOSE_MESSAGE_TOO_BIG,
+    CLOSE_RATE_LIMITED,
+    CLOSE_UNAUTHENTICATED,
+    CLOSE_UNSUPPORTED_DATA,
+    ERROR_INVALID_JSON,
+    ERROR_INVALID_MESSAGE,
+    ERROR_INVALID_TICKET_ID,
+    ERROR_NOT_FOUND,
+    ERROR_NOT_JOINED,
+    ERROR_TOO_MANY_TICKETS,
+    ERROR_UNKNOWN_TYPE,
+    EVENT_ERROR,
+    EVENT_JOINED,
+    EVENT_LEFT,
+    EVENT_PONG,
+)
+from tickets.models import SenderType
 
-CLOSE_UNSUPPORTED_DATA = 1003
-CLOSE_MESSAGE_TOO_BIG = 1009
-CLOSE_UNAUTHENTICATED = 4401
-CLOSE_FORBIDDEN = 4403
-CLOSE_RATE_LIMITED = 4429
 MAX_JOINED_TICKETS = 50
 MAX_ID = 2**63 - 1
 SUPPORT_NAME = "Support"
@@ -58,11 +76,11 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         self.is_staff = self.user is not None and self.user.role in STAFF_ROLES
         if self.user is not None:
             self.identity = f"user:{self.user.pk}"
-            self.sender_type = "agent" if self.is_staff else "customer"
+            self.sender_type = SenderType.AGENT if self.is_staff else SenderType.CUSTOMER
             self.sender_name = _display_name(self.user, self.is_staff)
         else:
             self.identity = f"visitor:{self.visitor.pk}"
-            self.sender_type = "visitor"
+            self.sender_type = SenderType.VISITOR
             self.sender_name = self.visitor.name
         self.limiter = MessageRateLimiter(
             settings.WS_RATE_LIMIT_MESSAGES, settings.WS_RATE_LIMIT_WINDOW_SECONDS
@@ -105,22 +123,22 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         try:
             content = json.loads(text_data)
         except (ValueError, RecursionError):
-            await self._send_error("invalid_json")
+            await self._send_error(ERROR_INVALID_JSON)
             return
         if not isinstance(content, dict):
-            await self._send_error("invalid_message")
+            await self._send_error(ERROR_INVALID_MESSAGE)
             return
         message_type = content.get("type")
-        if message_type == "ping":
-            await self._send({"type": "pong"})
-        elif message_type == "join":
+        if message_type == CLIENT_PING:
+            await self._send({"type": EVENT_PONG})
+        elif message_type == CLIENT_JOIN:
             await self._join(content.get("ticket_id"))
-        elif message_type == "leave":
+        elif message_type == CLIENT_LEAVE:
             await self._leave(content.get("ticket_id"))
-        elif message_type == "typing":
+        elif message_type == CLIENT_TYPING:
             await self._typing(content.get("ticket_id"), content.get("is_typing"))
         else:
-            await self._send_error("unknown_type")
+            await self._send_error(ERROR_UNKNOWN_TYPE)
 
     async def realtime_event(self, event):
         if self.is_staff:
@@ -140,24 +158,24 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
 
     async def _join(self, ticket_id):
         if not _is_valid_id(ticket_id):
-            await self._send_error("invalid_ticket_id")
+            await self._send_error(ERROR_INVALID_TICKET_ID)
             return
         if ticket_id in self.ticket_ids:
-            await self._send({"type": "joined", "ticket_id": ticket_id})
+            await self._send({"type": EVENT_JOINED, "ticket_id": ticket_id})
             return
         if len(self.ticket_ids) >= MAX_JOINED_TICKETS:
-            await self._send_error("too_many_tickets", ticket_id)
+            await self._send_error(ERROR_TOO_MANY_TICKETS, ticket_id)
             return
         if not await can_join_ticket(self.user, self.visitor, ticket_id):
-            await self._send_error("not_found", ticket_id)
+            await self._send_error(ERROR_NOT_FOUND, ticket_id)
             return
         await self.channel_layer.group_add(ticket_group(ticket_id), self.channel_name)
         self.ticket_ids.add(ticket_id)
-        await self._send({"type": "joined", "ticket_id": ticket_id})
+        await self._send({"type": EVENT_JOINED, "ticket_id": ticket_id})
 
     async def _leave(self, ticket_id):
         if not _is_valid_id(ticket_id):
-            await self._send_error("invalid_ticket_id")
+            await self._send_error(ERROR_INVALID_TICKET_ID)
             return
         if ticket_id in self.ticket_ids:
             if self.typing.is_typing(ticket_id):
@@ -165,17 +183,17 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
             self.typing.clear(ticket_id)
             await self.channel_layer.group_discard(ticket_group(ticket_id), self.channel_name)
             self.ticket_ids.discard(ticket_id)
-        await self._send({"type": "left", "ticket_id": ticket_id})
+        await self._send({"type": EVENT_LEFT, "ticket_id": ticket_id})
 
     async def _typing(self, ticket_id, is_typing):
         if not _is_valid_id(ticket_id):
-            await self._send_error("invalid_ticket_id")
+            await self._send_error(ERROR_INVALID_TICKET_ID)
             return
         if not isinstance(is_typing, bool):
-            await self._send_error("invalid_message", ticket_id)
+            await self._send_error(ERROR_INVALID_MESSAGE, ticket_id)
             return
         if ticket_id not in self.ticket_ids:
-            await self._send_error("not_joined", ticket_id)
+            await self._send_error(ERROR_NOT_JOINED, ticket_id)
             return
         if self.typing.allow(ticket_id, is_typing):
             await self._relay_typing(ticket_id, is_typing)
@@ -189,7 +207,7 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
     async def _send_error(self, code, ticket_id=None):
-        payload = {"type": "error", "code": code}
+        payload = {"type": EVENT_ERROR, "code": code}
         if ticket_id is not None:
             payload["ticket_id"] = ticket_id
         await self._send(payload)

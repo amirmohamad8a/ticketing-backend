@@ -1,12 +1,36 @@
-from realtime.events import publish
+from enum import StrEnum
+
+from realtime.events import TICKET_EVENT_TYPE, publish
 from tickets.models import TicketEvent
 
-TICKET_EVENT_TYPE = "ticket.event"
-TAG_FIELD = "tag"
-CONTACT_FIELD = "contact"
-DELETED_FIELD = "deleted"
-RESTORED_FIELD = "restored"
-STAFF_ONLY_FIELDS = frozenset({"assignee", TAG_FIELD, CONTACT_FIELD, DELETED_FIELD, RESTORED_FIELD})
+
+class TicketEventField(StrEnum):
+    STATUS = "status"
+    ASSIGNEE = "assignee"
+    PRIORITY = "priority"
+    TITLE = "title"
+    DESCRIPTION = "description"
+    TAG = "tag"
+    CONTACT = "contact"
+    DELETED = "deleted"
+    RESTORED = "restored"
+    CHANNEL = "channel"
+    CREATED = "created"
+
+
+TAG_FIELD = TicketEventField.TAG
+CONTACT_FIELD = TicketEventField.CONTACT
+DELETED_FIELD = TicketEventField.DELETED
+RESTORED_FIELD = TicketEventField.RESTORED
+STAFF_ONLY_EVENT_FIELDS = frozenset(
+    {
+        TicketEventField.ASSIGNEE,
+        TicketEventField.TAG,
+        TicketEventField.CONTACT,
+        TicketEventField.DELETED,
+        TicketEventField.RESTORED,
+    }
+)
 
 
 def tag_changes(old_tags, new_tags):
@@ -34,6 +58,6 @@ def record_event(ticket, actor, field_changed, old_value, new_value):
             "old_value": old_value,
             "new_value": new_value,
         },
-        staff_only=field_changed in STAFF_ONLY_FIELDS,
+        staff_only=field_changed in STAFF_ONLY_EVENT_FIELDS,
     )
     return event
