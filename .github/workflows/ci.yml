@@ -82,6 +82,7 @@ jobs:
           black --check .
           isort --check-only .
           ruff check .
+          lint-imports
 
       - name: Check for missing migrations
         run: python manage.py makemigrations --check --dry-run

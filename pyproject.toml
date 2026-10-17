@@ -62,3 +62,115 @@ omit = [
 show_missing = true
 skip_covered = true
 fail_under = 92
+
+# The contracts describe the intended layering. Test modules are ignored by
+# wildcard because they intentionally build cross-app fixtures. The remaining
+# explicit entries are the current production violations; later refactor
+# phases shrink this list.
+[tool.importlinter]
+root_packages = [
+    "accounts",
+    "audit",
+    "chat",
+    "config",
+    "core",
+    "realtime",
+    "stats",
+    "tickets",
+]
+
+[[tool.importlinter.contracts]]
+name = "core imports no other app"
+type = "forbidden"
+source_modules = ["core"]
+forbidden_modules = ["accounts", "tickets", "chat", "realtime", "stats", "audit"]
+ignore_imports = [
+    "core.tests.** -> **",
+    "core.demo -> accounts.models",
+    "core.demo -> chat.conversations",
+    "core.demo -> chat.models",
+    "core.demo -> chat.offline",
+    "core.demo -> tickets.events",
+    "core.demo -> tickets.models",
+    "core.metrics -> stats.queries",
+    "core.orphans -> accounts.models",
+    "core.orphans -> tickets.models",
+]
+
+[[tool.importlinter.contracts]]
+name = "accounts (except models) imports no higher app"
+type = "forbidden"
+source_modules = ["accounts"]
+forbidden_modules = ["tickets", "chat", "realtime", "stats", "audit", "core.demo"]
+ignore_imports = [
+    "accounts.tests.** -> **",
+    "accounts.admin -> realtime.events",
+    "accounts.admin -> tickets.assignment",
+    "accounts.serializers -> realtime.events",
+    "accounts.serializers -> tickets.assignment",
+    "accounts.views -> realtime.events",
+    "accounts.views -> tickets.permissions",
+]
+
+[[tool.importlinter.contracts]]
+name = "tickets imports no higher app except chat models"
+type = "forbidden"
+source_modules = ["tickets"]
+forbidden_modules = ["chat", "realtime", "stats", "audit", "core.demo"]
+ignore_imports = [
+    "tickets.tests.** -> **",
+    "tickets.serializers -> chat.models",
+    "tickets.assignment -> chat.assignment",
+    "tickets.events -> realtime.events",
+    "tickets.messages -> realtime.events",
+]
+
+[[tool.importlinter.contracts]]
+name = "chat imports no higher app"
+type = "forbidden"
+source_modules = ["chat"]
+forbidden_modules = ["realtime", "stats", "audit", "core.demo"]
+ignore_imports = [
+    "chat.tests.** -> **",
+    "chat.assignment -> realtime.presence",
+    "chat.assignment -> tickets.assignment",
+    "chat.availability -> realtime.presence",
+    "chat.conversations -> realtime.presence",
+    "chat.offline -> realtime.events",
+    "chat.offline -> realtime.presence",
+    "chat.offline -> tickets.events",
+    "chat.offline -> tickets.messages",
+    "chat.widget.schema -> realtime.serializers",
+    "chat.widget.schema -> tickets.serializers",
+    "chat.widget.serializers -> accounts.serializers",
+    "chat.widget.serializers -> tickets.serializers",
+    "chat.widget.views -> realtime.tickets",
+    "chat.contact -> tickets.events",
+    "chat.conversations -> tickets.events",
+    "chat.conversations -> tickets.messages",
+    "chat.conversations -> tickets.lifecycle",
+    "chat.widget.views -> tickets.messages",
+    "chat.widget.views -> tickets.serializers",
+    "chat.widget.views -> tickets.lifecycle",
+]
+
+[[tool.importlinter.contracts]]
+name = "realtime is a leaf"
+type = "forbidden"
+source_modules = ["realtime"]
+forbidden_modules = ["stats", "audit", "core.demo"]
+ignore_imports = [
+    "realtime.tests.** -> **",
+    "realtime.consumers -> core.metrics",
+    "realtime.presence_consumer -> core.metrics",
+]
+
+[[tool.importlinter.contracts]]
+name = "stats and audit are leaves"
+type = "forbidden"
+source_modules = ["stats", "audit"]
+forbidden_modules = ["core.demo"]
+ignore_imports = [
+    "stats.tests.** -> **",
+    "audit.tests.** -> **",
+]
