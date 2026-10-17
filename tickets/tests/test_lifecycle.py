@@ -185,11 +185,21 @@ class ReopenServiceTests(TestCase):
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, Ticket.Status.IN_PROGRESS)
 
+    def test_a_waiting_ticket_is_moved_to_in_progress(self):
+        ticket = TicketFactory(status=Ticket.Status.WAITING_ON_CUSTOMER)
+        self.assertTrue(reopen_on_customer_reply(ticket.pk))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, Ticket.Status.IN_PROGRESS)
+        event = ticket.events.get()
+        self.assertEqual(
+            (event.field_changed, event.old_value, event.new_value),
+            ("status", "waiting_on_customer", "in_progress"),
+        )
+
     def test_unfinished_tickets_are_left_alone(self):
         for status in (
             Ticket.Status.OPEN,
             Ticket.Status.IN_PROGRESS,
-            Ticket.Status.WAITING_ON_CUSTOMER,
         ):
             with self.subTest(status=status):
                 ticket = TicketFactory(status=status)
@@ -244,13 +254,22 @@ class ReopenOnReplyApiTests(TestCase):
         for status in (
             Ticket.Status.OPEN,
             Ticket.Status.IN_PROGRESS,
-            Ticket.Status.WAITING_ON_CUSTOMER,
         ):
             with self.subTest(status=status):
                 ticket = TicketFactory(customer=self.customer, status=status)
                 self.assertEqual(self._reply(self.owner, ticket).status_code, 201)
                 self.assertEqual(self._stored(ticket).status, status)
                 self.assertFalse(ticket.events.exists())
+
+    def test_a_customer_reply_moves_a_waiting_ticket_to_in_progress(self):
+        ticket = TicketFactory(customer=self.customer, status=Ticket.Status.WAITING_ON_CUSTOMER)
+        response = self._reply(self.owner, ticket)
+        self.assertEqual(response.status_code, 201)
+        stored = self._stored(ticket)
+        self.assertEqual(stored.status, Ticket.Status.IN_PROGRESS)
+        event = ticket.events.get()
+        self.assertEqual((event.old_value, event.new_value), ("waiting_on_customer", "in_progress"))
+        self.assertEqual(event.actor, self.customer)
 
     def test_a_staff_reply_does_not_reopen(self):
         ticket = _resolved(1, customer=self.customer)

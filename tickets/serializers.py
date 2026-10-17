@@ -14,6 +14,12 @@ from tickets.models import Attachment, Comment, Ticket, TicketEvent, TicketRatin
 from tickets.validators import MAX_BODY_LENGTH, MAX_TICKET_TAGS
 
 STAFF_ONLY_RESPONSE_FIELDS = frozenset({"tags", "first_response_due_at", "visitor", "site"})
+AUDITED_TEXT_FIELDS = ("priority", "title", "description")
+MAX_EVENT_VALUE_LENGTH = 255
+
+
+def _event_value(value):
+    return str(value)[:MAX_EVENT_VALUE_LENGTH]
 
 
 class TicketVisitorSerializer(serializers.ModelSerializer):
@@ -119,6 +125,7 @@ class TicketSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         actor = self._get_actor()
         validated_data.pop("status", None)
+        assignee = validated_data.get("assignee")
 
         with transaction.atomic():
             ticket = super().create(validated_data)
@@ -129,6 +136,14 @@ class TicketSerializer(serializers.ModelSerializer):
                 old_value="",
                 new_value=ticket.status,
             )
+            if assignee is not None:
+                record_event(
+                    ticket=ticket,
+                    actor=actor,
+                    field_changed="assignee",
+                    old_value="",
+                    new_value=assignee.username,
+                )
             self._record_changes(ticket, actor, tag_changes([], ticket.tags.all()))
 
         return ticket
@@ -150,6 +165,15 @@ class TicketSerializer(serializers.ModelSerializer):
             old_assignee = instance.assignee.username if instance.assignee else ""
             new_assignee = validated_data["assignee"].username if validated_data["assignee"] else ""
             changes.append(("assignee", old_assignee, new_assignee))
+        for field in AUDITED_TEXT_FIELDS:
+            if field in validated_data and validated_data[field] != getattr(instance, field):
+                changes.append(
+                    (
+                        field,
+                        _event_value(getattr(instance, field)),
+                        _event_value(validated_data[field]),
+                    )
+                )
         if tags is not None:
             changes.extend(tag_changes(instance.tags.all(), tags))
 

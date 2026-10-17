@@ -2,7 +2,7 @@ import logging
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
@@ -90,7 +90,15 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        return User.objects.create_user(role=User.Role.CUSTOMER, **validated_data)
+        try:
+            with transaction.atomic():
+                return User.objects.create_user(role=User.Role.CUSTOMER, **validated_data)
+        except IntegrityError:
+            if User.objects.filter(username__iexact=validated_data.get("username", "")).exists():
+                raise serializers.ValidationError(
+                    {"username": _("A user with that username already exists.")}
+                )
+            raise
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -151,7 +159,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     def _delete_old_avatar(storage, name):
         try:
             storage.delete(name)
-        except OSError:
+        except Exception:
             logger.warning(
                 "Could not delete a replaced avatar file",
                 extra={"avatar_name": name},
@@ -250,15 +258,22 @@ class UserCreateSerializer(ActorMixin, RegisterSerializer):
     def create(self, validated_data):
         actor = self._get_actor()
 
-        with transaction.atomic():
-            user = User.objects.create_user(**validated_data)
-            record_user_event(
-                user=user,
-                actor=actor,
-                field_changed="created",
-                old_value="",
-                new_value=user.role,
-            )
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(**validated_data)
+                record_user_event(
+                    user=user,
+                    actor=actor,
+                    field_changed="created",
+                    old_value="",
+                    new_value=user.role,
+                )
+        except IntegrityError:
+            if User.objects.filter(username__iexact=validated_data.get("username", "")).exists():
+                raise serializers.ValidationError(
+                    {"username": _("A user with that username already exists.")}
+                )
+            raise
 
         return user
 

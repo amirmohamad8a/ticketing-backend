@@ -1,13 +1,14 @@
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from chat.retention import count_stale_visitors, purge_stale_visitors
+from chat.retention import count_redactable_visitors, redact_stale_visitors
 
 
 class Command(BaseCommand):
     help = (
-        "Delete visitors who have no tickets and have not been seen for the retention period "
-        "(VISITOR_RETENTION_DAYS). Safe to run more than once."
+        "Clear the name, phone and email of visitors whose conversations are all finished and "
+        "who have not been seen for the retention period (VISITOR_RETENTION_DAYS). The visitor "
+        "rows are kept, only the contact details are removed. Safe to run more than once."
     )
 
     def add_arguments(self, parser):
@@ -20,7 +21,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Only count the visitors that would be deleted.",
+            help="Only count the visitors whose contact details would be cleared.",
         )
 
     def handle(self, *args, **options):
@@ -30,17 +31,17 @@ class Command(BaseCommand):
         effective_days = settings.VISITOR_RETENTION_DAYS if days is None else days
 
         if options["dry_run"]:
-            total = count_stale_visitors(days)
+            total = count_redactable_visitors(days)
             self.stdout.write(
-                f"{total} visitor(s) without tickets, not seen for {effective_days} days, "
-                "would be deleted."
+                f"{total} visitor(s) with finished conversations, not seen for "
+                f"{effective_days} days, would have their contact details cleared."
             )
             return
 
-        deleted = purge_stale_visitors(days)
+        redacted = redact_stale_visitors(days)
         self.stdout.write(
             self.style.SUCCESS(
-                f"Deleted {deleted} visitor(s) without tickets, not seen for "
-                f"{effective_days} days."
+                f"Cleared the contact details of {redacted} visitor(s) with finished "
+                f"conversations, not seen for {effective_days} days."
             )
         )

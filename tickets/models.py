@@ -142,6 +142,19 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
         indexes = [
             GinIndex(build_search_vector(*TICKET_SEARCH_FIELDS), name="ticket_search_gin"),
             models.Index(fields=["-created_at", "-id"], name="ticket_created_id_desc_idx"),
+            models.Index(
+                fields=["channel", "assignee", "status"],
+                name="ticket_chat_unfinished_idx",
+                condition=models.Q(is_deleted=False) & ~models.Q(status__in=["resolved", "closed"]),
+            ),
+            models.Index(
+                fields=["assignee", "status"],
+                name="ticket_unassigned_unfin_idx",
+                condition=(
+                    models.Q(assignee__isnull=True, is_deleted=False)
+                    & ~models.Q(status__in=["resolved", "closed"])
+                ),
+            ),
         ]
 
     def clean(self):

@@ -3,11 +3,11 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from chat.models import Visitor
-from tickets.models import Comment, Ticket
+from tickets.models import Ticket
 
 logger = logging.getLogger(__name__)
 
@@ -20,41 +20,46 @@ def retention_cutoff(days=None, now=None):
     return now - timedelta(days=days)
 
 
-def stale_visitors(cutoff):
-    return Visitor.objects.filter(last_seen_at__lt=cutoff).filter(
-        ~Exists(Ticket.all_objects.filter(visitor=OuterRef("pk"))),
-        ~Exists(Comment.objects.filter(visitor=OuterRef("pk"))),
+def redactable_visitors(cutoff):
+    has_unfinished_ticket = Exists(
+        Ticket.objects.filter(visitor=OuterRef("pk")).exclude(status__in=Ticket.FINISHED_STATUSES)
+    )
+    return (
+        Visitor.objects.filter(last_seen_at__lt=cutoff)
+        .annotate(has_unfinished_ticket=has_unfinished_ticket)
+        .filter(has_unfinished_ticket=False)
+        .exclude(Q(name="", phone="", email=""))
     )
 
 
-def count_stale_visitors(days=None, now=None):
-    return stale_visitors(retention_cutoff(days, now)).count()
+def count_redactable_visitors(days=None, now=None):
+    return redactable_visitors(retention_cutoff(days, now)).count()
 
 
-def _delete_batch(cutoff, batch_size):
+def _redact_batch(cutoff, batch_size):
     with transaction.atomic():
         ids = list(
-            stale_visitors(cutoff)
+            redactable_visitors(cutoff)
             .select_for_update(skip_locked=True, of=("self",))
             .order_by("pk")
             .values_list("pk", flat=True)[:batch_size]
         )
         if not ids:
             return 0
-        Visitor.objects.filter(pk__in=ids).delete()
+        Visitor.objects.filter(pk__in=ids).update(name="", phone="", email="")
     return len(ids)
 
 
-def purge_stale_visitors(days=None, now=None, batch_size=BATCH_SIZE):
+def redact_stale_visitors(days=None, now=None, batch_size=BATCH_SIZE):
     cutoff = retention_cutoff(days, now)
-    deleted = 0
+    redacted = 0
     while True:
-        removed = _delete_batch(cutoff, batch_size)
-        deleted += removed
+        removed = _redact_batch(cutoff, batch_size)
+        redacted += removed
         if removed < batch_size:
             break
     logger.info(
         "Visitor retention finished",
-        extra={"deleted": deleted, "cutoff": cutoff.isoformat()},
+        extra={"redacted": redacted, "cutoff": cutoff.isoformat()},
     )
-    return deleted
+    return redacted

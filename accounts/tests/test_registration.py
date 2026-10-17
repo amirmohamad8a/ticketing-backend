@@ -1,8 +1,11 @@
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 
+from rest_framework import serializers
 from rest_framework.test import APIClient
 
 from accounts.models import User
+from accounts.serializers import RegisterSerializer
 from core.tests.factories import UserFactory
 
 URL = "/api/auth/register/"
@@ -233,3 +236,26 @@ class RegistrationPhoneTests(TestCase):
         for phone in ("09123456789", "+989123456789", "۰۹۱۲۳۴۵۶۷۸۹"):
             with self.subTest(phone=phone):
                 self._assert_rejected(self._register(phone=phone), expected_users=1)
+
+
+class RegistrationUsernameRaceTests(TestCase):
+    def test_the_database_rejects_case_insensitive_duplicate_usernames(self):
+        User.objects.create_user(username="Ali", password=PASSWORD)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                User.objects.create_user(username="ali", password=PASSWORD)
+
+    def test_a_lowercase_collision_is_mapped_to_the_username_field_error(self):
+        User.objects.create_user(username="Ali", password=PASSWORD)
+        serializer = RegisterSerializer()
+        with self.assertRaises(serializers.ValidationError) as caught:
+            serializer.create(
+                {
+                    "username": "ali",
+                    "password": PASSWORD,
+                    "first_name": "",
+                    "last_name": "",
+                    "phone": None,
+                }
+            )
+        self.assertIn("username", caught.exception.detail)

@@ -100,7 +100,12 @@ comments_schema = _stack(
     extend_schema(
         methods=["GET"],
         tags=TAGS,
+        deprecated=True,
         filters=False,
+        description=(
+            "Deprecated: use `GET /api/tickets/{id}/messages/` instead. This endpoint is "
+            "capped at the newest messages and does not expose a cursor."
+        ),
         responses=CommentSerializer(many=True),
     ),
     extend_schema(

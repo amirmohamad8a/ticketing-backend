@@ -203,3 +203,35 @@ class WidgetAttachmentTests(TestCase):
         res = self.client.get(_download_url(att_id))
         self.assertEqual(res.status_code, 200)
         self.assertIn("url", res.data)
+
+
+class WidgetReplyReopenTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.site = SiteFactory(allowed_origins=["https://example.com"])
+        res = self.client.post(
+            CONVERSATIONS_URL,
+            {"site_key": self.site.key, "body": "Hello"},
+            HTTP_ORIGIN="https://example.com",
+        )
+        self.token = res.data["token"]
+        self.ticket_id = res.data["conversation"]["id"]
+        self.client.credentials(HTTP_X_VISITOR_TOKEN=self.token, HTTP_ORIGIN="https://example.com")
+
+    def _make_waiting(self):
+        Ticket.objects.filter(pk=self.ticket_id).update(status=Ticket.Status.WAITING_ON_CUSTOMER)
+
+    def test_a_visitor_message_moves_a_waiting_conversation_to_in_progress(self):
+        self._make_waiting()
+        res = self.client.post(_messages_url(self.ticket_id), {"body": "Still there?"})
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(Ticket.objects.get(pk=self.ticket_id).status, Ticket.Status.IN_PROGRESS)
+
+    def test_a_visitor_attachment_moves_a_waiting_conversation_to_in_progress(self):
+        self._make_waiting()
+        upload = SimpleUploadedFile("test.txt", b"hello", content_type="text/plain")
+        res = self.client.post(
+            _attachments_url(self.ticket_id), {"file": upload, "body": "See attached"}
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(Ticket.objects.get(pk=self.ticket_id).status, Ticket.Status.IN_PROGRESS)

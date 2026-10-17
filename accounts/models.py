@@ -5,6 +5,8 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models.functions import Lower
+from django.utils.translation import gettext_lazy as _
 
 from accounts.validators import validate_iranian_mobile
 from core.models import AppendOnlyModel
@@ -48,6 +50,13 @@ class User(AbstractUser):
         validators=[MinValueValidator(1), MaxValueValidator(MAX_CONCURRENT_CHATS_LIMIT)],
     )
     last_chat_assigned_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta:
+        verbose_name = _("user")
+        verbose_name_plural = _("users")
+        constraints = [
+            models.UniqueConstraint(Lower("username"), name="user_username_ci_unique"),
+        ]
 
     def __str__(self):
         return self.username

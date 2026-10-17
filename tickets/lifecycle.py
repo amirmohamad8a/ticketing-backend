@@ -52,11 +52,14 @@ def close_due_tickets(now=None):
     return closed
 
 
+REOPENABLE_STATUSES = (*Ticket.FINISHED_STATUSES, Ticket.Status.WAITING_ON_CUSTOMER)
+
+
 def reopen_on_customer_reply(ticket_id, request=None):
     with transaction.atomic():
         ticket = (
             Ticket.objects.select_for_update()
-            .filter(pk=ticket_id, status__in=Ticket.FINISHED_STATUSES)
+            .filter(pk=ticket_id, status__in=REOPENABLE_STATUSES)
             .first()
         )
         if ticket is None:

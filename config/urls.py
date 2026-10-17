@@ -1,10 +1,32 @@
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import include, path
+from django.utils.translation import gettext as _
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from accounts.views import TaggedTokenObtainPairView, TaggedTokenRefreshView
 from core.views import SignedDownloadView, health, metrics, ready
+
+
+def _error_response(status_code, code, message):
+    return JsonResponse(
+        {"error": {"code": code, "message": message, "details": None}},
+        status=status_code,
+    )
+
+
+def handler400(request, exception=None):
+    return _error_response(400, "bad_request", _("The request could not be processed."))
+
+
+def handler404(request, exception):
+    return _error_response(404, "not_found", _("Not found."))
+
+
+def handler500(request):
+    return _error_response(500, "server_error", _("An unexpected error occurred."))
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),

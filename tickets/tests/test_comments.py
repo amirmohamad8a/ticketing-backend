@@ -4,6 +4,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import User
+from tickets.messages import MESSAGES_PAGE_SIZE
 from tickets.models import Comment, Ticket
 from tickets.validators import MAX_BODY_LENGTH
 
@@ -165,3 +166,39 @@ class CommentCreationTests(TestCase):
         )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(response.data["body"]), MAX_BODY_LENGTH)
+
+
+class CommentListCapTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.customer = User.objects.create_user(
+            username="cap_cust", password="pass12345", role=User.Role.CUSTOMER
+        )
+        self.ticket = Ticket.objects.create(title="t", description="d", customer=self.customer)
+        for index in range(MESSAGES_PAGE_SIZE + 5):
+            Comment.objects.create(
+                ticket=self.ticket, author=self.customer, body=f"comment {index}"
+            )
+        _auth(self.client, self.customer)
+
+    def test_a_small_conversation_is_not_marked_truncated(self):
+        ticket = Ticket.objects.create(title="small", description="d", customer=self.customer)
+        Comment.objects.create(ticket=ticket, author=self.customer, body="only one")
+        response = self.client.get(f"/api/tickets/{ticket.id}/comments/")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("X-Results-Truncated", response.headers)
+
+    def test_a_long_conversation_is_capped_to_the_page_size(self):
+        response = self.client.get(f"/api/tickets/{self.ticket.id}/comments/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), MESSAGES_PAGE_SIZE)
+        self.assertEqual(response.headers["X-Results-Truncated"], "true")
+
+    def test_the_cap_keeps_the_newest_comments_in_order(self):
+        response = self.client.get(f"/api/tickets/{self.ticket.id}/comments/")
+        ids = [row["id"] for row in response.data]
+        self.assertEqual(ids, sorted(ids))
+        newest = Comment.objects.filter(ticket=self.ticket).order_by("-id").first()
+        oldest = Comment.objects.filter(ticket=self.ticket).order_by("id").first()
+        self.assertIn(newest.id, ids)
+        self.assertNotIn(oldest.id, ids)

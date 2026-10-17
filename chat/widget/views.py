@@ -60,6 +60,7 @@ from chat.widget.throttles import (
 )
 from core.downloads import build_download_link
 from realtime.tickets import issue_ticket
+from tickets.lifecycle import reopen_on_customer_reply
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
 from tickets.models import Attachment, TicketRating
 from tickets.ratings import rate_ticket
@@ -205,12 +206,15 @@ class MessageListCreateView(WidgetAPIView):
         serializer.is_valid(raise_exception=True)
         _ensure_open(ticket)
         data = serializer.validated_data
-        comment, created = post_message(
-            ticket,
-            data["body"],
-            visitor=visitor,
-            client_msg_id=data.get("client_msg_id") or None,
-        )
+        with transaction.atomic():
+            comment, created = post_message(
+                ticket,
+                data["body"],
+                visitor=visitor,
+                client_msg_id=data.get("client_msg_id") or None,
+            )
+            if created:
+                reopen_on_customer_reply(ticket.pk, request)
         body = WidgetMessageSerializer(comment, context={"request": request}).data
         return Response(body, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
@@ -285,6 +289,7 @@ class AttachmentCreateView(WidgetAPIView):
             )
             if created:
                 file_serializer.save(comment=comment)
+                reopen_on_customer_reply(ticket.pk, request)
         body = WidgetMessageSerializer(comment, context=context).data
         return Response(body, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 

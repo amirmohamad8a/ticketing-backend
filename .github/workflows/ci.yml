@@ -83,6 +83,9 @@ jobs:
           isort --check-only .
           ruff check .
 
+      - name: Check for missing migrations
+        run: python manage.py makemigrations --check --dry-run
+
       - name: Check API schema
         run: |
           python manage.py spectacular --file schema.yml --validate --fail-on-warn
@@ -124,7 +127,7 @@ jobs:
         run: pip-audit -r requirements-dev.txt --no-deps --disable-pip
 
   build-images:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
 
     steps:

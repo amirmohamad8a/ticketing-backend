@@ -4,7 +4,7 @@ import tempfile
 from django.contrib.admin.sites import site
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.db.models import ProtectedError
 from django.test import TestCase, override_settings
 
@@ -414,3 +414,26 @@ class AttachmentAdminRegistrationTests(TestCase):
         admin_instance = site._registry[Attachment]
         for field in ("ticket", "comment", "uploaded_by", "content_type", "size"):
             self.assertIn(field, admin_instance.list_display)
+
+
+class RecurringQueryIndexTests(TestCase):
+    EXPECTED = {"ticket_chat_unfinished_idx", "ticket_unassigned_unfin_idx"}
+
+    def test_the_indexes_are_declared_on_the_model(self):
+        names = {index.name for index in Ticket._meta.indexes}
+        self.assertTrue(self.EXPECTED.issubset(names))
+
+    def test_the_indexes_exist_in_the_database(self):
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(cursor, Ticket._meta.db_table)
+        self.assertTrue(self.EXPECTED.issubset(set(constraints)))
+
+    def test_the_indexes_are_partial(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT indexname, indexdef FROM pg_indexes WHERE tablename = %s",
+                [Ticket._meta.db_table],
+            )
+            definitions = dict(cursor.fetchall())
+        for name in self.EXPECTED:
+            self.assertIn("WHERE", definitions[name])

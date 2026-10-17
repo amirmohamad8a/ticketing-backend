@@ -121,7 +121,7 @@ class DeactivatedCurrentAssigneeTests(TestCase):
         response = self.client.patch(self.url, {"title": "Retitled"}, format="json")
         self.assertEqual(response.status_code, 200)
 
-    def test_put_resending_the_same_assignee_is_accepted_and_writes_no_event(self):
+    def test_put_resending_the_same_assignee_is_accepted_and_writes_no_assignee_event(self):
         response = self.client.put(
             self.url,
             {"title": "Retitled", "description": "d", "assignee": self.leaver.id},
@@ -130,7 +130,10 @@ class DeactivatedCurrentAssigneeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.assignee, self.leaver)
-        self.assertFalse(self._events().exists())
+        self.assertEqual(
+            set(self._events().values_list("field_changed", flat=True)),
+            {"title", "description"},
+        )
 
     def test_ticket_can_be_moved_to_an_active_agent(self):
         response = self.client.patch(self.url, {"assignee": self.agent.id}, format="json")

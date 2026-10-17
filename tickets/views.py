@@ -218,8 +218,13 @@ class TicketViewSet(viewsets.ModelViewSet):
             queryset = ticket.comments.select_related("author")
             if request.user.role == User.Role.CUSTOMER:
                 queryset = queryset.filter(is_internal=False)
-            serializer = CommentSerializer(queryset, many=True)
-            return Response(serializer.data)
+            latest = list(queryset.order_by("-id")[: MESSAGES_PAGE_SIZE + 1])
+            has_more = len(latest) > MESSAGES_PAGE_SIZE
+            rows = sorted(latest[:MESSAGES_PAGE_SIZE], key=lambda comment: comment.id)
+            response = Response(CommentSerializer(rows, many=True).data)
+            if has_more:
+                response["X-Results-Truncated"] = "true"
+            return response
 
         serializer = CommentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

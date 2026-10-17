@@ -1,5 +1,7 @@
 from django.contrib import admin
+from django.db import transaction
 
+from tickets.events import RESTORED_FIELD, record_event
 from tickets.models import (
     Attachment,
     CannedReply,
@@ -59,7 +61,18 @@ class TicketAdmin(admin.ModelAdmin):
 
     @admin.action(description="Restore selected tickets")
     def restore_selected(self, request, queryset):
-        restored = queryset.restore()
+        restored = 0
+        for ticket in queryset.filter(is_deleted=True):
+            with transaction.atomic():
+                ticket.restore()
+                record_event(
+                    ticket=ticket,
+                    actor=request.user,
+                    field_changed=RESTORED_FIELD,
+                    old_value="",
+                    new_value="",
+                )
+                restored += 1
         self.message_user(request, f"Restored {restored} ticket(s).")
 
 

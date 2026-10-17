@@ -1916,6 +1916,8 @@ paths:
   /api/tickets/{id}/comments/:
     get:
       operationId: tickets_comments_list
+      description: 'Deprecated: use `GET /api/tickets/{id}/messages/` instead. This
+        endpoint is capped at the newest messages and does not expose a cursor.'
       parameters:
       - in: path
         name: id
@@ -1927,6 +1929,7 @@ paths:
       - Tickets
       security:
       - jwtAuth: []
+      deprecated: true
       responses:
         '200':
           content:
