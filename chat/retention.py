@@ -66,7 +66,7 @@ def redact_stale_visitors(days=None, now=None, batch_size=BATCH_SIZE):
 
 
 def deletable_visitors(cutoff):
-    has_ticket = Exists(Ticket.objects.filter(visitor=OuterRef("pk")))
+    has_ticket = Exists(Ticket.all_objects.filter(visitor=OuterRef("pk")))
     return (
         Visitor.objects.filter(last_seen_at__lt=cutoff)
         .annotate(has_ticket=has_ticket)

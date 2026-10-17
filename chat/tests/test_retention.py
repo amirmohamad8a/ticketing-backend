@@ -132,6 +132,32 @@ class VisitorDeletionTests(TestCase):
         self.assertEqual(delete_stale_visitors(), 0)
         self.assertTrue(Visitor.objects.filter(pk=visitor.pk).exists())
 
+    def test_a_visitor_with_only_a_soft_deleted_ticket_is_kept(self):
+        visitor = VisitorFactory(last_seen_at=OLD)
+        _chat_ticket(visitor, Ticket.Status.CLOSED).delete()
+        self.assertEqual(count_deletable_visitors(), 0)
+        self.assertEqual(delete_stale_visitors(), 0)
+        self.assertTrue(Visitor.objects.filter(pk=visitor.pk).exists())
+
+    def test_a_soft_deleted_ticket_does_not_block_later_visitors_in_the_same_batch(self):
+        blocked = VisitorFactory(last_seen_at=OLD, name="Sara")
+        _chat_ticket(blocked, Ticket.Status.CLOSED).delete()
+        deletable = VisitorFactory(last_seen_at=OLD, name="Ali")
+        result = purge_stale_visitors(batch_size=10)
+        self.assertEqual(result, {"deleted": 1, "redacted": 1})
+        self.assertFalse(Visitor.objects.filter(pk=deletable.pk).exists())
+        self.assertTrue(Visitor.objects.filter(pk=blocked.pk).exists())
+
+    def test_a_soft_deleted_ticket_is_not_an_unfinished_conversation_for_redaction(self):
+        visitor = VisitorFactory(
+            last_seen_at=OLD, name="Sara", phone="09123456789", email="sara@example.com"
+        )
+        _chat_ticket(visitor, Ticket.Status.OPEN).delete()
+        self.assertEqual(redact_stale_visitors(), 1)
+        visitor.refresh_from_db()
+        self.assertEqual((visitor.name, visitor.phone, visitor.email), ("", "", ""))
+        self.assertTrue(Visitor.objects.filter(pk=visitor.pk).exists())
+
     def test_the_count_helper_matches_the_deletion(self):
         VisitorFactory(last_seen_at=OLD)
         self.assertEqual(count_deletable_visitors(), 1)
