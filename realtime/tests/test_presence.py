@@ -10,13 +10,14 @@ from chat import presence
 from config.asgi import application
 from core.tests.factories import AgentFactory, UserFactory
 from core.tickets import issue_ticket
+from tickets.participants import Participant
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.django_db(transaction=True)]
 
 
 async def test_presence_connect_and_heartbeat():
     agent = await sync_to_async(AgentFactory)()
-    ws_ticket = (await sync_to_async(issue_ticket)(user=agent))["ticket"]
+    ws_ticket = (await sync_to_async(issue_ticket)(Participant(user=agent)))["ticket"]
 
     communicator = WebsocketCommunicator(application, f"/ws/presence/?ticket={ws_ticket}")
     connected, _ = await communicator.connect()
@@ -34,7 +35,7 @@ async def test_presence_connect_and_heartbeat():
 
 async def test_presence_customer_rejected():
     customer = await sync_to_async(UserFactory)()
-    ws_ticket = (await sync_to_async(issue_ticket)(user=customer))["ticket"]
+    ws_ticket = (await sync_to_async(issue_ticket)(Participant(user=customer)))["ticket"]
 
     communicator = WebsocketCommunicator(application, f"/ws/presence/?ticket={ws_ticket}")
     connected, code = await communicator.connect()
@@ -44,7 +45,7 @@ async def test_presence_customer_rejected():
 
 async def test_presence_set_status():
     agent = await sync_to_async(AgentFactory)()
-    ws_ticket = (await sync_to_async(issue_ticket)(user=agent))["ticket"]
+    ws_ticket = (await sync_to_async(issue_ticket)(Participant(user=agent)))["ticket"]
 
     communicator = WebsocketCommunicator(application, f"/ws/presence/?ticket={ws_ticket}")
     await communicator.connect()
@@ -70,7 +71,7 @@ async def test_presence_expiry():
 
 async def test_presence_rejects_bad_messages():
     agent = await sync_to_async(AgentFactory)()
-    ws_ticket = (await sync_to_async(issue_ticket)(user=agent))["ticket"]
+    ws_ticket = (await sync_to_async(issue_ticket)(Participant(user=agent)))["ticket"]
     communicator = WebsocketCommunicator(application, f"/ws/presence/?ticket={ws_ticket}")
     await communicator.connect()
     await communicator.receive_json_from()
@@ -89,7 +90,7 @@ async def test_presence_rejects_bad_messages():
 
 async def test_presence_closes_on_a_binary_frame():
     agent = await sync_to_async(AgentFactory)()
-    ws_ticket = (await sync_to_async(issue_ticket)(user=agent))["ticket"]
+    ws_ticket = (await sync_to_async(issue_ticket)(Participant(user=agent)))["ticket"]
     communicator = WebsocketCommunicator(application, f"/ws/presence/?ticket={ws_ticket}")
     await communicator.connect()
     await communicator.receive_json_from()
@@ -102,7 +103,7 @@ async def test_presence_closes_on_a_binary_frame():
 
 async def test_presence_closes_on_an_oversized_frame():
     agent = await sync_to_async(AgentFactory)()
-    ws_ticket = (await sync_to_async(issue_ticket)(user=agent))["ticket"]
+    ws_ticket = (await sync_to_async(issue_ticket)(Participant(user=agent)))["ticket"]
     communicator = WebsocketCommunicator(application, f"/ws/presence/?ticket={ws_ticket}")
     await communicator.connect()
     await communicator.receive_json_from()
@@ -116,7 +117,7 @@ async def test_presence_closes_on_an_oversized_frame():
 @override_settings(WS_RATE_LIMIT_MESSAGES=1, WS_RATE_LIMIT_WINDOW_SECONDS=60)
 async def test_presence_closes_on_a_message_flood():
     agent = await sync_to_async(AgentFactory)()
-    ws_ticket = (await sync_to_async(issue_ticket)(user=agent))["ticket"]
+    ws_ticket = (await sync_to_async(issue_ticket)(Participant(user=agent)))["ticket"]
     communicator = WebsocketCommunicator(application, f"/ws/presence/?ticket={ws_ticket}")
     await communicator.connect()
     await communicator.receive_json_from()

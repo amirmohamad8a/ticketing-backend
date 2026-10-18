@@ -9,6 +9,7 @@ from core.tests.factories import AgentFactory, TicketFactory, VisitorFactory
 from tickets.events import record_event
 from tickets.messages import post_message
 from tickets.models import Ticket
+from tickets.participants import Participant
 
 
 class RecordingLayer:
@@ -47,7 +48,7 @@ class RealtimePayloadContractTests(TestCase):
         with self._capture() as get_layer:
             get_layer.return_value = layer
             with self.captureOnCommitCallbacks(execute=True):
-                comment, created = post_message(ticket, "Hello", author=agent)
+                comment, created = post_message(ticket, "Hello", Participant(agent))
 
         self.assertTrue(created)
         payload = _payload(
@@ -74,7 +75,9 @@ class RealtimePayloadContractTests(TestCase):
         with self._capture() as get_layer:
             get_layer.return_value = layer
             with self.captureOnCommitCallbacks(execute=True):
-                comment, _created = post_message(ticket, "Secret", author=agent, is_internal=True)
+                comment, _created = post_message(
+                    ticket, "Secret", Participant(agent), is_internal=True
+                )
 
         payload = layer.messages[0][1]["payload"]
         self.assertEqual(payload["id"], comment.pk)

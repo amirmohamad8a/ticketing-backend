@@ -9,6 +9,7 @@ from chat.visitors import start_visitor_session
 from tickets.events import TicketEventField, record_event
 from tickets.messages import post_customer_message
 from tickets.models import Ticket
+from tickets.participants import Participant
 
 TITLE_MAX_LENGTH = 100
 
@@ -52,7 +53,10 @@ def open_conversation(visitor, body, client_msg_id=None, request=None):
                 new_value=ticket.status,
             )
         comment, _posted = post_customer_message(
-            ticket, body, visitor=visitor, client_msg_id=client_msg_id
+            ticket,
+            body,
+            Participant(visitor=visitor),
+            client_msg_id=client_msg_id,
         )
         if created and route_new_chat(ticket) is None:
             _schedule_offline_conversion(ticket)

@@ -13,10 +13,13 @@ def _cache_key(token):
     return CACHE_PREFIX + hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def issue_ticket(user=None, visitor=None):
-    if (user is None) == (visitor is None):
-        raise ValueError("A ticket needs exactly one of user or visitor.")
-    payload = {"user_id": user.pk} if user is not None else {"visitor_id": visitor.pk}
+def issue_ticket(participant):
+    if participant is None:
+        raise ValueError("A ticket needs a participant.")
+    if participant.is_visitor:
+        payload = {"visitor_id": participant.visitor.pk}
+    else:
+        payload = {"user_id": participant.user.pk}
     token = secrets.token_urlsafe(32)
     ttl = settings.WS_TICKET_TTL_SECONDS
     cache.set(_cache_key(token), payload, timeout=ttl)

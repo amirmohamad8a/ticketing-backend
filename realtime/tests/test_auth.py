@@ -5,13 +5,14 @@ from channels.testing import WebsocketCommunicator
 from config.asgi import application
 from core.tests.factories import SiteFactory, UserFactory, VisitorFactory
 from core.tickets import issue_ticket
+from tickets.participants import Participant
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.django_db(transaction=True)]
 
 
 async def test_connect_with_valid_user_ticket():
     user = await sync_to_async(UserFactory)()
-    ticket = (await sync_to_async(issue_ticket)(user=user))["ticket"]
+    ticket = (await sync_to_async(issue_ticket)(Participant(user=user)))["ticket"]
     communicator = WebsocketCommunicator(application, f"/ws/?ticket={ticket}")
     connected, _ = await communicator.connect()
     assert connected
@@ -21,7 +22,7 @@ async def test_connect_with_valid_user_ticket():
 async def test_connect_with_valid_visitor_ticket():
     site = await sync_to_async(SiteFactory)(allowed_origins=["http://testserver"])
     visitor = await sync_to_async(VisitorFactory)(site=site)
-    ticket = (await sync_to_async(issue_ticket)(visitor=visitor))["ticket"]
+    ticket = (await sync_to_async(issue_ticket)(Participant(visitor=visitor)))["ticket"]
     communicator = WebsocketCommunicator(
         application, f"/ws/?ticket={ticket}", headers=[(b"origin", b"http://testserver")]
     )
@@ -33,7 +34,7 @@ async def test_connect_with_valid_visitor_ticket():
 async def test_connect_visitor_with_bad_origin():
     site = await sync_to_async(SiteFactory)(allowed_origins=["http://allowed.com"])
     visitor = await sync_to_async(VisitorFactory)(site=site)
-    ticket = (await sync_to_async(issue_ticket)(visitor=visitor))["ticket"]
+    ticket = (await sync_to_async(issue_ticket)(Participant(visitor=visitor)))["ticket"]
     communicator = WebsocketCommunicator(
         application, f"/ws/?ticket={ticket}", headers=[(b"origin", b"http://evil.com")]
     )

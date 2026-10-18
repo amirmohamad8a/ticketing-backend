@@ -15,6 +15,7 @@ from chat import presence
 from core.health import check_cache, run_checks
 from core.tests.factories import AgentFactory, UserFactory
 from core.tickets import issue_ticket, redeem_ticket
+from tickets.participants import Participant
 
 KEY_PREFIX = "ticketing-test"
 REQUIRED = os.environ.get("REQUIRE_REDIS") == "1"
@@ -88,7 +89,7 @@ class RedisBackedCacheTests(TestCase):
 
     def test_websocket_tickets_work_exactly_once(self):
         user = UserFactory()
-        token = issue_ticket(user=user)["ticket"]
+        token = issue_ticket(Participant(user=user))["ticket"]
         self.assertEqual(redeem_ticket(token), {"user_id": user.pk})
         self.assertIsNone(redeem_ticket(token))
 

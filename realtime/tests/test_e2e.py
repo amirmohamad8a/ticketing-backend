@@ -8,6 +8,7 @@ from chat.conversations import start_conversation
 from config.asgi import application
 from core.tests.factories import AgentFactory, SiteFactory
 from core.tickets import issue_ticket
+from tickets.participants import Participant
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.django_db(transaction=True)]
 
@@ -26,8 +27,8 @@ async def test_visitor_message_to_agent_reply_e2e():
 
     await assign_ticket()
 
-    visitor_ws_ticket = (await sync_to_async(issue_ticket)(visitor=visitor))["ticket"]
-    agent_ws_ticket = (await sync_to_async(issue_ticket)(user=agent))["ticket"]
+    visitor_ws_ticket = (await sync_to_async(issue_ticket)(Participant(visitor=visitor)))["ticket"]
+    agent_ws_ticket = (await sync_to_async(issue_ticket)(Participant(user=agent)))["ticket"]
 
     visitor_comm = WebsocketCommunicator(
         application, f"/ws/?ticket={visitor_ws_ticket}", headers=[(b"origin", b"http://testserver")]

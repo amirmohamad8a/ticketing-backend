@@ -10,6 +10,7 @@ from accounts.models import User
 from chat.models import Visitor
 from chat.widget.auth import origin_allowed_for_site
 from core.tickets import redeem_ticket
+from tickets.participants import Participant
 
 TICKET_PARAM = "ticket"
 
@@ -44,6 +45,7 @@ class TicketAuthMiddleware(BaseMiddleware):
         scope = dict(scope)
         scope["user"] = AnonymousUser()
         scope["visitor"] = None
+        scope["participant"] = None
         token = _query_param(scope, TICKET_PARAM)
         if token:
             payload = await sync_to_async(redeem_ticket)(token)
@@ -58,6 +60,7 @@ class TicketAuthMiddleware(BaseMiddleware):
             user = await _get_user(user_id)
             if user is not None:
                 scope["user"] = user
+                scope["participant"] = Participant(user=user)
         elif visitor_id is not None:
             visitor = await _get_visitor(visitor_id)
             if visitor is None:
@@ -65,3 +68,4 @@ class TicketAuthMiddleware(BaseMiddleware):
             origin = _header(scope, b"origin")
             if origin_allowed_for_site(origin, visitor.site):
                 scope["visitor"] = visitor
+                scope["participant"] = Participant(visitor=visitor)

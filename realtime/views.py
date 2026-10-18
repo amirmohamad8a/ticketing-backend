@@ -8,6 +8,7 @@ from chat.presence import online_agents
 from core.tickets import issue_ticket
 from realtime.schema import online_agents_schema, socket_ticket_schema
 from realtime.serializers import OnlineAgentSerializer
+from tickets.participants import Participant
 
 
 @socket_ticket_schema
@@ -17,7 +18,7 @@ class SocketTicketView(APIView):
     throttle_scope = "ws_ticket"
 
     def post(self, request):
-        return Response(issue_ticket(user=request.user))
+        return Response(issue_ticket(Participant(user=request.user)))
 
 
 @online_agents_schema

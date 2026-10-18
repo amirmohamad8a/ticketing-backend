@@ -14,6 +14,7 @@ from core.tests.factories import (
 )
 from tickets.messages import post_message
 from tickets.models import Ticket
+from tickets.participants import Participant
 
 SLA_MINUTES = {"low": 1440, "medium": 480, "high": 240, "urgent": 60}
 
@@ -27,19 +28,21 @@ class FirstResponseContractTests(TestCase):
     def test_first_response_at_is_set_once_by_the_first_public_staff_reply(self):
         self.assertIsNone(self.ticket.first_response_at)
 
-        internal, _ = post_message(self.ticket, "internal", author=self.agent, is_internal=True)
+        internal, _ = post_message(
+            self.ticket, "internal", Participant(self.agent), is_internal=True
+        )
         self.ticket.refresh_from_db()
         self.assertIsNone(self.ticket.first_response_at)
 
-        post_message(self.ticket, "customer", author=self.customer)
+        post_message(self.ticket, "customer", Participant(self.customer))
         self.ticket.refresh_from_db()
         self.assertIsNone(self.ticket.first_response_at)
 
-        first, _ = post_message(self.ticket, "first reply", author=self.agent)
+        first, _ = post_message(self.ticket, "first reply", Participant(self.agent))
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.first_response_at, first.created_at)
 
-        post_message(self.ticket, "second reply", author=self.agent)
+        post_message(self.ticket, "second reply", Participant(self.agent))
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.first_response_at, first.created_at)
 

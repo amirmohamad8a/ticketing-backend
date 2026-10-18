@@ -56,6 +56,7 @@ from core.downloads import build_download_link
 from core.tickets import issue_ticket
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_customer_message
 from tickets.models import Ticket, TicketRating
+from tickets.participants import Participant
 from tickets.ratings import rate_ticket
 from tickets.reads import mark_conversation_read, unread_count, visible_comments
 from tickets.selectors import visible_attachments
@@ -113,10 +114,9 @@ class ConversationCreateView(WidgetAPIView):
         serializer = ConversationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        visitor = request.auth if isinstance(request.auth, Visitor) else None
-        if visitor is not None:
+        if isinstance(request.auth, Visitor):
             _visitor, token, ticket, comment, created = continue_conversation(
-                visitor, data, request
+                request.auth, data, request
             )
         else:
             _visitor, token, ticket, comment, created = start_new_conversation(request, data)
@@ -140,7 +140,7 @@ class MessageListCreateView(WidgetAPIView):
         query.is_valid(raise_exception=True)
         after = query.validated_data["after"]
         queryset = (
-            visible_comments(ticket, visitor=visitor)
+            visible_comments(ticket, Participant(visitor=visitor))
             .select_related("author", "visitor")
             .prefetch_related("attachments")
         )
@@ -149,7 +149,7 @@ class MessageListCreateView(WidgetAPIView):
             "results": rows,
             "has_more": has_more,
             "agents_available": agents_available(),
-            "unread_count": unread_count(ticket, visitor=visitor),
+            "unread_count": unread_count(ticket, Participant(visitor=visitor)),
         }
         return Response(WidgetMessageListSerializer(payload, context={"request": request}).data)
 
@@ -163,7 +163,7 @@ class MessageListCreateView(WidgetAPIView):
         comment, created = post_customer_message(
             ticket,
             data["body"],
-            visitor=visitor,
+            Participant(visitor=visitor),
             client_msg_id=data.get("client_msg_id") or None,
         )
         body = WidgetMessageSerializer(comment, context={"request": request}).data
@@ -179,8 +179,8 @@ class ConversationReadView(WidgetAPIView):
         serializer.is_valid(raise_exception=True)
         state = mark_conversation_read(
             ticket,
+            Participant(visitor=visitor),
             comment_id=serializer.validated_data.get("last_read_comment_id"),
-            visitor=visitor,
         )
         return Response(ReadStateSerializer(state).data)
 
@@ -234,7 +234,7 @@ class AttachmentCreateView(WidgetAPIView):
         comment, created = post_customer_message(
             ticket,
             data["body"],
-            visitor=visitor,
+            Participant(visitor=visitor),
             client_msg_id=data.get("client_msg_id") or None,
             on_created=lambda message: file_serializer.save(comment=message),
         )
@@ -255,4 +255,4 @@ class WidgetAttachmentDownloadView(WidgetAPIView):
 @widget_socket_ticket_schema
 class WidgetSocketTicketView(WidgetAPIView):
     def post(self, request):
-        return Response(issue_ticket(visitor=request.auth))
+        return Response(issue_ticket(Participant(visitor=request.auth)))

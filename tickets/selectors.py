@@ -2,6 +2,7 @@ from django.db.models import Count, Q
 
 from accounts.models import User
 from tickets.models import Attachment, Ticket
+from tickets.participants import Participant
 
 
 def annotate_open_chats(queryset):
@@ -12,19 +13,17 @@ def annotate_open_chats(queryset):
     return queryset.annotate(open_chats=Count("assigned_tickets", filter=open_chat_filter))
 
 
-def comment_visibility_filter(user=None, visitor=None):
-    if (user is None) == (visitor is None):
-        raise ValueError("A reader needs exactly one of user or visitor.")
-    if visitor is not None or user.role == User.Role.CUSTOMER:
-        return Q(is_internal=False)
-    return Q()
+def comment_visibility_filter(participant: Participant):
+    if participant.sees_internal_notes:
+        return Q()
+    return Q(is_internal=False)
 
 
-def unread_comment_filter(user=None, visitor=None):
-    visibility = comment_visibility_filter(user, visitor)
-    if visitor is not None:
-        return visibility & ~Q(visitor=visitor)
-    return visibility & ~Q(author=user)
+def unread_comment_filter(participant: Participant):
+    visibility = comment_visibility_filter(participant)
+    if participant.is_visitor:
+        return visibility & ~Q(visitor=participant.visitor)
+    return visibility & ~Q(author=participant.user)
 
 
 def visible_attachments(viewer, queryset=None):

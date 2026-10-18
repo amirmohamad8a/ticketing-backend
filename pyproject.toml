@@ -106,6 +106,7 @@ forbidden_modules = ["chat", "demo", "realtime", "stats", "audit"]
 ignore_imports = [
     "tickets.tests.** -> **",
     "tickets.serializers -> chat.models",
+    "tickets.participants -> chat.models",
 ]
 
 [[tool.importlinter.contracts]]

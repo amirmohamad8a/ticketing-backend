@@ -8,6 +8,7 @@ from core.tests.factories import (
     VisitorFactory,
 )
 from tickets.models import Comment, ConversationRead, Ticket
+from tickets.participants import Participant
 from tickets.reads import annotate_unread, read_state, unread_count
 
 
@@ -68,12 +69,14 @@ class UnreadParityTests(TestCase):
     def test_read_state_and_annotate_unread_agree_for_every_user_reader(self):
         for reader in (self.customer, self.first_agent, self.second_agent):
             with self.subTest(role=reader.role, username=reader.username):
-                state = read_state(self.ticket, user=reader)
-                self.assertEqual(state["unread_count"], unread_count(self.ticket, user=reader))
+                state = read_state(self.ticket, Participant(reader))
+                self.assertEqual(
+                    state["unread_count"], unread_count(self.ticket, Participant(reader))
+                )
                 self.assertEqual(state["unread_count"], self._annotation(reader))
 
     def test_the_visitor_reader_uses_the_same_rule_as_the_widget(self):
-        state = read_state(self.ticket, visitor=self.visitor)
+        state = read_state(self.ticket, Participant(visitor=self.visitor))
         self.assertEqual(state["last_read_comment_id"], self.comments[1].pk)
         self.assertEqual(
             state["unread_count"],

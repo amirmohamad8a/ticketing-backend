@@ -20,6 +20,7 @@ from tickets.filters import TicketFilter
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_customer_message, post_message
 from tickets.models import Ticket, TicketRating
 from tickets.pagination import TicketCursorPagination
+from tickets.participants import Participant
 from tickets.permissions import (
     AdminOnlyDeleteAndRestore,
     CustomerFieldRestrictions,
@@ -147,8 +148,8 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         state = mark_conversation_read(
             ticket,
+            Participant.from_request(request),
             comment_id=serializer.validated_data.get("last_read_comment_id"),
-            user=request.user,
         )
         return Response(ReadStateSerializer(state).data)
 
@@ -172,7 +173,8 @@ class TicketViewSet(viewsets.ModelViewSet):
         query = MessageQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
         after = query.validated_data["after"]
-        queryset = visible_comments(ticket, user=request.user).select_related("author")
+        participant = Participant.from_request(request)
+        queryset = visible_comments(ticket, participant).select_related("author")
         rows, has_more = message_page(queryset, after, MESSAGES_PAGE_SIZE)
         payload = {
             "results": rows,
@@ -197,7 +199,7 @@ class TicketViewSet(viewsets.ModelViewSet):
 
         if request.method == "GET":
             queryset = ticket.comments.select_related("author")
-            if request.user.role == User.Role.CUSTOMER:
+            if not Participant.from_request(request).sees_internal_notes:
                 queryset = queryset.filter(is_internal=False)
             latest = list(queryset.order_by("-id")[: MESSAGES_PAGE_SIZE + 1])
             has_more = len(latest) > MESSAGES_PAGE_SIZE
@@ -211,12 +213,12 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         is_internal = data.get("is_internal", False)
-        is_customer = request.user.role == User.Role.CUSTOMER
-        if is_customer:
+        participant = Participant.from_request(request)
+        if participant.is_customer:
             comment, created = post_customer_message(
                 ticket,
                 data["body"],
-                actor=request.user,
+                participant,
                 is_internal=False,
                 client_msg_id=data.get("client_msg_id"),
             )
@@ -224,7 +226,7 @@ class TicketViewSet(viewsets.ModelViewSet):
             comment, created = post_message(
                 ticket,
                 data["body"],
-                author=request.user,
+                participant,
                 is_internal=is_internal,
                 client_msg_id=data.get("client_msg_id"),
             )

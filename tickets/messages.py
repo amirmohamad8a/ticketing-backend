@@ -8,6 +8,7 @@ from accounts.permissions import STAFF_ROLES
 from core.events import MESSAGE_EVENT_TYPE, publish
 from tickets.lifecycle import reopen_on_customer_reply
 from tickets.models import Comment, SenderType, Ticket
+from tickets.participants import Participant
 
 MESSAGES_PAGE_SIZE = 100
 
@@ -27,12 +28,12 @@ def message_page(queryset, after, page_size):
     return rows[:page_size], len(rows) > page_size
 
 
-def _find_existing(ticket, client_msg_id, author, visitor):
+def _find_existing(ticket, client_msg_id, participant):
     return Comment.objects.filter(
         ticket=ticket,
         client_msg_id=client_msg_id,
-        author=author,
-        visitor=visitor,
+        author=participant.user if participant is not None else None,
+        visitor=participant.visitor if participant is not None else None,
     ).first()
 
 
@@ -74,20 +75,21 @@ def _record_first_response(ticket, comment):
 def post_message(
     ticket,
     body,
-    author=None,
-    visitor=None,
+    participant: Participant | None = None,
     is_internal=False,
     client_msg_id=None,
     kind=Comment.Kind.MESSAGE,
 ):
-    if kind != Comment.Kind.SYSTEM and (author is None) == (visitor is None):
-        raise ValueError("A message needs exactly one of author or visitor.")
-    if visitor is not None:
+    if kind != Comment.Kind.SYSTEM and participant is None:
+        raise ValueError("A message needs a participant.")
+    if participant is not None and participant.is_visitor:
         is_internal = False
     client_msg_id = client_msg_id or None
+    author = participant.user if participant is not None else None
+    visitor = participant.visitor if participant is not None else None
 
     if client_msg_id:
-        existing = _find_existing(ticket, client_msg_id, author, visitor)
+        existing = _find_existing(ticket, client_msg_id, participant)
         if existing is not None:
             return existing, False
 
@@ -107,7 +109,7 @@ def post_message(
     except IntegrityError:
         if not client_msg_id:
             raise
-        existing = _find_existing(ticket, client_msg_id, author, visitor)
+        existing = _find_existing(ticket, client_msg_id, participant)
         if existing is not None:
             return existing, False
         if Comment.objects.filter(ticket=ticket, client_msg_id=client_msg_id).exists():
@@ -121,8 +123,7 @@ def post_message(
 def post_customer_message(
     ticket,
     body,
-    actor=None,
-    visitor=None,
+    participant: Participant,
     is_internal=False,
     client_msg_id=None,
     kind=Comment.Kind.MESSAGE,
@@ -132,8 +133,7 @@ def post_customer_message(
         comment, created = post_message(
             ticket,
             body,
-            author=actor,
-            visitor=visitor,
+            participant,
             is_internal=is_internal,
             client_msg_id=client_msg_id,
             kind=kind,
@@ -141,5 +141,5 @@ def post_customer_message(
         if created:
             if on_created is not None:
                 on_created(comment)
-            reopen_on_customer_reply(ticket.pk, actor=actor)
+            reopen_on_customer_reply(ticket.pk, actor=participant.actor)
     return comment, created

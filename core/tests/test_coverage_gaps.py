@@ -22,6 +22,7 @@ from core.tests.factories import (
 )
 from tickets.messages import post_message
 from tickets.models import Comment, Ticket
+from tickets.participants import Participant
 
 
 class RecordingLayer:
@@ -161,7 +162,7 @@ class MessageServiceCoverageTests(TestCase):
 
     def test_visitor_messages_are_never_internal(self):
         comment, _created = post_message(
-            self.ticket, "hello", visitor=self.visitor, is_internal=True
+            self.ticket, "hello", Participant(visitor=self.visitor), is_internal=True
         )
         self.assertFalse(comment.is_internal)
 
@@ -176,7 +177,7 @@ class MessageServiceCoverageTests(TestCase):
         with self.assertRaises(ValueError):
             post_message(self.ticket, "nobody")
         with self.assertRaises(ValueError):
-            post_message(self.ticket, "two", author=self.agent, visitor=self.visitor)
+            Participant(self.agent, self.visitor)
 
     def test_integrity_error_for_a_client_id_used_by_another_sender_is_a_validation_error(self):
         CommentFactory(
@@ -189,11 +190,11 @@ class MessageServiceCoverageTests(TestCase):
                 post_message(
                     self.ticket,
                     "hello",
-                    author=self.customer,
+                    Participant(self.customer),
                     client_msg_id="shared-id",
                 )
 
     def test_an_integrity_error_without_a_client_id_is_reraised(self):
         with patch("tickets.messages.Comment.objects.create", side_effect=IntegrityError):
             with self.assertRaises(IntegrityError):
-                post_message(self.ticket, "hello", author=self.agent)
+                post_message(self.ticket, "hello", Participant(self.agent))

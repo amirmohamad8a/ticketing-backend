@@ -35,6 +35,7 @@ from core.tests.factories import SiteFactory, TicketFactory, UserFactory, Visito
 from core.tickets import issue_ticket, redeem_ticket
 from realtime.limits import MessageRateLimiter, TypingThrottle
 from tickets.models import TicketEvent
+from tickets.participants import Participant
 from tickets.signals import delete_attachment_file
 from tickets.tasks import auto_close_resolved, report_orphan_files
 
@@ -229,13 +230,15 @@ class RealtimeTicketCoverageTests(TestCase):
 
     def test_a_ticket_needs_exactly_one_identity(self):
         with self.assertRaises(ValueError):
-            issue_ticket()
+            issue_ticket(None)
         with self.assertRaises(ValueError):
-            issue_ticket(user=UserFactory(), visitor=VisitorFactory())
+            Participant()
+        with self.assertRaises(ValueError):
+            Participant(user=UserFactory(), visitor=VisitorFactory())
 
     def test_a_ticket_can_only_be_redeemed_once(self):
         user = UserFactory()
-        token = issue_ticket(user=user)["ticket"]
+        token = issue_ticket(Participant(user=user))["ticket"]
         self.assertEqual(redeem_ticket(token), {"user_id": user.pk})
         self.assertIsNone(redeem_ticket(token))
 
@@ -243,7 +246,7 @@ class RealtimeTicketCoverageTests(TestCase):
         for token in ("", "short", "x" * 200, None, 12):
             with self.subTest(token=token):
                 self.assertIsNone(redeem_ticket(token))
-        token = issue_ticket(user=UserFactory())["ticket"]
+        token = issue_ticket(Participant(user=UserFactory()))["ticket"]
         with patch("core.tickets.cache.delete", return_value=False):
             self.assertIsNone(redeem_ticket(token))
 

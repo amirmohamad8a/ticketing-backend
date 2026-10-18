@@ -5,6 +5,7 @@ from channels.testing import WebsocketCommunicator
 from config.asgi import application
 from core.tests.factories import AgentFactory, TicketFactory, UserFactory
 from core.tickets import issue_ticket
+from tickets.participants import Participant
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.django_db(transaction=True)]
 
@@ -12,7 +13,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.django_db(transaction=True)]
 async def test_join_and_leave_ticket():
     user = await sync_to_async(UserFactory)()
     ticket = await sync_to_async(TicketFactory)(customer=user)
-    ws_ticket = (await sync_to_async(issue_ticket)(user=user))["ticket"]
+    ws_ticket = (await sync_to_async(issue_ticket)(Participant(user=user)))["ticket"]
 
     communicator = WebsocketCommunicator(application, f"/ws/?ticket={ws_ticket}")
     connected, _ = await communicator.connect()
@@ -31,7 +32,7 @@ async def test_join_and_leave_ticket():
 
 async def test_join_ticket_not_found():
     user = await sync_to_async(UserFactory)()
-    ws_ticket = (await sync_to_async(issue_ticket)(user=user))["ticket"]
+    ws_ticket = (await sync_to_async(issue_ticket)(Participant(user=user)))["ticket"]
 
     communicator = WebsocketCommunicator(application, f"/ws/?ticket={ws_ticket}")
     await communicator.connect()
@@ -49,7 +50,7 @@ async def test_customer_cannot_join_other_ticket():
     customer2 = await sync_to_async(UserFactory)()
     ticket2 = await sync_to_async(TicketFactory)(customer=customer2)
 
-    ws_ticket = (await sync_to_async(issue_ticket)(user=customer1))["ticket"]
+    ws_ticket = (await sync_to_async(issue_ticket)(Participant(user=customer1)))["ticket"]
     communicator = WebsocketCommunicator(application, f"/ws/?ticket={ws_ticket}")
     await communicator.connect()
 
@@ -66,8 +67,8 @@ async def test_typing_fanout():
     user2 = await sync_to_async(AgentFactory)()
     ticket = await sync_to_async(TicketFactory)(customer=user1, assignee=user2)
 
-    ws_ticket1 = (await sync_to_async(issue_ticket)(user=user1))["ticket"]
-    ws_ticket2 = (await sync_to_async(issue_ticket)(user=user2))["ticket"]
+    ws_ticket1 = (await sync_to_async(issue_ticket)(Participant(user=user1)))["ticket"]
+    ws_ticket2 = (await sync_to_async(issue_ticket)(Participant(user=user2)))["ticket"]
 
     comm1 = WebsocketCommunicator(application, f"/ws/?ticket={ws_ticket1}")
     comm2 = WebsocketCommunicator(application, f"/ws/?ticket={ws_ticket2}")

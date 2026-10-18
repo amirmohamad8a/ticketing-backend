@@ -1,19 +1,16 @@
 from channels.db import database_sync_to_async
 
-from accounts.models import User
-from chat.conversations import conversations_of
 from tickets.models import Ticket
+from tickets.participants import Participant
 
 
-def visible_tickets(user=None, visitor=None):
-    if visitor is not None:
-        return conversations_of(visitor)
+def visible_tickets(participant: Participant):
     queryset = Ticket.objects.all()
-    if user.role == User.Role.CUSTOMER:
-        queryset = queryset.filter(customer=user)
-    return queryset
+    if participant.is_staff:
+        return queryset
+    return queryset.filter(**participant.ownership_filter)
 
 
 @database_sync_to_async
-def can_join_ticket(user, visitor, ticket_id):
-    return visible_tickets(user, visitor).filter(pk=ticket_id).exists()
+def can_join_ticket(participant: Participant, ticket_id):
+    return visible_tickets(participant).filter(pk=ticket_id).exists()

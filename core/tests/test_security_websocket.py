@@ -19,6 +19,7 @@ from core.tests.factories import (
     VisitorFactory,
 )
 from core.tickets import issue_ticket
+from tickets.participants import Participant
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.django_db(transaction=True)]
 
@@ -63,7 +64,7 @@ def _post_comment(user, ticket_id, body, internal):
 
 
 async def _open(identity, origin=ORIGIN, path="/ws/"):
-    token = (await sync_to_async(issue_ticket)(**identity))["ticket"]
+    token = (await sync_to_async(issue_ticket)(Participant(**identity)))["ticket"]
     headers = [(b"origin", origin.encode())] if origin else []
     communicator = WebsocketCommunicator(application, f"{path}?ticket={token}", headers=headers)
     connected, code = await communicator.connect(timeout=5)
@@ -122,7 +123,7 @@ async def test_the_presence_socket_is_for_staff_only():
 
 async def test_a_socket_ticket_works_only_once():
     world = await sync_to_async(_build_world)()
-    token = (await sync_to_async(issue_ticket)(user=world.customer))["ticket"]
+    token = (await sync_to_async(issue_ticket)(Participant(user=world.customer)))["ticket"]
     first = WebsocketCommunicator(application, f"/ws/?ticket={token}")
     second = WebsocketCommunicator(application, f"/ws/?ticket={token}")
     connected, _code = await first.connect()
@@ -135,7 +136,7 @@ async def test_a_socket_ticket_works_only_once():
 
 async def test_tampered_and_truncated_socket_tickets_are_refused():
     world = await sync_to_async(_build_world)()
-    token = (await sync_to_async(issue_ticket)(user=world.customer))["ticket"]
+    token = (await sync_to_async(issue_ticket)(Participant(user=world.customer)))["ticket"]
     swapped = token[:-1] + ("A" if token[-1] != "A" else "B")
     for candidate in (swapped, token[:10], token + token, "x" * 40):
         communicator = WebsocketCommunicator(application, f"/ws/?ticket={candidate}")
@@ -147,7 +148,7 @@ async def test_tampered_and_truncated_socket_tickets_are_refused():
 async def test_an_expired_socket_ticket_is_refused():
     world = await sync_to_async(_build_world)()
     with override_settings(WS_TICKET_TTL_SECONDS=-1):
-        token = (await sync_to_async(issue_ticket)(user=world.customer))["ticket"]
+        token = (await sync_to_async(issue_ticket)(Participant(user=world.customer)))["ticket"]
     communicator = WebsocketCommunicator(application, f"/ws/?ticket={token}")
     connected, code = await communicator.connect()
     assert not connected
@@ -156,7 +157,7 @@ async def test_an_expired_socket_ticket_is_refused():
 
 async def test_a_ticket_of_a_deactivated_user_is_refused():
     world = await sync_to_async(_build_world)()
-    token = (await sync_to_async(issue_ticket)(user=world.customer))["ticket"]
+    token = (await sync_to_async(issue_ticket)(Participant(user=world.customer)))["ticket"]
     await sync_to_async(User.objects.filter(pk=world.customer.pk).update)(is_active=False)
     communicator = WebsocketCommunicator(application, f"/ws/?ticket={token}")
     connected, code = await communicator.connect()
@@ -166,7 +167,7 @@ async def test_a_ticket_of_a_deactivated_user_is_refused():
 
 async def test_a_ticket_of_a_visitor_of_a_deactivated_site_is_refused():
     world = await sync_to_async(_build_world)()
-    token = (await sync_to_async(issue_ticket)(visitor=world.visitor_a))["ticket"]
+    token = (await sync_to_async(issue_ticket)(Participant(visitor=world.visitor_a)))["ticket"]
     await sync_to_async(Site.objects.filter(pk=world.site.pk).update)(is_active=False)
     headers = [(b"origin", ORIGIN.encode())]
     communicator = WebsocketCommunicator(application, f"/ws/?ticket={token}", headers=headers)

@@ -11,6 +11,7 @@ from core.tests.factories import AdminFactory, AgentFactory, TicketFactory, User
 from tickets.lifecycle import change_status
 from tickets.messages import post_message
 from tickets.models import Comment, Ticket
+from tickets.participants import Participant
 
 T1 = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
 T2 = T1 + timedelta(hours=1)
@@ -46,7 +47,7 @@ class FirstResponseTests(TestCase):
 
     def test_the_first_public_staff_reply_sets_the_time(self):
         with _frozen(T1):
-            comment, created = post_message(self.ticket, "Hello", author=self.agent)
+            comment, created = post_message(self.ticket, "Hello", Participant(self.agent))
         self.assertTrue(created)
         self.assertEqual(comment.created_at, T1)
         self.assertEqual(self._stored(), T1)
@@ -54,33 +55,33 @@ class FirstResponseTests(TestCase):
 
     def test_it_is_set_only_once(self):
         with _frozen(T1):
-            post_message(self.ticket, "First", author=self.agent)
+            post_message(self.ticket, "First", Participant(self.agent))
         with _frozen(T2):
-            post_message(self.ticket, "Second", author=self.agent)
+            post_message(self.ticket, "Second", Participant(self.agent))
         with _frozen(T3):
-            post_message(self.ticket, "Third", author=self.admin)
+            post_message(self.ticket, "Third", Participant(self.admin))
         self.assertEqual(self._stored(), T1)
 
     def test_an_admin_reply_counts(self):
         with _frozen(T1):
-            post_message(self.ticket, "Hello", author=self.admin)
+            post_message(self.ticket, "Hello", Participant(self.admin))
         self.assertEqual(self._stored(), T1)
 
     def test_internal_notes_do_not_count(self):
         with _frozen(T1):
-            post_message(self.ticket, "Note", author=self.agent, is_internal=True)
+            post_message(self.ticket, "Note", Participant(self.agent), is_internal=True)
         self.assertIsNone(self._stored())
         with _frozen(T2):
-            post_message(self.ticket, "Reply", author=self.agent)
+            post_message(self.ticket, "Reply", Participant(self.agent))
         self.assertEqual(self._stored(), T2)
 
     def test_customer_messages_do_not_count(self):
-        post_message(self.ticket, "Anyone there?", author=self.customer)
+        post_message(self.ticket, "Anyone there?", Participant(self.customer))
         self.assertIsNone(self._stored())
 
     def test_visitor_messages_do_not_count(self):
         ticket = TicketFactory(from_visitor=True)
-        post_message(ticket, "Hello", visitor=ticket.visitor)
+        post_message(ticket, "Hello", Participant(visitor=ticket.visitor))
         self.assertIsNone(self._stored(ticket))
 
     def test_system_messages_do_not_count(self):
@@ -90,15 +91,15 @@ class FirstResponseTests(TestCase):
     def test_an_existing_value_is_never_overwritten(self):
         Ticket.objects.filter(pk=self.ticket.pk).update(first_response_at=T1)
         with _frozen(T2):
-            post_message(self.ticket, "Late reply", author=self.agent)
+            post_message(self.ticket, "Late reply", Participant(self.agent))
         self.assertEqual(self._stored(), T1)
 
     def test_a_retried_message_does_not_change_it(self):
         with _frozen(T1):
-            post_message(self.ticket, "Hello", author=self.agent, client_msg_id="m1")
+            post_message(self.ticket, "Hello", Participant(self.agent), client_msg_id="m1")
         with _frozen(T2):
             _comment, created = post_message(
-                self.ticket, "Hello", author=self.agent, client_msg_id="m1"
+                self.ticket, "Hello", Participant(self.agent), client_msg_id="m1"
             )
         self.assertFalse(created)
         self.assertEqual(self._stored(), T1)
