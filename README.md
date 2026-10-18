@@ -1,28 +1,36 @@
 # Ticketing Backend
 
-A support-ticketing REST API built with Django and Django REST Framework. Customers open tickets, agents work them through a validated status workflow, and every change is recorded in an append-only audit log and announced by email.
+A support-ticketing REST API built with Django and Django REST Framework, with a
+real-time chat layer. Customers open tickets, website visitors talk to agents
+through an embeddable widget, and every change is written to an append-only
+audit trail.
+
+The OpenAPI schema in [`schema.yml`](schema.yml) is the source of truth for
+routes, request and response bodies, operation ids and permissions. Swagger UI
+is served at `/api/docs/` and the JSON schema at `/api/schema/`.
 
 ## Features
 
-- Three roles (customer, agent, admin) on a custom user model
-- JWT authentication with short-lived access tokens, rotating refresh tokens, a blacklist and logout
-- Role-scoped querysets: a customer only ever sees their own tickets
-- Ticket status state machine: illegal transitions return 400 and write nothing
-- Append-only audit trail of status and assignee changes, readable at `/api/tickets/{id}/events/`
-- Comments with internal notes that customers never receive
-- Attachments with a 10 MB limit and a content-type allowlist (stored on local disk for now; persistent storage is planned)
-- Filtering by status, priority and assignee (including `assignee=me`) and cursor pagination
-- One error format for every failure: `{"error": {"code", "message", "details"}}`
-- OpenAPI schema and Swagger UI
-- Email notifications sent by Celery workers, with idempotency, exponential backoff retries and dead-letter logging
-- Database-free `/health/` endpoint for uptime checks
-- Automated tests with an 85% coverage threshold, GitHub Actions CI, and Render deploys that wait for CI to pass
+- Tickets with a status workflow, field-level permissions, soft delete and
+  restore, tags, canned replies, CSV export, ratings and a per-participant read
+  state with unread counts.
+- An embeddable chat widget with visitor tokens, origin checks, conversation
+  start/resume, messages, read state, contact details, ratings, attachments and
+  signed downloads.
+- Real-time WebSocket events for messages, ticket changes and typing, plus an
+  agent presence socket and capacity-aware chat routing.
+- Offline fallback that turns an unanswered chat into an offline-form ticket and
+  lets the visitor leave contact details.
+- JWT authentication with rotating refresh tokens, blacklist and immediate
+  revocation, plus role-based access for customers, agents and admins.
+- Append-only ticket and user audit logs, statistics, and filtering by status,
+  priority, assignee, tag, search and overdue state.
+- Safe uploads and downloads: magic-byte checks, allowlists, random stored names,
+  local or S3-compatible storage and short-lived signed links.
+- Operational support: JSON logging with request ids, Redis-backed throttling,
+  Prometheus metrics, health checks and production deployment checks.
 
-## Tech stack
-
-Python 3.12, Django, Django REST Framework, SimpleJWT, django-filter, drf-spectacular, Celery, Redis, PostgreSQL, Docker, pytest. Production runs on Render (web service and Key Value), Neon (PostgreSQL) and Brevo (SMTP).
-
-## Run locally
+## Run it
 
 You need Docker with Compose.
 
@@ -31,64 +39,75 @@ cp .env.example .env
 docker compose up --build
 ```
 
-In a second terminal:
+In a second terminal, migrate the database and seed the demo data:
 
 ```bash
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py createsuperuser
-docker compose exec web python manage.py seed_demo
+make demo
+```
+
+Without `make`:
+
+```bash
+docker compose exec -T web python manage.py migrate
+docker compose exec -T web python manage.py seed_demo
 ```
 
 - API: http://localhost:8000
 - Swagger UI: http://localhost:8000/api/docs/
-- Admin: http://localhost:8000/admin/
+- Django admin: http://localhost:8000/admin/
 
-`seed_demo` is optional and safe to run more than once. It creates a demo customer, a demo agent and a few tickets with comments.
+`seed_demo` creates a demo customer (`demo_customer`), a demo agent
+(`demo_agent`), a chat site and sample conversations. Both accounts use the
+password `demo-ticketing-2026`. `make reset-demo` removes the demo data and
+seeds a clean state again.
 
-`createsuperuser` creates a user with the customer role. To act as an agent or admin in the API, change the role in the admin site.
-
-In development, emails are printed to the Celery worker log instead of being sent:
-
-```bash
-docker compose logs -f celery
-```
-
-Run the tests:
+Create a superuser with:
 
 ```bash
-docker compose exec web pytest --cov
+docker compose exec web python manage.py createsuperuser
 ```
 
-## Configuration
+## Tests
 
-Settings are read from environment variables. Copy `.env.example` to `.env` for local use.
+The test settings use local storage, an in-memory cache, channel layer and
+Celery broker, and relaxed throttles.
 
-| Variable | Required | Default | Description |
-| --- | --- | --- | --- |
-| `SECRET_KEY` | Yes | none | Django secret key |
-| `DEBUG` | No | `False` | Debug mode. Development settings force it on |
-| `ALLOWED_HOSTS` | No | empty | Comma-separated host names |
-| `DATABASE_URL` | No | SQLite file | Database connection URL |
-| `DJANGO_SETTINGS_MODULE` | No | `config.settings.dev` | `config.settings.prod` in the production image |
-| `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend |
-| `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated origins allowed to call the API |
-| `EMAIL_HOST` | No | `localhost` | SMTP host |
-| `EMAIL_PORT` | No | `587` | SMTP port |
-| `EMAIL_HOST_USER` | No | empty | SMTP login |
-| `EMAIL_HOST_PASSWORD` | No | empty | SMTP password or key |
-| `EMAIL_USE_TLS` | No | `True` | Use TLS for SMTP |
-| `EMAIL_TIMEOUT` | No | `10` | SMTP timeout in seconds |
-| `DEFAULT_FROM_EMAIL` | No | `support@example.com` | Sender address for notifications |
-| `CSRF_TRUSTED_ORIGINS` | No | empty | Production only. Comma-separated trusted origins |
-| `RENDER_EXTERNAL_HOSTNAME` | No | empty | Production only. Set by Render and added to allowed hosts |
-| `RUN_MIGRATIONS_ON_START` | No | `false` | Run migrations when the production container starts |
-| `RUN_EMBEDDED_WORKER` | No | `false` | Run a Celery worker inside the web container |
-| `WEB_CONCURRENCY` | No | gunicorn default | Number of gunicorn workers |
-| `PORT` | No | `8000` | Port gunicorn listens on. Set by Render |
+```bash
+docker compose exec -e STORAGE_BACKEND=local web pytest --cov
+```
 
-## Deployment
+Formatting and lint:
 
-Every push and pull request runs linting and the test suite on GitHub Actions. Render redeploys the `main` branch only after those checks pass, and migrations run when the container starts. The service configuration lives in `render.yaml`.
+```bash
+docker compose exec -T web black --check .
+docker compose exec -T web isort --check-only .
+docker compose exec -T web ruff check .
+docker compose exec -T web lint-imports
+```
+
+## Documentation
+
+- [API notes](docs/api-notes.md): authentication, resources, ticket workflows,
+  messages, ratings, export, stats and audit.
+- [Widget](docs/widget.md): the public widget API and conversation lifecycle.
+- [Realtime](docs/realtime.md): WebSocket protocol, events, typing and presence.
+- [Operations](docs/operations.md): logging, rate limits, metrics and production
+  and security checks.
+- [Configuration](docs/configuration.md): every environment variable.
+- [Self-hosting](docs/self-hosting.md): production image, reverse proxy, backups
+  and restore.
+- [Architecture](docs/architecture.md): layering and import rules.
+
+## Project layout
+
+| App | Responsibility |
+| --- | --- |
+| `accounts` | Users, profile, avatars, authentication and the user audit log |
+| `tickets` | Tickets, comments, attachments, read state, ratings, tags and export |
+| `chat` | Sites, visitors, the widget API, routing, presence and offline fallback |
+| `realtime` | ASGI consumers, socket authentication and the realtime HTTP side |
+| `core` | Shared infrastructure: errors, logging, metrics, uploads, storage and downloads |
+| `config` | Settings, URLs, ASGI routing and Celery |
 
 ## License
 

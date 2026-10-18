@@ -18,15 +18,44 @@ select = ["E", "F", "W"]
 ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
+"config/asgi.py" = ["E402"]
+"config/settings/base.py" = ["F403", "F405"]
 "config/settings/dev.py" = ["F403"]
+"config/settings/loadtest.py" = ["F403", "F405"]
 "config/settings/prod.py" = ["F403", "F405"]
+"config/settings/test.py" = ["F403", "F405"]
+
+[tool.vulture]
+exclude = ["*/venv/*", "*/migrations/*", "*/tests/*"]
+min_confidence = 80
+paths = ["."]
+
+[tool.bandit]
+exclude_dirs = [
+    "*/venv/*",
+    "*/migrations/*",
+    "*/tests/*",
+    "*/tests.py",
+    "*/test_*.py",
+    "*/*_tests.py",
+    "*/staticfiles/*",
+    "*/media/*",
+    "*/backups/*",
+]
+skips = ["B101"]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "config.settings.dev"
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+addopts = "--ds=config.settings.test"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore:.*WindowsSelectorEventLoopPolicy.*:DeprecationWarning",
+    "ignore:.*set_event_loop_policy.*:DeprecationWarning",
+]
 
 [tool.coverage.run]
-source = ["accounts", "config", "core", "notifications", "tickets"]
+source = ["accounts", "audit", "chat", "config", "core", "demo", "realtime", "stats", "tickets"]
 branch = true
 omit = [
     "*/migrations/*",
@@ -39,4 +68,78 @@ omit = [
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-fail_under = 85
+fail_under = 92
+
+# The contracts describe the intended layering. Test modules are ignored by
+# wildcard because they intentionally build cross-app fixtures. The remaining
+# explicit entries are the current production violations; later refactor
+# phases shrink this list.
+[tool.importlinter]
+root_packages = [
+    "accounts",
+    "audit",
+    "chat",
+    "config",
+    "core",
+    "demo",
+    "realtime",
+    "stats",
+    "tickets",
+]
+
+[[tool.importlinter.contracts]]
+name = "core imports no other app"
+type = "forbidden"
+source_modules = ["core"]
+forbidden_modules = ["accounts", "tickets", "chat", "demo", "realtime", "stats", "audit"]
+ignore_imports = [
+    "core.tests.** -> **",
+]
+
+[[tool.importlinter.contracts]]
+name = "accounts (except models) imports no higher app"
+type = "forbidden"
+source_modules = ["accounts"]
+forbidden_modules = ["tickets", "chat", "demo", "realtime", "stats", "audit"]
+ignore_imports = [
+    "accounts.tests.** -> **",
+]
+
+[[tool.importlinter.contracts]]
+name = "tickets imports no higher app except chat models"
+type = "forbidden"
+source_modules = ["tickets"]
+forbidden_modules = ["chat", "demo", "realtime", "stats", "audit"]
+ignore_imports = [
+    "tickets.tests.** -> **",
+    "tickets.serializers.** -> chat.models",
+    "tickets.participants -> chat.models",
+]
+
+[[tool.importlinter.contracts]]
+name = "chat imports no higher app"
+type = "forbidden"
+source_modules = ["chat"]
+forbidden_modules = ["realtime", "stats", "audit", "demo"]
+ignore_imports = [
+    "chat.tests.** -> **",
+]
+
+[[tool.importlinter.contracts]]
+name = "realtime is a leaf"
+type = "forbidden"
+source_modules = ["realtime"]
+forbidden_modules = ["stats", "audit", "demo"]
+ignore_imports = [
+    "realtime.tests.** -> **",
+]
+
+[[tool.importlinter.contracts]]
+name = "stats and audit are leaves"
+type = "forbidden"
+source_modules = ["stats", "audit"]
+forbidden_modules = ["demo"]
+ignore_imports = [
+    "stats.tests.** -> **",
+    "audit.tests.** -> **",
+]

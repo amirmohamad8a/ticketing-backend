@@ -1,9 +1,12 @@
 .env
+.env.prod
 venv/
 __pycache__/
 *.pyc
 db.sqlite3
 media/
+backups/
 .coverage
 htmlcov/
 coverage.xml
+.refactor/

@@ -1,0 +1,19 @@
+groups:
+  - name: ticketing
+    rules:
+      - alert: TicketQueueGrowing
+        expr: ticketing_queue_size > 50 and delta(ticketing_queue_size[10m]) > 25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Unassigned ticket queue is growing fast
+          description: The queue holds {{ $value }} tickets and grew by more than 25 in 10 minutes. Check the widget for a flood.
+      - alert: WidgetStartThrottleSpike
+        expr: sum(rate(ticketing_http_requests_total{view="widget-conversation-create",status="429"}[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Widget conversation starts are being throttled
+          description: More than one widget start per second has been throttled for 10 minutes. Check for a scripted flood and the site start budget.

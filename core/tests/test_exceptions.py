@@ -1,5 +1,9 @@
+import json
+
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from django.http import Http404
+from django.test import override_settings
+from django.urls import path
 
 import pytest
 from rest_framework import exceptions
@@ -7,10 +11,18 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import User
+from config.urls import handler400, handler404, handler500
 from core.exceptions import custom_exception_handler
 from tickets.models import Ticket
 
 ENVELOPE_KEYS = {"code", "message", "details"}
+
+
+def _boom(request):
+    raise RuntimeError("boom")
+
+
+urlpatterns = [path("boom/", _boom)]
 
 
 def _assert_envelope(data, code):
@@ -89,3 +101,48 @@ def test_logout_without_refresh_token_returns_validation_envelope():
     assert response.status_code == 400
     _assert_envelope(response.data, "validation_error")
     assert "refresh" in response.data["error"]["details"]
+
+
+def _envelope(response):
+    return json.loads(response.content)
+
+
+@pytest.mark.parametrize(
+    "handler,status_code,code",
+    [
+        (lambda: handler400(None), 400, "bad_request"),
+        (lambda: handler404(None, Http404()), 404, "not_found"),
+        (lambda: handler500(None), 500, "server_error"),
+    ],
+)
+def test_django_error_handlers_return_the_envelope(handler, status_code, code):
+    response = handler()
+    assert response.status_code == status_code
+    assert response["Content-Type"] == "application/json"
+    _assert_envelope(_envelope(response), code)
+
+
+@pytest.mark.django_db
+@override_settings(DEBUG=False, ALLOWED_HOSTS=["testserver"])
+def test_unknown_route_returns_a_json_404_envelope():
+    response = APIClient().get("/api/this-route-does-not-exist/")
+    assert response.status_code == 404
+    _assert_envelope(_envelope(response), "not_found")
+
+
+@pytest.mark.django_db
+@override_settings(DEBUG=False, ALLOWED_HOSTS=["support.example.com"])
+def test_a_disallowed_host_returns_a_json_400_envelope():
+    response = APIClient().get("/health/")
+    assert response.status_code == 400
+    _assert_envelope(_envelope(response), "bad_request")
+
+
+@pytest.mark.django_db
+@override_settings(DEBUG=False, ALLOWED_HOSTS=["testserver"], ROOT_URLCONF=__name__)
+def test_an_unhandled_error_returns_a_json_500_envelope():
+    client = APIClient()
+    client.raise_request_exception = False
+    response = client.get("/boom/")
+    assert response.status_code == 500
+    _assert_envelope(_envelope(response), "server_error")

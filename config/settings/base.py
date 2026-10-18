@@ -1,26 +1,26 @@
-from datetime import timedelta
-from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 
-import environ
-
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
-env = environ.Env()
-environ.Env.read_env(str(BASE_DIR / ".env"))
-
-
-SECRET_KEY = env("SECRET_KEY")
-DEBUG = env.bool("DEBUG", default=False)
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
-
+from config.settings.celery import *
+from config.settings.environment import env
+from config.settings.jwt import *
+from config.settings.logging import *
+from config.settings.realtime import *
+from config.settings.redis import *
+from config.settings.security import *
+from config.settings.storage import *
+from config.settings.throttling import *
+from config.settings.widget import *
 
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
+    "channels",
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
@@ -28,12 +28,20 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "accounts",
     "tickets",
-    "notifications",
+    "chat",
+    "realtime",
+    "stats",
+    "audit",
     "core",
+    "demo",
 ]
 
 MIDDLEWARE = [
+    "core.middleware.RequestIdMiddleware",
+    "core.metrics.RequestMetricsMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "core.middleware.RequestSizeLimitMiddleware",
+    "core.middleware.AdminLoginThrottleMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -61,93 +69,94 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
 
 
-DATABASES = {"default": env.db("DATABASE_URL", default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')}
+DATABASE_URL = env("DATABASE_URL", default="")
+if not DATABASE_URL:
+    raise ImproperlyConfigured("DATABASE_URL must be set.")
+if not DATABASE_URL.startswith(("postgres://", "postgresql://")):
+    raise ImproperlyConfigured("DATABASE_URL must point to PostgreSQL.")
+
+DATABASES = {"default": env.db("DATABASE_URL")}
 
 AUTH_USER_MODEL = "accounts.User"
 
 
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
-    },
-]
-
-
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ),
-    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
-}
-
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
-    "AUTH_HEADER_TYPES": ("Bearer",),
-}
-
 SPECTACULAR_SETTINGS = {
     "TITLE": "Ticketing API",
-    "DESCRIPTION": "Support ticketing system API — tickets, comments, attachments, audit history.",
+    "DESCRIPTION": (
+        "Support ticketing system API: tickets, comments, attachments, the chat widget, "
+        "agent presence, statistics and the audit trail.\n\n"
+        "Staff and customers authenticate with `Authorization: Bearer <access token>`. "
+        "Widget visitors authenticate with the `X-Visitor-Token` header and must call "
+        "from an origin listed in the site's `allowed_origins`.\n\n"
+        "Every failed request returns the same envelope: "
+        '`{"error": {"code": "...", "message": "...", "details": ...}}`. '
+        "`details` holds the field errors of a validation error and is `null` otherwise. "
+        "Clients should branch on `code` and never display `message`.\n\n"
+        "WebSocket messages are not part of OpenAPI. They are described in "
+        "`docs/realtime.md`."
+    ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "TAGS": [
+        {
+            "name": "Auth",
+            "description": "Registration, login, logout, profile and password change.",
+        },
+        {"name": "Users", "description": "User management for admins."},
+        {
+            "name": "Agents",
+            "description": "Agent lists for assignment and live presence.",
+        },
+        {"name": "Avatars", "description": "Signed download links for avatars."},
+        {
+            "name": "Tickets",
+            "description": (
+                "Tickets, messages, comments, attachments, ratings and events. "
+                "Customers receive a reduced ticket without `tags` and "
+                "`first_response_due_at`."
+            ),
+        },
+        {"name": "Attachments", "description": "Signed download links for attachments."},
+        {"name": "Canned replies", "description": "Reply templates for agents."},
+        {"name": "Tags", "description": "Ticket tags."},
+        {"name": "Sites", "description": "Chat sites and widget settings for admins."},
+        {"name": "Widget", "description": "Public API used by the embeddable chat widget."},
+        {"name": "Realtime", "description": "HTTP side of the WebSocket layer."},
+        {"name": "Stats", "description": "Support metrics."},
+        {"name": "Audit", "description": "Ticket and user audit trail for admins."},
+    ],
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "core.schema.add_error_responses",
+    ],
+    "ENUM_NAME_OVERRIDES": {
+        "TicketStatusEnum": "tickets.models.Ticket.Status",
+        "PresenceStatusEnum": "chat.presence.STATUSES",
+        "KindEnum": "tickets.models.Comment.Kind",
+        "AuditKindEnum": "audit.cursors.KINDS",
+    },
 }
 
-CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 
+LANGUAGE_CODE = "fa"
 
-LANGUAGE_CODE = "en-us"
-
-TIME_ZONE = "UTC"
+TIME_ZONE = "Asia/Tehran"
 
 USE_I18N = True
 
 USE_TZ = True
 
 
-STATIC_URL = "static/"
-
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
-
-
-MAILERS = {
-    "default": {
-        "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
-        "OPTIONS": {
-            "host": env("EMAIL_HOST", default="localhost"),
-            "port": env.int("EMAIL_PORT", default=587),
-            "username": env("EMAIL_HOST_USER", default=""),
-            "password": env("EMAIL_HOST_PASSWORD", default=""),
-            "use_tls": env.bool("EMAIL_USE_TLS", default=True),
-            "timeout": env.int("EMAIL_TIMEOUT", default=10),
-        },
-    },
+SLA_FIRST_RESPONSE_MINUTES = {
+    "low": env.int("SLA_FIRST_RESPONSE_LOW_MINUTES", default=1440),
+    "medium": env.int("SLA_FIRST_RESPONSE_MEDIUM_MINUTES", default=480),
+    "high": env.int("SLA_FIRST_RESPONSE_HIGH_MINUTES", default=240),
+    "urgent": env.int("SLA_FIRST_RESPONSE_URGENT_MINUTES", default=60),
 }
 
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="support@example.com")
-
-
-REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
-
-CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+AUTO_CLOSE_AFTER_DAYS = env.int("AUTO_CLOSE_AFTER_DAYS", default=7)
+VISITOR_RETENTION_DAYS = env.int("VISITOR_RETENTION_DAYS", default=30)

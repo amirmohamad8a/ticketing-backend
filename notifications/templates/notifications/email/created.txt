@@ -1,8 +1,0 @@
-{% autoescape off %}Hi {{ recipient.first_name|default:recipient.username }},
-
-We received your request and created ticket #{{ ticket.id }}: "{{ ticket.title }}".
-
-Current status: {{ new_value }}.
-
-Our team will get back to you as soon as possible.
-{% endautoescape %}

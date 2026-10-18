@@ -1,9 +1,17 @@
 import factory
 
 from accounts.models import User
-from notifications.models import NotificationLog
-from notifications.tasks import build_idempotency_key
-from tickets.models import Attachment, Comment, Ticket, TicketEvent
+from chat.models import Site, Visitor
+from tickets.models import (
+    Attachment,
+    CannedReply,
+    Comment,
+    ConversationRead,
+    Tag,
+    Ticket,
+    TicketEvent,
+    TicketRating,
+)
 
 
 class UserFactory(factory.django.DjangoModelFactory):
@@ -30,16 +38,75 @@ class AdminFactory(UserFactory):
     role = User.Role.ADMIN
 
 
+class SiteFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Site
+
+    name = factory.Sequence(lambda n: f"Site {n}")
+    allowed_origins = factory.LazyFunction(lambda: ["https://example.com"])
+
+
+class VisitorFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Visitor
+
+    site = factory.SubFactory(SiteFactory)
+    name = factory.Sequence(lambda n: f"Visitor {n}")
+
+
+class TagFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Tag
+
+    name = factory.Sequence(lambda n: f"tag-{n}")
+    color = Tag.Color.GRAY
+
+
+class CannedReplyFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = CannedReply
+
+    title = factory.Sequence(lambda n: f"Reply {n}")
+    shortcut = factory.Sequence(lambda n: f"reply-{n}")
+    body = "Thanks for contacting support."
+
+
 class TicketFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Ticket
+        skip_postgeneration_save = True
+
+    class Params:
+        from_visitor = factory.Trait(
+            customer=None,
+            visitor=factory.SubFactory(VisitorFactory),
+            site=factory.SelfAttribute("visitor.site"),
+            channel=Ticket.Channel.CHAT,
+        )
 
     title = factory.Sequence(lambda n: f"Ticket {n}")
     description = "Ticket description"
     status = Ticket.Status.OPEN
     priority = Ticket.Priority.MEDIUM
+    channel = Ticket.Channel.PORTAL
     customer = factory.SubFactory(UserFactory)
+    visitor = None
+    site = None
     assignee = None
+
+    @factory.post_generation
+    def tags(self, create, extracted, **kwargs):
+        if create and extracted:
+            self.tags.set(extracted)
+
+
+class TicketRatingFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = TicketRating
+
+    ticket = factory.SubFactory(TicketFactory, status=Ticket.Status.RESOLVED)
+    score = 5
+    comment = ""
 
 
 class TicketEventFactory(factory.django.DjangoModelFactory):
@@ -76,14 +143,24 @@ class AttachmentFactory(factory.django.DjangoModelFactory):
     ticket = factory.SubFactory(TicketFactory)
     comment = None
     file = factory.django.FileField(filename="attachment.txt", data=b"hello world")
+    original_name = "attachment.txt"
     uploaded_by = factory.SubFactory(UserFactory)
     size = factory.LazyAttribute(lambda attachment: attachment.file.size)
     content_type = "text/plain"
 
 
-class NotificationLogFactory(factory.django.DjangoModelFactory):
+class ConversationReadFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = NotificationLog
+        model = ConversationRead
 
-    event = factory.SubFactory(TicketEventFactory)
-    idempotency_key = factory.LazyAttribute(lambda log: build_idempotency_key(log.event.id))
+    ticket = factory.SubFactory(TicketFactory)
+    last_read_comment_id = 0
+    user = factory.SubFactory(UserFactory)
+    visitor = None
+
+    class Params:
+        for_visitor = factory.Trait(
+            user=None,
+            ticket=factory.SubFactory(TicketFactory, from_visitor=True),
+            visitor=factory.SelfAttribute("ticket.visitor"),
+        )

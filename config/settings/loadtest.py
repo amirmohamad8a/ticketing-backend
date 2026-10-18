@@ -1,0 +1,10 @@
+from .dev import *
+
+REST_FRAMEWORK = {
+    **REST_FRAMEWORK,
+    "DEFAULT_THROTTLE_RATES": {
+        scope: "1000000/min" for scope in REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+    },
+}
+
+WS_RATE_LIMIT_MESSAGES = 1000000

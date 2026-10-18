@@ -5,9 +5,12 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+  schedule:
+    - cron: "0 5 * * 1"
 
 jobs:
   lint-and-test:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
 
     services:
@@ -25,11 +28,28 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      # Redis backs the throttle counters, WebSocket tickets and presence
+      # entries. The redis service and REQUIRE_REDIS=1 make the tests in
+      # core/tests/test_redis_integration.py run against a real Redis instead
+      # of being skipped, so the Redis-only code paths are actually covered.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       SECRET_KEY: ci-test-secret-key
       DEBUG: "True"
       ALLOWED_HOSTS: localhost,127.0.0.1
       DATABASE_URL: postgres://ticketing:ticketing@localhost:5432/ticketing
+      REDIS_URL: redis://localhost:6379/0
+      # Fails the run instead of skipping when Redis is unreachable.
+      REQUIRE_REDIS: "1"
       DJANGO_SETTINGS_MODULE: config.settings.dev
 
     steps:
@@ -38,17 +58,103 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
+      - name: Wait for Redis
+        run: |
+          python - <<'PY'
+          import redis
+
+          client = redis.Redis.from_url("redis://localhost:6379/0")
+          assert client.ping()
+          PY
+
       - name: Lint
         run: |
           black --check .
           isort --check-only .
           ruff check .
+          lint-imports
+
+      - name: Migrate from an empty database
+        run: python manage.py migrate --noinput
+
+      - name: Check for missing migrations
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Check API schema
+        run: |
+          python manage.py spectacular --file schema.yml --validate --fail-on-warn
+          git diff --exit-code -- schema.yml
 
       - name: Test
         run: pytest --cov
+
+      - name: Check deployment settings
+        run: python manage.py check --deploy --fail-level WARNING
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.prod
+          SECRET_KEY: ci-deploy-check-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz
+          JWT_SIGNING_KEY: ci-deploy-check-jwt-signing-key-9876543210-zyxwvutsrqponmlk
+          ALLOWED_HOSTS: support.example.com
+          DATABASE_URL: postgres://ticketing:ticketing@localhost:5432/ticketing
+          NUM_PROXIES: "1"
+
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-security.txt
+
+      - name: Install security tools
+        run: pip install -r requirements-security.txt
+
+      - name: Static analysis (bandit)
+        run: bandit -r . -c pyproject.toml --severity-level medium --confidence-level medium
+
+      - name: Dependency audit (pip-audit, runtime)
+        run: pip-audit -r requirements.txt --no-deps --disable-pip
+
+      - name: Dependency audit (pip-audit, dev)
+        run: pip-audit -r requirements-dev.txt --no-deps --disable-pip
+
+  build-images:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build development image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          cache-from: type=gha,scope=dev
+          cache-to: type=gha,mode=max,scope=dev
+
+      - name: Build production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.prod
+          push: false
+          cache-from: type=gha,scope=prod
+          cache-to: type=gha,mode=max,scope=prod

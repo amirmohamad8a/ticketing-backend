@@ -9,12 +9,10 @@ from core.tests.factories import (
     AgentFactory,
     AttachmentFactory,
     CommentFactory,
-    NotificationLogFactory,
     TicketEventFactory,
     TicketFactory,
     UserFactory,
 )
-from notifications.tasks import build_idempotency_key
 from tickets.models import Ticket
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
@@ -71,12 +69,6 @@ class TicketFactoryTests(TestCase):
         self.assertFalse(comment.is_internal)
         self.assertTrue(comment.body)
         self.assertIsNotNone(comment.ticket)
-
-
-class NotificationLogFactoryTests(TestCase):
-    def test_key_is_derived_from_the_event(self):
-        log = NotificationLogFactory()
-        self.assertEqual(log.idempotency_key, build_idempotency_key(log.event.id))
 
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
