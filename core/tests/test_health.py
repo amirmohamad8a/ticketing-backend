@@ -1,6 +1,6 @@
 import importlib.util
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, TestCase
 
@@ -42,14 +42,13 @@ class HealthCheckTests(TestCase):
         self.assertIn("no-store", response.headers["Cache-Control"])
 
 
-class _FakeResponse:
-    status = 200
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
+def _connection(status=200, error=None):
+    connection = MagicMock()
+    if error is not None:
+        connection.request.side_effect = error
+    else:
+        connection.getresponse.return_value.status = status
+    return connection
 
 
 class ContainerHealthcheckTests(SimpleTestCase):
@@ -62,15 +61,34 @@ class ContainerHealthcheckTests(SimpleTestCase):
             self.assertEqual(healthcheck._host_header(), "localhost")
 
     def test_a_healthy_app_exits_zero(self):
-        with patch("urllib.request.urlopen", return_value=_FakeResponse()):
+        with patch("http.client.HTTPConnection", return_value=_connection(200)):
             self.assertEqual(healthcheck.main(), 0)
 
     def test_an_unreachable_app_exits_nonzero(self):
-        with patch("urllib.request.urlopen", side_effect=OSError("refused")):
+        connection = _connection(error=OSError("refused"))
+        with patch("http.client.HTTPConnection", return_value=connection):
             self.assertEqual(healthcheck.main(), 1)
 
     def test_a_non_200_status_exits_nonzero(self):
-        response = _FakeResponse()
-        response.status = 503
-        with patch("urllib.request.urlopen", return_value=response):
+        with patch("http.client.HTTPConnection", return_value=_connection(503)):
             self.assertEqual(healthcheck.main(), 1)
+
+    def test_the_probe_targets_loopback_with_the_allowed_host_header(self):
+        connection = _connection(200)
+        environment = {"PORT": "9000", "ALLOWED_HOSTS": "support.example.com"}
+        with patch.dict("os.environ", environment):
+            with patch("http.client.HTTPConnection", return_value=connection) as factory:
+                healthcheck.main()
+        factory.assert_called_once_with(
+            "127.0.0.1", 9000, timeout=healthcheck.REQUEST_TIMEOUT_SECONDS
+        )
+        connection.request.assert_called_once_with(
+            "GET", "/health/", headers={"Host": "support.example.com"}
+        )
+
+    def test_the_connection_is_closed_after_success_and_failure(self):
+        for connection in (_connection(200), _connection(error=OSError("refused"))):
+            with self.subTest(connection=connection):
+                with patch("http.client.HTTPConnection", return_value=connection):
+                    healthcheck.main()
+                connection.close.assert_called_once_with()
