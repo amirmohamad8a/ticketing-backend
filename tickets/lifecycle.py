@@ -6,18 +6,19 @@ from django.db import transaction
 from django.utils import timezone
 
 from tickets.models import Ticket
-from tickets.serializers import TicketSerializer
+from tickets.services import update_ticket
 
 logger = logging.getLogger(__name__)
 
 
-def change_status(ticket, new_status, request=None):
-    context = {"request": request} if request is not None else {}
-    serializer = TicketSerializer(
-        ticket, data={"status": new_status}, partial=True, context=context
-    )
-    serializer.is_valid(raise_exception=True)
-    return serializer.save()
+def _actor(actor):
+    if actor is not None and hasattr(actor, "user"):
+        return actor.user
+    return actor
+
+
+def change_status(ticket, new_status, actor=None):
+    return update_ticket(ticket, _actor(actor), {"status": new_status})
 
 
 def _close_if_due(ticket_id, cutoff):
@@ -55,7 +56,7 @@ def close_due_tickets(now=None):
 REOPENABLE_STATUSES = (*Ticket.FINISHED_STATUSES, Ticket.Status.WAITING_ON_CUSTOMER)
 
 
-def reopen_on_customer_reply(ticket_id, request=None):
+def reopen_on_customer_reply(ticket_id, actor=None):
     with transaction.atomic():
         ticket = (
             Ticket.objects.select_for_update()
@@ -64,5 +65,5 @@ def reopen_on_customer_reply(ticket_id, request=None):
         )
         if ticket is None:
             return False
-        change_status(ticket, Ticket.Status.IN_PROGRESS, request)
+        change_status(ticket, Ticket.Status.IN_PROGRESS, _actor(actor))
     return True

@@ -7,8 +7,7 @@ from chat.tasks import convert_to_offline
 from chat.visitors import start_visitor_session
 from realtime import presence
 from tickets.events import TicketEventField, record_event
-from tickets.lifecycle import reopen_on_customer_reply
-from tickets.messages import post_message
+from tickets.messages import post_customer_message
 from tickets.models import Ticket
 
 TITLE_MAX_LENGTH = 100
@@ -52,11 +51,11 @@ def open_conversation(visitor, body, client_msg_id=None, request=None):
                 old_value="",
                 new_value=ticket.status,
             )
-        comment, posted = post_message(ticket, body, visitor=visitor, client_msg_id=client_msg_id)
+        comment, _posted = post_customer_message(
+            ticket, body, visitor=visitor, client_msg_id=client_msg_id
+        )
         if created and route_new_chat(ticket) is None:
             _schedule_offline_conversion(ticket)
-        if not created and posted:
-            reopen_on_customer_reply(ticket.pk, request)
     return ticket, comment, created
 
 

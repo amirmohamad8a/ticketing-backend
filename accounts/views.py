@@ -1,19 +1,15 @@
 import os
 
-from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404
-from django.utils.translation import gettext_lazy as _
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, status, viewsets
-from rest_framework.exceptions import ValidationError
 from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
-from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -39,8 +35,8 @@ from accounts.serializers import (
     UserSerializer,
     UserUpdateSerializer,
 )
+from accounts.services import change_own_password, logout_user
 from accounts.throttles import LoginUsernameThrottle
-from accounts.tokens import blacklist_user_tokens
 from core.downloads import build_download_link
 from realtime.events import close_user_sockets
 
@@ -83,11 +79,12 @@ class PasswordChangeView(APIView):
     def post(self, request):
         serializer = PasswordChangeSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
-        with transaction.atomic():
-            user = serializer.save()
-            blacklist_user_tokens(user)
-            close_user_sockets(user.pk)
-            refresh = RefreshToken.for_user(user)
+        user = change_own_password(
+            request.user,
+            serializer.validated_data["new_password"],
+            close_user_sockets_fn=close_user_sockets,
+        )
+        refresh = RefreshToken.for_user(user)
         return Response({"refresh": str(refresh), "access": str(refresh.access_token)})
 
 
@@ -96,16 +93,11 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        refresh_token = request.data.get("refresh")
-        if not refresh_token:
-            raise ValidationError({"refresh": _("Refresh token is required.")})
-        try:
-            token = RefreshToken(refresh_token)
-            with transaction.atomic():
-                token.blacklist()
-                close_user_sockets(request.user.pk)
-        except TokenError:
-            raise ValidationError({"refresh": _("Invalid or expired token.")})
+        logout_user(
+            request.data.get("refresh"),
+            request.user,
+            close_user_sockets_fn=close_user_sockets,
+        )
         return Response(status=status.HTTP_205_RESET_CONTENT)
 
 

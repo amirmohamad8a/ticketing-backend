@@ -2,19 +2,16 @@ import logging
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import IntegrityError, transaction
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from rest_framework import serializers
 
-from accounts.events import UserEventField, flag, record_user_event
 from accounts.models import User
-from accounts.tokens import blacklist_user_tokens
+from accounts.services import create_user, update_user
 from core.phone import build_phone_field
 from core.uploads import ensure_content_matches
 from realtime.events import close_user_sockets
-from tickets.assignment import release_tickets
 
 logger = logging.getLogger(__name__)
 
@@ -64,15 +61,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        try:
-            with transaction.atomic():
-                return User.objects.create_user(role=User.Role.CUSTOMER, **validated_data)
-        except IntegrityError:
-            if User.objects.filter(username__iexact=validated_data.get("username", "")).exists():
-                raise serializers.ValidationError(
-                    {"username": _("A user with that username already exists.")}
-                )
-            raise
+        return create_user(
+            None,
+            validated_data,
+            record_created=False,
+            role=User.Role.CUSTOMER,
+        )
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -230,26 +224,7 @@ class UserCreateSerializer(ActorMixin, RegisterSerializer):
         read_only_fields = ["id"]
 
     def create(self, validated_data):
-        actor = self._get_actor()
-
-        try:
-            with transaction.atomic():
-                user = User.objects.create_user(**validated_data)
-                record_user_event(
-                    user=user,
-                    actor=actor,
-                    field_changed=UserEventField.CREATED,
-                    old_value="",
-                    new_value=user.role,
-                )
-        except IntegrityError:
-            if User.objects.filter(username__iexact=validated_data.get("username", "")).exists():
-                raise serializers.ValidationError(
-                    {"username": _("A user with that username already exists.")}
-                )
-            raise
-
-        return user
+        return create_user(self._get_actor(), validated_data)
 
     def to_representation(self, instance):
         return UserSerializer(instance, context=self.context).data
@@ -292,47 +267,12 @@ class UserUpdateSerializer(ActorMixin, serializers.ModelSerializer):
         return attrs
 
     def update(self, instance, validated_data):
-        actor = self._get_actor()
-        password = validated_data.pop("password", None)
-
-        events = []
-        deactivated = False
-        demoted = False
-        close_sockets = False
-        if "role" in validated_data and validated_data["role"] != instance.role:
-            events.append((UserEventField.ROLE, instance.role, validated_data["role"]))
-            demoted = validated_data["role"] == User.Role.CUSTOMER
-            close_sockets = True
-        if "is_active" in validated_data and validated_data["is_active"] != instance.is_active:
-            new_state = validated_data["is_active"]
-            events.append((UserEventField.IS_ACTIVE, flag(instance.is_active), flag(new_state)))
-            deactivated = not new_state
-            close_sockets = True
-        if password is not None:
-            events.append((UserEventField.PASSWORD, "", ""))
-            close_sockets = True
-
-        with transaction.atomic():
-            instance = super().update(instance, validated_data)
-            if password is not None:
-                instance.set_password(password)
-                instance.save(update_fields=["password"])
-            if password is not None or deactivated:
-                blacklist_user_tokens(instance)
-            if deactivated or demoted:
-                release_tickets(instance, actor)
-            for field_changed, old_value, new_value in events:
-                record_user_event(
-                    user=instance,
-                    actor=actor,
-                    field_changed=field_changed,
-                    old_value=old_value,
-                    new_value=new_value,
-                )
-            if close_sockets:
-                close_user_sockets(instance.pk)
-
-        return instance
+        return update_user(
+            instance,
+            self._get_actor(),
+            validated_data,
+            close_user_sockets_fn=close_user_sockets,
+        )
 
     def to_representation(self, instance):
         return UserSerializer(instance, context=self.context).data

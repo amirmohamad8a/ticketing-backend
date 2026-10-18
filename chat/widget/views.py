@@ -1,9 +1,6 @@
-from django.db import transaction
 from django.shortcuts import get_object_or_404
-from django.utils.translation import gettext_lazy as _
 
 from rest_framework import status
-from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -11,17 +8,18 @@ from rest_framework.views import APIView
 
 from chat.availability import agents_available
 from chat.contact import save_contact
-from chat.conversations import conversations_of, open_conversation, start_conversation
+from chat.conversations import conversations_of
 from chat.exceptions import ConversationClosed
-from chat.models import Site, Visitor
-from chat.tokens import issue_visitor_token
+from chat.models import Visitor
+from chat.widget.admission import continue_conversation
+from chat.widget.admission import find_site as _find_site
+from chat.widget.admission import start_new_conversation
 from chat.widget.auth import (
     IsVisitorFromAllowedOrigin,
     VisitorTokenAuthentication,
     ensure_origin_allowed,
 )
-from chat.widget.limits import ensure_site_capacity
-from chat.widget.pow import issue_challenge, verify_solution
+from chat.widget.pow import issue_challenge
 from chat.widget.schema import (
     attachment_upload_schema,
     conversation_contact_schema,
@@ -56,21 +54,11 @@ from chat.widget.throttles import (
 )
 from core.downloads import build_download_link
 from realtime.tickets import issue_ticket
-from tickets.lifecycle import reopen_on_customer_reply
-from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
+from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_customer_message
 from tickets.models import Attachment, Ticket, TicketRating
 from tickets.ratings import rate_ticket
 from tickets.reads import mark_conversation_read, unread_count, visible_comments
 from tickets.serializers import ReadMarkSerializer, ReadStateSerializer, TicketRatingSerializer
-
-
-def _find_site(key, field):
-    if not key:
-        raise ValidationError({field: _("This field is required.")})
-    site = Site.objects.filter(key=key, is_active=True).first()
-    if site is None:
-        raise NotFound
-    return site
 
 
 def _get_conversation(visitor, pk):
@@ -80,16 +68,6 @@ def _get_conversation(visitor, pk):
 def _ensure_open(ticket):
     if ticket.status in Ticket.FINISHED_STATUSES:
         raise ConversationClosed
-
-
-def _check_required_fields(site, data):
-    errors = {}
-    if site.require_name and not data.get("name"):
-        errors["name"] = _("This field is required.")
-    if site.require_contact and not (data.get("phone") or data.get("email")):
-        errors["contact"] = _("A phone number or an email is required.")
-    if errors:
-        raise ValidationError(errors)
 
 
 class WidgetAPIView(APIView):
@@ -134,30 +112,13 @@ class ConversationCreateView(WidgetAPIView):
         serializer = ConversationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        client_msg_id = data.get("client_msg_id") or None
         visitor = request.auth if isinstance(request.auth, Visitor) else None
-
         if visitor is not None:
-            ensure_origin_allowed(request, visitor.site)
-            ticket, comment, created = open_conversation(
-                visitor, data["body"], client_msg_id, request=request
+            _visitor, token, ticket, comment, created = continue_conversation(
+                visitor, data, request
             )
-            token = issue_visitor_token(visitor)
         else:
-            site = _find_site(data.get("site_key"), "site_key")
-            ensure_origin_allowed(request, site)
-            _check_required_fields(site, data)
-            verify_solution(site, data.get("pow_challenge"), data.get("pow_nonce"))
-            ensure_site_capacity(site)
-            session, ticket, comment = start_conversation(
-                site,
-                data["body"],
-                name=data.get("name") or "",
-                phone=data.get("phone") or "",
-                email=data.get("email") or "",
-                client_msg_id=client_msg_id,
-            )
-            visitor, token, created = session.visitor, session.token, True
+            _visitor, token, ticket, comment, created = start_new_conversation(request, data)
 
         payload = {
             "token": token,
@@ -198,15 +159,12 @@ class MessageListCreateView(WidgetAPIView):
         serializer.is_valid(raise_exception=True)
         _ensure_open(ticket)
         data = serializer.validated_data
-        with transaction.atomic():
-            comment, created = post_message(
-                ticket,
-                data["body"],
-                visitor=visitor,
-                client_msg_id=data.get("client_msg_id") or None,
-            )
-            if created:
-                reopen_on_customer_reply(ticket.pk, request)
+        comment, created = post_customer_message(
+            ticket,
+            data["body"],
+            visitor=visitor,
+            client_msg_id=data.get("client_msg_id") or None,
+        )
         body = WidgetMessageSerializer(comment, context={"request": request}).data
         return Response(body, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
@@ -272,16 +230,13 @@ class AttachmentCreateView(WidgetAPIView):
         file_serializer = WidgetAttachmentSerializer(data={"file": data["file"]}, context=context)
         file_serializer.is_valid(raise_exception=True)
         _ensure_open(ticket)
-        with transaction.atomic():
-            comment, created = post_message(
-                ticket,
-                data["body"],
-                visitor=visitor,
-                client_msg_id=data.get("client_msg_id") or None,
-            )
-            if created:
-                file_serializer.save(comment=comment)
-                reopen_on_customer_reply(ticket.pk, request)
+        comment, created = post_customer_message(
+            ticket,
+            data["body"],
+            visitor=visitor,
+            client_msg_id=data.get("client_msg_id") or None,
+            on_created=lambda message: file_serializer.save(comment=message),
+        )
         body = WidgetMessageSerializer(comment, context=context).data
         return Response(body, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 

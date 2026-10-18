@@ -1,4 +1,3 @@
-from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
@@ -16,11 +15,10 @@ from accounts.models import User
 from accounts.permissions import IsAgentOrAdmin
 from core.downloads import build_download_link
 from tickets.assignment import claim_ticket
-from tickets.events import DELETED_FIELD, RESTORED_FIELD, STAFF_ONLY_EVENT_FIELDS, record_event
+from tickets.events import STAFF_ONLY_EVENT_FIELDS
 from tickets.export import build_export_response
 from tickets.filters import TicketFilter
-from tickets.lifecycle import reopen_on_customer_reply
-from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_message
+from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_customer_message, post_message
 from tickets.models import Attachment, Ticket, TicketRating
 from tickets.pagination import TicketCursorPagination
 from tickets.permissions import (
@@ -50,6 +48,7 @@ from tickets.serializers import (
     TicketRatingSerializer,
     TicketSerializer,
 )
+from tickets.services import delete_ticket, restore_ticket
 from tickets.throttles import AttachmentUploadThrottle, ExportThrottle
 
 UPLOAD_THROTTLES = [UserRateThrottle, AttachmentUploadThrottle]
@@ -93,26 +92,15 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer.save(customer=self.request.user)
 
     def perform_destroy(self, instance):
-        with transaction.atomic():
-            instance.delete()
-            record_event(
-                ticket=instance,
-                actor=self.request.user,
-                field_changed=DELETED_FIELD,
-                old_value="",
-                new_value="",
-            )
+        delete_ticket(instance, self.request.user)
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
-        pk = self.get_object().pk
-        with transaction.atomic():
-            ticket = get_object_or_404(Ticket.objects.select_for_update(), pk=pk)
-            self.check_object_permissions(request, ticket)
-            serializer = self.get_serializer(ticket, data=request.data, partial=partial)
-            serializer.is_valid(raise_exception=True)
-            self.perform_update(serializer)
-        refreshed = self.get_queryset().get(pk=pk)
+        ticket = self.get_object()
+        serializer = self.get_serializer(ticket, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        refreshed = self.get_queryset().get(pk=ticket.pk)
         return Response(self.get_serializer(refreshed).data)
 
     def _attachments_response(self, request, queryset, **parent):
@@ -141,21 +129,13 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def restore(self, request, pk=None):
         ticket = self.get_object()
-        with transaction.atomic():
-            ticket.restore()
-            record_event(
-                ticket=ticket,
-                actor=request.user,
-                field_changed=RESTORED_FIELD,
-                old_value="",
-                new_value="",
-            )
+        restore_ticket(ticket, request.user)
         return Response(self.get_serializer(ticket).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAgentOrAdmin])
     def claim(self, request, pk=None):
         ticket = self.get_object()
-        claim_ticket(ticket.pk, request.user, request)
+        claim_ticket(ticket.pk, request.user, request.user)
         refreshed = self.get_queryset().get(pk=ticket.pk)
         return Response(self.get_serializer(refreshed).data)
 
@@ -232,8 +212,14 @@ class TicketViewSet(viewsets.ModelViewSet):
         is_internal = data.get("is_internal", False)
         is_customer = request.user.role == User.Role.CUSTOMER
         if is_customer:
-            is_internal = False
-        with transaction.atomic():
+            comment, created = post_customer_message(
+                ticket,
+                data["body"],
+                actor=request.user,
+                is_internal=False,
+                client_msg_id=data.get("client_msg_id"),
+            )
+        else:
             comment, created = post_message(
                 ticket,
                 data["body"],
@@ -241,8 +227,6 @@ class TicketViewSet(viewsets.ModelViewSet):
                 is_internal=is_internal,
                 client_msg_id=data.get("client_msg_id"),
             )
-            if created and is_customer:
-                reopen_on_customer_reply(ticket.pk, request)
         status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response(CommentSerializer(comment).data, status=status_code)
 

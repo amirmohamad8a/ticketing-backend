@@ -6,9 +6,8 @@ from django.http import HttpResponseRedirect
 
 from accounts.events import UserEventField, flag, record_user_event
 from accounts.models import User, UserEvent
-from accounts.tokens import blacklist_user_tokens
+from accounts.services import apply_user_side_effects, reset_password
 from realtime.events import close_user_sockets
-from tickets.assignment import release_tickets
 
 M2M_FIELDS = (UserEventField.GROUPS, UserEventField.USER_PERMISSIONS)
 VALUE_MAX_LENGTH = 255
@@ -72,20 +71,15 @@ class UserAdmin(DjangoUserAdmin):
 
         with transaction.atomic():
             super().save_model(request, obj, form, change)
-            if deactivated:
-                blacklist_user_tokens(obj)
-            if deactivated or demoted:
-                release_tickets(obj, actor)
-            for field_changed, old_value, new_value in events:
-                record_user_event(
-                    user=obj,
-                    actor=actor,
-                    field_changed=field_changed,
-                    old_value=old_value,
-                    new_value=new_value,
-                )
-            if events:
-                close_user_sockets(obj.pk)
+            apply_user_side_effects(
+                obj,
+                actor,
+                events,
+                revoke_tokens=deactivated,
+                release=deactivated or demoted,
+                close_sockets=bool(events),
+                close_user_sockets_fn=close_user_sockets,
+            )
 
     def save_related(self, request, form, formsets, change):
         user = form.instance
@@ -94,21 +88,25 @@ class UserAdmin(DjangoUserAdmin):
             super().save_related(request, form, formsets, change)
             if not change:
                 return
-            changed = False
+            events = []
             for field in M2M_FIELDS:
                 after = _m2m_labels(user, field)
                 if after == before[field]:
                     continue
-                changed = True
-                record_user_event(
-                    user=user,
-                    actor=request.user,
-                    field_changed=field,
-                    old_value=_join(before[field] - after),
-                    new_value=_join(after - before[field]),
+                events.append(
+                    (
+                        field,
+                        _join(before[field] - after),
+                        _join(after - before[field]),
+                    )
                 )
-            if changed:
-                close_user_sockets(user.pk)
+            apply_user_side_effects(
+                user,
+                request.user,
+                events,
+                close_sockets=bool(events),
+                close_user_sockets_fn=close_user_sockets,
+            )
 
     def user_change_password(self, request, id, form_url=""):
         with transaction.atomic():
@@ -118,15 +116,24 @@ class UserAdmin(DjangoUserAdmin):
             user = self.get_object(request, unquote(id))
             if user is None:
                 return response
-            blacklist_user_tokens(user)
-            record_user_event(
-                user=user,
-                actor=request.user,
-                field_changed=UserEventField.PASSWORD,
-                old_value="",
-                new_value="",
-            )
-            close_user_sockets(user.pk)
+            post = getattr(request, "POST", {}) or {}
+            password = post.get("password1")
+            if password:
+                reset_password(
+                    user,
+                    password,
+                    request.user,
+                    close_user_sockets_fn=close_user_sockets,
+                )
+            else:
+                apply_user_side_effects(
+                    user,
+                    request.user,
+                    [(UserEventField.PASSWORD, "", "")],
+                    revoke_tokens=True,
+                    close_sockets=True,
+                    close_user_sockets_fn=close_user_sockets,
+                )
         return response
 
 

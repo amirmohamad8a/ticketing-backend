@@ -100,9 +100,9 @@ forbidden_modules = ["tickets", "chat", "demo", "realtime", "stats", "audit"]
 ignore_imports = [
     "accounts.tests.** -> **",
     "accounts.admin -> realtime.events",
-    "accounts.admin -> tickets.assignment",
     "accounts.serializers -> realtime.events",
-    "accounts.serializers -> tickets.assignment",
+    "accounts.services -> realtime.events",
+    "accounts.services -> tickets.assignment",
     "accounts.views -> realtime.events",
 ]
 
@@ -141,10 +141,8 @@ ignore_imports = [
     "chat.contact -> tickets.events",
     "chat.conversations -> tickets.events",
     "chat.conversations -> tickets.messages",
-    "chat.conversations -> tickets.lifecycle",
     "chat.widget.views -> tickets.messages",
     "chat.widget.views -> tickets.serializers",
-    "chat.widget.views -> tickets.lifecycle",
 ]
 
 [[tool.importlinter.contracts]]

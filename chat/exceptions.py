@@ -1,10 +1,12 @@
 from django.utils.translation import gettext_lazy as _
 
 from rest_framework import status
-from rest_framework.exceptions import APIException
+
+from core.errors import DomainError
 
 
-class ConversationClosed(APIException):
+class ConversationClosed(DomainError):
     status_code = status.HTTP_409_CONFLICT
-    default_detail = _("This conversation is closed.")
+    code = "conversation_closed"
     default_code = "conversation_closed"
+    default_message = _("This conversation is closed.")

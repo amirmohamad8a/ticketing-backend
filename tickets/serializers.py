@@ -1,29 +1,17 @@
-from django.db import transaction
 from django.urls import reverse
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from rest_framework import serializers
 
-from accounts.models import User
 from chat.models import Site, Visitor
 from core.uploads import clean_file_name, ensure_content_matches
-from tickets.events import TicketEventField, record_event, tag_changes
 from tickets.messages import comment_sender_type
 from tickets.models import Attachment, Comment, Ticket, TicketEvent, TicketRating
-from tickets.validators import MAX_BODY_LENGTH, MAX_TICKET_TAGS
+from tickets.rules import validate_assignee, validate_status_transition, validate_tags
+from tickets.services import create_ticket, update_ticket
+from tickets.validators import MAX_BODY_LENGTH
 
 STAFF_ONLY_RESPONSE_FIELDS = frozenset({"tags", "first_response_due_at", "visitor", "site"})
-AUDITED_TEXT_FIELDS = (
-    TicketEventField.PRIORITY,
-    TicketEventField.TITLE,
-    TicketEventField.DESCRIPTION,
-)
-MAX_EVENT_VALUE_LENGTH = 255
-
-
-def _event_value(value):
-    return str(value)[:MAX_EVENT_VALUE_LENGTH]
 
 
 class TicketVisitorSerializer(serializers.ModelSerializer):
@@ -80,34 +68,14 @@ class TicketSerializer(serializers.ModelSerializer):
     def validate_status(self, value):
         if self.instance is None:
             return value
-        current_status = self.instance.status
-        if value == current_status:
-            return value
-        allowed = Ticket.STATUS_TRANSITIONS.get(current_status, set())
-        if value not in allowed:
-            message = _("Cannot transition status from '%(current)s' to '%(new)s'.")
-            raise serializers.ValidationError(message % {"current": current_status, "new": value})
-        return value
+        return validate_status_transition(self.instance, value)
 
     def validate_assignee(self, value):
-        if value is None:
-            return value
-        if self.instance is not None and value == self.instance.assignee:
-            return value
-        if value.role == User.Role.CUSTOMER:
-            raise serializers.ValidationError(
-                _("Tickets can only be assigned to an agent or admin.")
-            )
-        if not value.is_active:
-            raise serializers.ValidationError(_("Tickets cannot be assigned to an inactive user."))
-        return value
+        current = self.instance.assignee if self.instance is not None else None
+        return validate_assignee(value, current)
 
     def validate_tags(self, value):
-        value = list(dict.fromkeys(value))
-        if len(value) > MAX_TICKET_TAGS:
-            message = _("A ticket can have at most %(max)s tags.")
-            raise serializers.ValidationError(message % {"max": MAX_TICKET_TAGS})
-        return value
+        return validate_tags(value)
 
     def _get_actor(self):
         request = self.context.get("request")
@@ -116,84 +84,11 @@ class TicketSerializer(serializers.ModelSerializer):
             return None
         return actor
 
-    def _record_changes(self, ticket, actor, changes):
-        for field_changed, old_value, new_value in changes:
-            record_event(
-                ticket=ticket,
-                actor=actor,
-                field_changed=field_changed,
-                old_value=old_value,
-                new_value=new_value,
-            )
-
     def create(self, validated_data):
-        actor = self._get_actor()
-        validated_data.pop("status", None)
-        assignee = validated_data.get("assignee")
-
-        with transaction.atomic():
-            ticket = super().create(validated_data)
-            record_event(
-                ticket=ticket,
-                actor=actor,
-                field_changed=TicketEventField.CREATED,
-                old_value="",
-                new_value=ticket.status,
-            )
-            if assignee is not None:
-                record_event(
-                    ticket=ticket,
-                    actor=actor,
-                    field_changed=TicketEventField.ASSIGNEE,
-                    old_value="",
-                    new_value=assignee.username,
-                )
-            self._record_changes(ticket, actor, tag_changes([], ticket.tags.all()))
-
-        return ticket
+        return create_ticket(self._get_actor(), validated_data)
 
     def update(self, instance, validated_data):
-        actor = self._get_actor()
-        tags = validated_data.pop("tags", None)
-
-        changes = []
-        if "status" in validated_data and validated_data["status"] != instance.status:
-            new_status = validated_data["status"]
-            changes.append((TicketEventField.STATUS, instance.status, new_status))
-            if new_status in Ticket.FINISHED_STATUSES:
-                if instance.resolved_at is None:
-                    validated_data["resolved_at"] = timezone.now()
-            else:
-                validated_data["resolved_at"] = None
-        if "assignee" in validated_data and validated_data["assignee"] != instance.assignee:
-            old_assignee = instance.assignee.username if instance.assignee else ""
-            new_assignee = validated_data["assignee"].username if validated_data["assignee"] else ""
-            changes.append((TicketEventField.ASSIGNEE, old_assignee, new_assignee))
-        for field in AUDITED_TEXT_FIELDS:
-            if field in validated_data and validated_data[field] != getattr(instance, field):
-                changes.append(
-                    (
-                        field,
-                        _event_value(getattr(instance, field)),
-                        _event_value(validated_data[field]),
-                    )
-                )
-        if tags is not None:
-            changes.extend(tag_changes(instance.tags.all(), tags))
-
-        changed_fields = [
-            attr for attr, value in validated_data.items() if getattr(instance, attr) != value
-        ]
-
-        with transaction.atomic():
-            for attr in changed_fields:
-                setattr(instance, attr, validated_data[attr])
-            instance.save(update_fields=[*changed_fields, "updated_at"])
-            if tags is not None:
-                instance.tags.set(tags)
-            self._record_changes(instance, actor, changes)
-
-        return instance
+        return update_ticket(instance, self._get_actor(), validated_data)
 
 
 class CustomerTicketSerializer(TicketSerializer):

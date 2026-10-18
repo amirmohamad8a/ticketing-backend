@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 from accounts.models import User
 from accounts.permissions import STAFF_ROLES
 from realtime.events import MESSAGE_EVENT_TYPE, publish
+from tickets.lifecycle import reopen_on_customer_reply
 from tickets.models import Comment, SenderType, Ticket
 
 MESSAGES_PAGE_SIZE = 100
@@ -115,3 +116,30 @@ def post_message(
             )
         raise
     return comment, True
+
+
+def post_customer_message(
+    ticket,
+    body,
+    actor=None,
+    visitor=None,
+    is_internal=False,
+    client_msg_id=None,
+    kind=Comment.Kind.MESSAGE,
+    on_created=None,
+):
+    with transaction.atomic():
+        comment, created = post_message(
+            ticket,
+            body,
+            author=actor,
+            visitor=visitor,
+            is_internal=is_internal,
+            client_msg_id=client_msg_id,
+            kind=kind,
+        )
+        if created:
+            if on_created is not None:
+                on_created(comment)
+            reopen_on_customer_reply(ticket.pk, actor=actor)
+    return comment, created
