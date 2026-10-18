@@ -37,6 +37,16 @@ class AppendOnlyModel(models.Model):
         raise AppendOnlyError(f"{type(self).__name__} rows cannot be deleted.")
 
 
+class AuditEvent(AppendOnlyModel):
+    field_changed = models.CharField(max_length=50)
+    old_value = models.CharField(max_length=255, blank=True, default="")
+    new_value = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+
+
 class SoftDeleteQuerySet(models.QuerySet):
     def deleted(self):
         return self.filter(is_deleted=True)

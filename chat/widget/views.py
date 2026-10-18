@@ -55,9 +55,10 @@ from chat.widget.throttles import (
 from core.downloads import build_download_link
 from core.tickets import issue_ticket
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_customer_message
-from tickets.models import Attachment, Ticket, TicketRating
+from tickets.models import Ticket, TicketRating
 from tickets.ratings import rate_ticket
 from tickets.reads import mark_conversation_read, unread_count, visible_comments
+from tickets.selectors import visible_attachments
 from tickets.serializers import ReadMarkSerializer, ReadStateSerializer, TicketRatingSerializer
 
 
@@ -244,19 +245,11 @@ class AttachmentCreateView(WidgetAPIView):
 @widget_download_schema
 class WidgetAttachmentDownloadView(WidgetAPIView):
     def get(self, request, pk):
-        attachment = get_object_or_404(self._visible_attachments(request.auth), pk=pk)
+        attachment = get_object_or_404(visible_attachments(request.auth), pk=pk)
         link = build_download_link(
             request, attachment.file, attachment.content_type, attachment.original_name
         )
         return Response(link)
-
-    @staticmethod
-    def _visible_attachments(visitor):
-        return Attachment.objects.filter(
-            comment__ticket__visitor=visitor,
-            comment__ticket__is_deleted=False,
-            comment__is_internal=False,
-        )
 
 
 @widget_socket_ticket_schema

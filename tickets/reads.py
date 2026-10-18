@@ -5,8 +5,8 @@ from django.utils.translation import gettext_lazy as _
 
 from rest_framework.exceptions import ValidationError
 
-from accounts.models import User
 from tickets.models import Comment, ConversationRead
+from tickets.selectors import comment_visibility_filter, unread_comment_filter
 
 
 def _reader_filter(user, visitor):
@@ -17,17 +17,11 @@ def _reader_filter(user, visitor):
 
 def visible_comments(ticket, user=None, visitor=None):
     _reader_filter(user, visitor)
-    queryset = Comment.objects.filter(ticket=ticket)
-    if visitor is not None or user.role == User.Role.CUSTOMER:
-        return queryset.filter(is_internal=False)
-    return queryset
+    return Comment.objects.filter(ticket=ticket).filter(comment_visibility_filter(user, visitor))
 
 
 def _comments_from_others(ticket, user, visitor):
-    queryset = visible_comments(ticket, user, visitor)
-    if visitor is not None:
-        return queryset.exclude(visitor=visitor)
-    return queryset.exclude(author=user)
+    return Comment.objects.filter(ticket=ticket).filter(unread_comment_filter(user, visitor))
 
 
 def _last_read(ticket, user, visitor):
@@ -74,9 +68,7 @@ def annotate_unread(queryset, user):
     )
     comments = Comment.objects.filter(
         ticket=OuterRef("pk"), id__gt=OuterRef("last_read_id")
-    ).exclude(author=user)
-    if user.role == User.Role.CUSTOMER:
-        comments = comments.filter(is_internal=False)
+    ).filter(unread_comment_filter(user))
     counts = comments.order_by().values("ticket").annotate(total=Count("pk")).values("total")
     return queryset.annotate(
         unread_count=Coalesce(Subquery(counts, output_field=IntegerField()), 0)

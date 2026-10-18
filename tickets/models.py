@@ -14,7 +14,7 @@ from django.utils.translation import gettext_lazy as _
 from core.models import (
     ActiveRowsManager,
     AllRowsManager,
-    AppendOnlyModel,
+    AuditEvent,
     SoftDeleteModel,
     SoftDeleteQuerySet,
     TimeStampedModel,
@@ -233,7 +233,7 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
         return f"#{self.pk} {self.title}"
 
 
-class TicketEvent(AppendOnlyModel):
+class TicketEvent(AuditEvent):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="events")
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -242,10 +242,6 @@ class TicketEvent(AppendOnlyModel):
         blank=True,
         related_name="ticket_events",
     )
-    field_changed = models.CharField(max_length=50)
-    old_value = models.CharField(max_length=255, blank=True, default="")
-    new_value = models.CharField(max_length=255, blank=True, default="")
-    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at"]

@@ -1,4 +1,3 @@
-from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 
@@ -19,7 +18,7 @@ from tickets.events import STAFF_ONLY_EVENT_FIELDS
 from tickets.export import build_export_response
 from tickets.filters import TicketFilter
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_customer_message, post_message
-from tickets.models import Attachment, Ticket, TicketRating
+from tickets.models import Ticket, TicketRating
 from tickets.pagination import TicketCursorPagination
 from tickets.permissions import (
     AdminOnlyDeleteAndRestore,
@@ -36,6 +35,7 @@ from tickets.schema import (
     rating_schema,
     ticket_schema,
 )
+from tickets.selectors import visible_attachments
 from tickets.serializers import (
     AttachmentSerializer,
     CommentSerializer,
@@ -106,6 +106,7 @@ class TicketViewSet(viewsets.ModelViewSet):
     def _attachments_response(self, request, queryset, **parent):
         context = {"request": request}
         if request.method == "GET":
+            queryset = visible_attachments(request.user, queryset)
             return Response(AttachmentSerializer(queryset, many=True, context=context).data)
 
         serializer = AttachmentSerializer(data=request.data, context=context)
@@ -266,17 +267,8 @@ class AttachmentDownloadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        attachment = get_object_or_404(self._visible_attachments(request.user), pk=pk)
+        attachment = get_object_or_404(visible_attachments(request.user), pk=pk)
         link = build_download_link(
             request, attachment.file, attachment.content_type, attachment.original_name
         )
         return Response(link)
-
-    @staticmethod
-    def _visible_attachments(user):
-        ticket_scope = Q(ticket__is_deleted=False)
-        comment_scope = Q(comment__ticket__is_deleted=False)
-        if user.role == User.Role.CUSTOMER:
-            ticket_scope &= Q(ticket__customer=user)
-            comment_scope &= Q(comment__ticket__customer=user, comment__is_internal=False)
-        return Attachment.objects.filter(ticket_scope | comment_scope)

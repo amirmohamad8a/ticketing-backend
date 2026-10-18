@@ -66,7 +66,7 @@ async def _open(identity, origin=ORIGIN, path="/ws/"):
     token = (await sync_to_async(issue_ticket)(**identity))["ticket"]
     headers = [(b"origin", origin.encode())] if origin else []
     communicator = WebsocketCommunicator(application, f"{path}?ticket={token}", headers=headers)
-    connected, code = await communicator.connect()
+    connected, code = await communicator.connect(timeout=5)
     return communicator, connected, code
 
 

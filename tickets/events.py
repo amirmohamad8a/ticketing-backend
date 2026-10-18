@@ -41,23 +41,32 @@ def tag_changes(old_tags, new_tags):
     return [(TAG_FIELD, name, "") for name in removed] + [(TAG_FIELD, "", name) for name in added]
 
 
-def record_event(ticket, actor, field_changed, old_value, new_value):
-    event = TicketEvent.objects.create(
+def create_event(ticket, actor, field_changed, old_value, new_value):
+    return TicketEvent.objects.create(
         ticket=ticket,
         actor=actor,
         field_changed=field_changed,
         old_value=old_value,
         new_value=new_value,
     )
+
+
+def publish_event(event):
     publish(
         TICKET_EVENT_TYPE,
         event.pk,
         event.ticket_id,
         {
-            "field_changed": field_changed,
-            "old_value": old_value,
-            "new_value": new_value,
+            "field_changed": event.field_changed,
+            "old_value": event.old_value,
+            "new_value": event.new_value,
         },
-        staff_only=field_changed in STAFF_ONLY_EVENT_FIELDS,
+        staff_only=event.field_changed in STAFF_ONLY_EVENT_FIELDS,
     )
+    return event
+
+
+def record_event(ticket, actor, field_changed, old_value, new_value):
+    event = create_event(ticket, actor, field_changed, old_value, new_value)
+    publish_event(event)
     return event
