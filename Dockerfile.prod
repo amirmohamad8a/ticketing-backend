@@ -46,6 +46,8 @@ USER app
 
 RUN SECRET_KEY=collectstatic-only-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz \
     JWT_SIGNING_KEY=collectstatic-only-signing-key-9876543210-zyxwvutsrqponmlkjihgfedcba \
+    DATABASE_URL=postgres://collectstatic:collectstatic@localhost:5432/collectstatic \
+    NUM_PROXIES=1 \
     python manage.py collectstatic --noinput
 
 EXPOSE 8000
