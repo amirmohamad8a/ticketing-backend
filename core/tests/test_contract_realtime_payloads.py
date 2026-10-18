@@ -30,7 +30,6 @@ def _message(group, payload, staff_only):
         "group": group,
         "staff_only": staff_only,
         "payload": payload,
-        "public_payload": payload,
     }
 
 

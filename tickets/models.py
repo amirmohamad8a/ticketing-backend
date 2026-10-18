@@ -20,6 +20,7 @@ from core.models import (
     TimeStampedModel,
 )
 from core.search import build_search_vector
+from core.uploads import ATTACHMENT_UPLOAD_POLICY
 from tickets.sla import compute_first_response_due_at
 from tickets.validators import (
     MAX_BODY_LENGTH,
@@ -44,7 +45,7 @@ class SenderType(StrEnum):
 
 
 def attachment_upload_path(instance, filename):
-    extension = Attachment.CONTENT_TYPE_EXTENSIONS.get(instance.content_type, "")
+    extension = ATTACHMENT_UPLOAD_POLICY.content_type_extensions.get(instance.content_type, "")
     return f"attachments/{timezone.localdate():%Y/%m/%d}/{uuid.uuid4().hex}{extension}"
 
 
@@ -219,14 +220,21 @@ class Ticket(SoftDeleteModel, TimeStampedModel):
         if bool(self.customer_id) == bool(self.visitor_id):
             raise ValidationError(_("Ticket must belong to exactly one of customer or visitor."))
 
+    def refresh_first_response_due_at(self, update_fields=None):
+        if update_fields is not None and "priority" not in update_fields:
+            return update_fields
+        self.first_response_due_at = compute_first_response_due_at(
+            self.priority, self.created_at or timezone.now()
+        )
+        if update_fields is None:
+            return None
+        return {*update_fields, "first_response_due_at"}
+
     def save(self, *args, **kwargs):
         update_fields = kwargs.get("update_fields")
-        if update_fields is None or "priority" in update_fields:
-            self.first_response_due_at = compute_first_response_due_at(
-                self.priority, self.created_at or timezone.now()
-            )
-            if update_fields is not None:
-                kwargs["update_fields"] = {*update_fields, "first_response_due_at"}
+        refreshed_fields = self.refresh_first_response_due_at(update_fields)
+        if update_fields is not None:
+            kwargs["update_fields"] = refreshed_fields
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -379,18 +387,9 @@ class TicketRating(TimeStampedModel):
 
 
 class Attachment(TimeStampedModel):
-    MAX_SIZE_BYTES = 10 * 1024 * 1024
-    CONTENT_TYPE_EXTENSIONS = {
-        "image/png": ".png",
-        "image/jpeg": ".jpg",
-        "image/gif": ".gif",
-        "application/pdf": ".pdf",
-        "text/plain": ".txt",
-        "application/msword": ".doc",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
-        "application/zip": ".zip",
-    }
-    ALLOWED_CONTENT_TYPES = frozenset(CONTENT_TYPE_EXTENSIONS)
+    MAX_SIZE_BYTES = ATTACHMENT_UPLOAD_POLICY.max_size_bytes
+    CONTENT_TYPE_EXTENSIONS = ATTACHMENT_UPLOAD_POLICY.content_type_extensions
+    ALLOWED_CONTENT_TYPES = ATTACHMENT_UPLOAD_POLICY.allowed_content_types
 
     ticket = models.ForeignKey(
         Ticket,

@@ -11,7 +11,7 @@ STORAGE_BACKEND = env("STORAGE_BACKEND", default="local")
 DOWNLOAD_URL_TTL_SECONDS = env.int("DOWNLOAD_URL_TTL_SECONDS", default=300)
 
 if STORAGE_BACKEND == "local":
-    _DEFAULT_STORAGE = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+    _DEFAULT_STORAGE = {"BACKEND": "core.storage.LocalStorage"}
 elif STORAGE_BACKEND == "s3":
     _DEFAULT_STORAGE = {
         "BACKEND": "core.storage.PresignedS3Storage",

@@ -112,7 +112,8 @@ class WidgetLimitCoverageTests(TestCase):
         ensure_site_capacity(self.site)
 
     def test_counting_starts_recovers_when_the_cache_counter_disappears(self):
-        with patch("chat.widget.limits.cache.incr", side_effect=ValueError):
+        cache.set(f"widget-site-starts:{self.site.pk}", 3)
+        with patch("core.counters.cache.incr", side_effect=ValueError):
             self.assertEqual(_count_start(self.site), 1)
 
     @override_settings(WIDGET_SITE_MAX_UNASSIGNED_CHATS=10)

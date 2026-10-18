@@ -10,8 +10,9 @@ from django.utils.translation import gettext_lazy as _
 
 from accounts.validators import validate_iranian_mobile
 from core.models import AuditEvent
+from core.uploads import AVATAR_UPLOAD_POLICY
 
-AVATAR_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
+AVATAR_EXTENSIONS = AVATAR_UPLOAD_POLICY.extensions
 
 
 def avatar_upload_path(instance, filename):
@@ -22,12 +23,8 @@ def avatar_upload_path(instance, filename):
 
 
 class User(AbstractUser):
-    AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024
-    AVATAR_CONTENT_TYPES = {
-        "image/png": ".png",
-        "image/jpeg": ".jpg",
-        "image/webp": ".webp",
-    }
+    AVATAR_MAX_SIZE_BYTES = AVATAR_UPLOAD_POLICY.max_size_bytes
+    AVATAR_CONTENT_TYPES = AVATAR_UPLOAD_POLICY.content_type_extensions
     DEFAULT_MAX_CONCURRENT_CHATS = 5
     MAX_CONCURRENT_CHATS_LIMIT = 50
 

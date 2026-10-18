@@ -23,5 +23,6 @@ python-discovery==1.6.1
 pytokens==0.4.1
 ruff==0.16.9
 virtualenv==21.12.1
+vulture==2.16
 import-linter==2.15
 grimp==3.17

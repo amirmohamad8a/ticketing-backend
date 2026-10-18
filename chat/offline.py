@@ -45,10 +45,19 @@ def _unanswered_chats():
     return Ticket.objects.chat().unfinished().filter(~Exists(_public_staff_replies(OuterRef("pk"))))
 
 
-def _confirm_early(candidate_ids):
-    previous = set(cache.get(EARLY_CANDIDATES_KEY) or ())
-    cache.set(EARLY_CANDIDATES_KEY, list(candidate_ids), timeout=EARLY_CANDIDATES_TTL_SECONDS)
-    return previous.intersection(candidate_ids)
+class EarlyCandidateConfirmation:
+    def __init__(self, key=EARLY_CANDIDATES_KEY, ttl_seconds=EARLY_CANDIDATES_TTL_SECONDS):
+        self.key = key
+        self.ttl_seconds = ttl_seconds
+
+    def confirm(self, candidate_ids):
+        candidate_ids = set(candidate_ids)
+        previous = set(cache.get(self.key) or ())
+        cache.set(self.key, list(candidate_ids), timeout=self.ttl_seconds)
+        return previous.intersection(candidate_ids)
+
+
+EARLY_CANDIDATES = EarlyCandidateConfirmation()
 
 
 def due_chat_ticket_ids(now=None):
@@ -70,7 +79,7 @@ def due_chat_ticket_ids(now=None):
                 early.add(pk)
         elif assignee_id not in online_ids:
             early.add(pk)
-    due = expired | _confirm_early(early)
+    due = expired | EARLY_CANDIDATES.confirm(early)
     return [pk for pk, *_rest in rows if pk in due]
 
 

@@ -63,6 +63,47 @@ class SlaFunctionTests(SimpleTestCase):
 
 
 @override_settings(SLA_FIRST_RESPONSE_MINUTES=SLA_MINUTES)
+class FirstResponseDueDateRuleTests(TestCase):
+    def setUp(self):
+        self.customer = UserFactory()
+
+    def _ticket(self, priority, **kwargs):
+        return Ticket(
+            title="t",
+            description="d",
+            customer=self.customer,
+            priority=priority,
+            created_at=NOW,
+            **kwargs,
+        )
+
+    def test_creation_sets_the_due_date_from_the_priority_and_start(self):
+        ticket = self._ticket(Ticket.Priority.HIGH)
+        self.assertIsNone(ticket.refresh_first_response_due_at())
+        self.assertEqual(ticket.first_response_due_at, NOW + timedelta(minutes=240))
+
+    def test_an_update_without_priority_leaves_the_due_date_alone(self):
+        ticket = self._ticket(Ticket.Priority.MEDIUM)
+        ticket.refresh_first_response_due_at()
+        due = ticket.first_response_due_at
+        ticket.priority = Ticket.Priority.URGENT
+        fields = {"title"}
+        self.assertIs(ticket.refresh_first_response_due_at(fields), fields)
+        self.assertEqual(ticket.first_response_due_at, due)
+
+    def test_an_update_with_priority_recalculates_and_adds_the_field(self):
+        ticket = self._ticket(Ticket.Priority.MEDIUM)
+        ticket.refresh_first_response_due_at()
+        ticket.priority = Ticket.Priority.URGENT
+        fields = {"priority"}
+        self.assertEqual(
+            ticket.refresh_first_response_due_at(fields),
+            {"priority", "first_response_due_at"},
+        )
+        self.assertEqual(ticket.first_response_due_at, NOW + timedelta(minutes=60))
+
+
+@override_settings(SLA_FIRST_RESPONSE_MINUTES=SLA_MINUTES)
 class TicketDueDateTests(TestCase):
     def setUp(self):
         self.customer = UserFactory()

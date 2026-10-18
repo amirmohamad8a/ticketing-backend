@@ -3,17 +3,20 @@ from datetime import timedelta
 from django.db import migrations, models
 from django.db.models import ExpressionWrapper, F
 
-from tickets.sla import first_response_minutes
-
-PRIORITIES = ("low", "medium", "high", "urgent")
+FIRST_RESPONSE_MINUTES = {
+    "low": 1440,
+    "medium": 480,
+    "high": 240,
+    "urgent": 60,
+}
 
 
 def backfill_due_dates(apps, schema_editor):
     Ticket = apps.get_model("tickets", "Ticket")
-    for priority in PRIORITIES:
+    for priority, minutes in FIRST_RESPONSE_MINUTES.items():
         Ticket.objects.filter(priority=priority).update(
             first_response_due_at=ExpressionWrapper(
-                F("created_at") + timedelta(minutes=first_response_minutes(priority)),
+                F("created_at") + timedelta(minutes=minutes),
                 output_field=models.DateTimeField(),
             )
         )

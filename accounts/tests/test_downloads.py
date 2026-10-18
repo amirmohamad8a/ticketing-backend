@@ -13,6 +13,7 @@ from django.test import RequestFactory, SimpleTestCase, TestCase, override_setti
 from rest_framework.test import APIClient
 
 from core.downloads import DOWNLOAD_SALT, build_download_link
+from core.storage import PresignedS3Storage
 from core.tests import read_streaming_body
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
@@ -116,13 +117,24 @@ class SignedDownloadTests(TestCase):
 
 class S3DownloadLinkTests(SimpleTestCase):
     def _link(self, filename=None):
-        storage = Mock()
-        storage.url.return_value = "https://bucket.example/attachments/a.txt?signature=1"
+        storage = PresignedS3Storage(
+            bucket_name="ticketing",
+            access_key="test-access-key",
+            secret_key="test-secret-key",
+            endpoint_url="http://minio:9000",
+            region_name="us-east-1",
+            signature_version="s3v4",
+            addressing_style="path",
+            default_acl=None,
+            querystring_auth=True,
+            file_overwrite=False,
+        )
+        storage.url = Mock(return_value="https://bucket.example/attachments/a.txt?signature=1")
         file = SimpleNamespace(name="attachments/a.txt", storage=storage)
         link = build_download_link(RequestFactory().get("/"), file, "text/plain", filename)
         return storage, link
 
-    @override_settings(STORAGE_BACKEND="s3", DOWNLOAD_URL_TTL_SECONDS=120)
+    @override_settings(DOWNLOAD_URL_TTL_SECONDS=120)
     def test_s3_backend_returns_the_presigned_url_of_the_storage(self):
         storage, link = self._link()
 
@@ -139,7 +151,7 @@ class S3DownloadLinkTests(SimpleTestCase):
             expire=120,
         )
 
-    @override_settings(STORAGE_BACKEND="s3", DOWNLOAD_URL_TTL_SECONDS=120)
+    @override_settings(DOWNLOAD_URL_TTL_SECONDS=120)
     def test_s3_url_forces_a_download_under_the_given_file_name(self):
         storage, _ = self._link(filename="invoice.txt")
 
@@ -148,7 +160,7 @@ class S3DownloadLinkTests(SimpleTestCase):
             parameters["ResponseContentDisposition"], 'attachment; filename="invoice.txt"'
         )
 
-    @override_settings(STORAGE_BACKEND="s3", DOWNLOAD_URL_TTL_SECONDS=120)
+    @override_settings(DOWNLOAD_URL_TTL_SECONDS=120)
     def test_s3_url_encodes_a_persian_file_name(self):
         storage, _ = self._link(filename="گزارش.txt")
 

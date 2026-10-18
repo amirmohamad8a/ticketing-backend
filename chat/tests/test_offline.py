@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 
 from chat import presence
 from chat.assignment import route_queued_chats
-from chat.offline import convert_due_chats
+from chat.offline import EarlyCandidateConfirmation, convert_due_chats
 from core.tests.factories import AgentFactory, SiteFactory, TicketFactory
 from tickets.models import Ticket
 
@@ -79,6 +79,30 @@ class QueuedChatDrainTests(TestCase):
         self.assertEqual(route_queued_chats(), 1)
         self.queued.refresh_from_db()
         self.assertEqual(self.queued.assignee, self.agent)
+
+
+class EarlyCandidateConfirmationTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def test_a_first_sighting_is_not_confirmed(self):
+        confirmation = EarlyCandidateConfirmation(key="early-test", ttl_seconds=10)
+        self.assertEqual(confirmation.confirm({1, 2}), set())
+
+    def test_a_second_sighting_confirms_the_shared_candidates(self):
+        confirmation = EarlyCandidateConfirmation(key="early-test", ttl_seconds=10)
+        self.assertEqual(confirmation.confirm({1, 2}), set())
+        self.assertEqual(confirmation.confirm({1, 2, 3}), {1, 2})
+
+    def test_the_configured_ttl_is_written_with_the_candidates(self):
+        confirmation = EarlyCandidateConfirmation(key="early-test", ttl_seconds=42)
+        with patch("chat.offline.cache.set") as set_cache:
+            confirmation.confirm({1, 2})
+        args, kwargs = set_cache.call_args
+        self.assertEqual(args[0], "early-test")
+        self.assertEqual(set(args[1]), {1, 2})
+        self.assertEqual(kwargs["timeout"], 42)
 
 
 class OfflineSweepTests(TestCase):

@@ -71,3 +71,67 @@ def clean_file_name(name):
     base = os.path.basename(str(name).replace("\\", "/"))
     printable = "".join(char for char in base if char.isprintable())
     return printable[:MAX_NAME_LENGTH]
+
+
+class UploadPolicy:
+    def __init__(
+        self,
+        *,
+        max_size_bytes,
+        content_type_extensions,
+        size_message,
+        type_message,
+        extensions=None,
+        rename=None,
+    ):
+        self.max_size_bytes = max_size_bytes
+        self.content_type_extensions = dict(content_type_extensions)
+        self.allowed_content_types = frozenset(content_type_extensions)
+        self.extensions = frozenset(extensions or content_type_extensions.values())
+        self.size_message = size_message
+        self.type_message = type_message
+        self.rename = rename
+
+    def validate(self, value, max_size_bytes=None):
+        max_size_bytes = self.max_size_bytes if max_size_bytes is None else max_size_bytes
+        if value.size > max_size_bytes:
+            max_mb = max_size_bytes // (1024 * 1024)
+            raise ValidationError(self.size_message % {"max_mb": max_mb})
+        content_type = getattr(value, "content_type", "") or ""
+        extension = self.content_type_extensions.get(content_type)
+        if extension is None:
+            raise ValidationError(self.type_message % {"content_type": content_type})
+        ensure_content_matches(value, content_type)
+        if self.rename is not None:
+            value.name = self.rename(extension)
+        return value
+
+
+ATTACHMENT_UPLOAD_POLICY = UploadPolicy(
+    max_size_bytes=10 * 1024 * 1024,
+    content_type_extensions={
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/gif": ".gif",
+        "application/pdf": ".pdf",
+        "text/plain": ".txt",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+        "application/zip": ".zip",
+    },
+    size_message=_("File too large. Max size is %(max_mb)sMB."),
+    type_message=_("File type '%(content_type)s' is not allowed."),
+)
+
+AVATAR_UPLOAD_POLICY = UploadPolicy(
+    max_size_bytes=2 * 1024 * 1024,
+    content_type_extensions={
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/webp": ".webp",
+    },
+    size_message=_("Avatar too large. Max size is %(max_mb)sMB."),
+    type_message=_("Avatar must be a PNG, JPEG or WebP image."),
+    extensions={".png", ".jpg", ".jpeg", ".webp"},
+    rename=lambda extension: f"avatar{extension}",
+)

@@ -53,24 +53,6 @@ class RealtimeEventsCoverageTests(TestCase):
                     publish("ticket.event", 1, 1, {"field_changed": "status"})
         self.assertEqual(len(logs.records), 2)
 
-    def test_public_data_builds_a_separate_public_payload(self):
-        layer = RecordingLayer()
-        with self._capture(layer):
-            with self.captureOnCommitCallbacks(execute=True):
-                publish(
-                    "ticket.event",
-                    7,
-                    3,
-                    {"field_changed": "assignee", "secret": True},
-                    staff_only=True,
-                    public_data={"field_changed": "assignee"},
-                )
-        self.assertEqual(len(layer.messages), 2)
-        for _group, message in layer.messages:
-            self.assertTrue(message["staff_only"])
-            self.assertEqual(message["payload"]["data"]["secret"], True)
-            self.assertNotIn("secret", message["public_payload"]["data"])
-
     def test_close_user_sockets_delivers_the_close_message(self):
         layer = RecordingLayer()
         with self._capture(layer):

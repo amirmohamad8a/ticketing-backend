@@ -1,9 +1,10 @@
 from django.conf import settings
-from django.core.cache import cache
 from django.http import HttpResponse
 from django.utils.translation import gettext
 
 from rest_framework.throttling import BaseThrottle
+
+from core.counters import increment_fixed_window
 
 ADMIN_LOGIN_CACHE_PREFIX = "admin_login_attempt"
 
@@ -33,11 +34,5 @@ class AdminLoginThrottleMiddleware:
         ident = BaseThrottle().get_ident(request) or "unknown"
         key = f"{ADMIN_LOGIN_CACHE_PREFIX}:{ident}"
         window = settings.ADMIN_LOGIN_WINDOW_SECONDS
-        try:
-            if cache.add(key, 1, window):
-                return False
-            attempts = cache.incr(key)
-        except ValueError:
-            cache.set(key, 1, window)
-            return False
+        attempts = increment_fixed_window(key, window)
         return attempts > max_attempts

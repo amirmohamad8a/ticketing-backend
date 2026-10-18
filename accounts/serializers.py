@@ -11,7 +11,7 @@ from accounts.models import User
 from accounts.services import create_user, update_user
 from core.events import close_user_sockets
 from core.phone import build_phone_field
-from core.uploads import ensure_content_matches
+from core.uploads import AVATAR_UPLOAD_POLICY
 
 logger = logging.getLogger(__name__)
 
@@ -101,17 +101,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     def validate_avatar(self, value):
         if value is None:
             return value
-        if value.size > User.AVATAR_MAX_SIZE_BYTES:
-            max_mb = User.AVATAR_MAX_SIZE_BYTES // (1024 * 1024)
-            message = _("Avatar too large. Max size is %(max_mb)sMB.")
-            raise serializers.ValidationError(message % {"max_mb": max_mb})
-        content_type = getattr(value, "content_type", "")
-        extension = User.AVATAR_CONTENT_TYPES.get(content_type)
-        if extension is None:
-            raise serializers.ValidationError(_("Avatar must be a PNG, JPEG or WebP image."))
-        ensure_content_matches(value, content_type)
-        value.name = f"avatar{extension}"
-        return value
+        return AVATAR_UPLOAD_POLICY.validate(value, max_size_bytes=User.AVATAR_MAX_SIZE_BYTES)
 
     def update(self, instance, validated_data):
         storage = instance.avatar.storage

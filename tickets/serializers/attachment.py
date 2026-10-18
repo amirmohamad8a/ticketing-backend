@@ -1,9 +1,8 @@
 from django.urls import reverse
-from django.utils.translation import gettext_lazy as _
 
 from rest_framework import serializers
 
-from core.uploads import clean_file_name, ensure_content_matches
+from core.uploads import ATTACHMENT_UPLOAD_POLICY, clean_file_name
 from tickets.models import Attachment
 
 
@@ -42,16 +41,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
         return request.build_absolute_uri(path) if request else path
 
     def validate_file(self, value):
-        if value.size > Attachment.MAX_SIZE_BYTES:
-            max_mb = Attachment.MAX_SIZE_BYTES // (1024 * 1024)
-            message = _("File too large. Max size is %(max_mb)sMB.")
-            raise serializers.ValidationError(message % {"max_mb": max_mb})
-        content_type = getattr(value, "content_type", "") or ""
-        if content_type not in Attachment.ALLOWED_CONTENT_TYPES:
-            message = _("File type '%(content_type)s' is not allowed.")
-            raise serializers.ValidationError(message % {"content_type": content_type})
-        ensure_content_matches(value, content_type)
-        return value
+        return ATTACHMENT_UPLOAD_POLICY.validate(value, max_size_bytes=Attachment.MAX_SIZE_BYTES)
 
     def create(self, validated_data):
         file_obj = validated_data["file"]
