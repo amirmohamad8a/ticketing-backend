@@ -1,12 +1,7 @@
 from rest_framework import serializers
 
 from accounts.models import User
-from realtime.presence import STATUSES
-
-
-class SocketTicketSerializer(serializers.Serializer):
-    ticket = serializers.CharField(read_only=True)
-    expires_in = serializers.IntegerField(read_only=True)
+from chat.presence import STATUSES
 
 
 class OnlineAgentSerializer(serializers.Serializer):

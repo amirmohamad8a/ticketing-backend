@@ -5,7 +5,7 @@ from rest_framework.exceptions import ValidationError
 
 from accounts.models import User
 from accounts.permissions import STAFF_ROLES
-from realtime.events import MESSAGE_EVENT_TYPE, publish
+from core.events import MESSAGE_EVENT_TYPE, publish
 from tickets.lifecycle import reopen_on_customer_reply
 from tickets.models import Comment, SenderType, Ticket
 

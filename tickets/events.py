@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from realtime.events import TICKET_EVENT_TYPE, publish
+from core.events import TICKET_EVENT_TYPE, publish
 from tickets.models import TicketEvent
 
 

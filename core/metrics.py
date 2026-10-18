@@ -1,4 +1,3 @@
-import logging
 import os
 import time
 
@@ -11,9 +10,6 @@ from prometheus_client import (
     generate_latest,
     multiprocess,
 )
-from prometheus_client.core import GaugeMetricFamily
-
-logger = logging.getLogger(__name__)
 
 TICKETS_ENDPOINT = "tickets"
 PRESENCE_ENDPOINT = "presence"
@@ -68,24 +64,11 @@ class RequestMetricsMiddleware:
         return response
 
 
-class DatabaseCollector:
-    def collect(self):
-        from stats.queries import queue_size
-
-        try:
-            size = queue_size()
-        except Exception:
-            logger.exception("Could not read the queue size for the metrics endpoint")
-            return
-        yield GaugeMetricFamily(
-            "ticketing_queue_size",
-            "Tickets without an assignee that are not resolved or closed.",
-            value=size,
-        )
-
-
 _scrape_registry = CollectorRegistry()
-_scrape_registry.register(DatabaseCollector())
+
+
+def register_scrape_collector(collector):
+    _scrape_registry.register(collector)
 
 
 def _is_multiprocess():

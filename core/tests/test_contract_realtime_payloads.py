@@ -4,8 +4,8 @@ from django.db import transaction
 from django.test import TestCase
 
 from chat.offline import convert_unanswered_chat
+from core.groups import AGENTS_QUEUE_GROUP, ticket_group
 from core.tests.factories import AgentFactory, TicketFactory, VisitorFactory
-from realtime.groups import AGENTS_QUEUE_GROUP, ticket_group
 from tickets.events import record_event
 from tickets.messages import post_message
 from tickets.models import Ticket
@@ -35,7 +35,7 @@ def _message(group, payload, staff_only):
 
 class RealtimePayloadContractTests(TestCase):
     def _capture(self):
-        return patch("realtime.events.get_channel_layer")
+        return patch("core.events.get_channel_layer")
 
     def _groups(self, ticket_id):
         return (ticket_group(ticket_id), AGENTS_QUEUE_GROUP)

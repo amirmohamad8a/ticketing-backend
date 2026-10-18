@@ -7,7 +7,7 @@ from django.http import HttpResponseRedirect
 from accounts.events import UserEventField, flag, record_user_event
 from accounts.models import User, UserEvent
 from accounts.services import apply_user_side_effects, reset_password
-from realtime.events import close_user_sockets
+from core.events import close_user_sockets
 
 M2M_FIELDS = (UserEventField.GROUPS, UserEventField.USER_PERMISSIONS)
 VALUE_MAX_LENGTH = 255
@@ -76,7 +76,8 @@ class UserAdmin(DjangoUserAdmin):
                 actor,
                 events,
                 revoke_tokens=deactivated,
-                release=deactivated or demoted,
+                deactivated=deactivated,
+                demoted=demoted,
                 close_sockets=bool(events),
                 close_user_sockets_fn=close_user_sockets,
             )

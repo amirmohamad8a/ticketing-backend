@@ -87,9 +87,6 @@ source_modules = ["core"]
 forbidden_modules = ["accounts", "tickets", "chat", "demo", "realtime", "stats", "audit"]
 ignore_imports = [
     "core.tests.** -> **",
-    "core.metrics -> stats.queries",
-    "core.orphans -> accounts.models",
-    "core.orphans -> tickets.models",
 ]
 
 [[tool.importlinter.contracts]]
@@ -99,11 +96,6 @@ source_modules = ["accounts"]
 forbidden_modules = ["tickets", "chat", "demo", "realtime", "stats", "audit"]
 ignore_imports = [
     "accounts.tests.** -> **",
-    "accounts.admin -> realtime.events",
-    "accounts.serializers -> realtime.events",
-    "accounts.services -> realtime.events",
-    "accounts.services -> tickets.assignment",
-    "accounts.views -> realtime.events",
 ]
 
 [[tool.importlinter.contracts]]
@@ -114,9 +106,6 @@ forbidden_modules = ["chat", "demo", "realtime", "stats", "audit"]
 ignore_imports = [
     "tickets.tests.** -> **",
     "tickets.serializers -> chat.models",
-    "tickets.assignment -> chat.assignment",
-    "tickets.events -> realtime.events",
-    "tickets.messages -> realtime.events",
 ]
 
 [[tool.importlinter.contracts]]
@@ -126,23 +115,6 @@ source_modules = ["chat"]
 forbidden_modules = ["realtime", "stats", "audit", "demo"]
 ignore_imports = [
     "chat.tests.** -> **",
-    "chat.assignment -> realtime.presence",
-    "chat.assignment -> tickets.assignment",
-    "chat.availability -> realtime.presence",
-    "chat.conversations -> realtime.presence",
-    "chat.offline -> realtime.events",
-    "chat.offline -> realtime.presence",
-    "chat.offline -> tickets.events",
-    "chat.offline -> tickets.messages",
-    "chat.widget.schema -> realtime.serializers",
-    "chat.widget.schema -> tickets.serializers",
-    "chat.widget.serializers -> tickets.serializers",
-    "chat.widget.views -> realtime.tickets",
-    "chat.contact -> tickets.events",
-    "chat.conversations -> tickets.events",
-    "chat.conversations -> tickets.messages",
-    "chat.widget.views -> tickets.messages",
-    "chat.widget.views -> tickets.serializers",
 ]
 
 [[tool.importlinter.contracts]]
@@ -152,8 +124,6 @@ source_modules = ["realtime"]
 forbidden_modules = ["stats", "audit", "demo"]
 ignore_imports = [
     "realtime.tests.** -> **",
-    "realtime.consumers -> core.metrics",
-    "realtime.presence_consumer -> core.metrics",
 ]
 
 [[tool.importlinter.contracts]]

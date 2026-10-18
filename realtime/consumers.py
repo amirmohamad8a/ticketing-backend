@@ -5,10 +5,10 @@ from django.conf import settings
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from accounts.permissions import STAFF_ROLES
+from core.events import publish_typing
+from core.groups import AGENTS_QUEUE_GROUP, ticket_group, user_group
 from core.metrics import TICKETS_ENDPOINT, socket_closed, socket_opened
 from realtime.access import can_join_ticket
-from realtime.events import publish_typing
-from realtime.groups import AGENTS_QUEUE_GROUP, ticket_group, user_group
 from realtime.limits import MessageRateLimiter, TypingThrottle
 from realtime.protocol import (
     CLIENT_JOIN,

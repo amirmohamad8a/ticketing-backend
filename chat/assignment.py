@@ -6,7 +6,7 @@ from rest_framework.exceptions import ValidationError
 
 from accounts.models import User
 from accounts.permissions import STAFF_ROLES
-from realtime import presence
+from chat import presence
 from tickets.assignment import assign_ticket
 from tickets.models import Ticket
 

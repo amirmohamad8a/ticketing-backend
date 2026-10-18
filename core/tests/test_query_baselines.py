@@ -6,6 +6,7 @@ import pytest
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from chat import presence
 from chat.conversations import start_conversation
 from chat.tokens import issue_visitor_token
 from core.tests import read_streaming_body
@@ -19,7 +20,6 @@ from core.tests.factories import (
     TicketFactory,
     UserFactory,
 )
-from realtime import presence
 from tickets import export
 
 pytestmark = pytest.mark.django_db

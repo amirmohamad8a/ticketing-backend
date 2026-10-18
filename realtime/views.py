@@ -4,10 +4,10 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAgentOrAdmin
-from realtime.presence import online_agents
+from chat.presence import online_agents
+from core.tickets import issue_ticket
 from realtime.schema import online_agents_schema, socket_ticket_schema
 from realtime.serializers import OnlineAgentSerializer
-from realtime.tickets import issue_ticket
 
 
 @socket_ticket_schema

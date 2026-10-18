@@ -4,7 +4,7 @@ from channels.testing import WebsocketCommunicator
 
 from config.asgi import application
 from core.tests.factories import AgentFactory, TicketFactory, UserFactory
-from realtime.tickets import issue_ticket
+from core.tickets import issue_ticket
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.django_db(transaction=True)]
 

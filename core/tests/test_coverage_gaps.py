@@ -10,6 +10,8 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from chat.offline import convert_due_chats, convert_unanswered_chat, due_chat_ticket_ids
+from core.events import close_user_sockets, publish, publish_typing
+from core.groups import ticket_group, user_group
 from core.tests.factories import (
     AgentFactory,
     CommentFactory,
@@ -18,8 +20,6 @@ from core.tests.factories import (
     UserFactory,
     VisitorFactory,
 )
-from realtime.events import close_user_sockets, publish, publish_typing
-from realtime.groups import ticket_group, user_group
 from tickets.messages import post_message
 from tickets.models import Comment, Ticket
 
@@ -37,17 +37,17 @@ class RecordingLayer:
 
 class RealtimeEventsCoverageTests(TestCase):
     def _capture(self, layer):
-        return patch("realtime.events.get_channel_layer", return_value=layer)
+        return patch("core.events.get_channel_layer", return_value=layer)
 
     def test_delivery_is_skipped_when_there_is_no_channel_layer(self):
-        with patch("realtime.events.get_channel_layer", return_value=None):
+        with patch("core.events.get_channel_layer", return_value=None):
             with self.captureOnCommitCallbacks(execute=True):
                 publish("ticket.event", 1, 1, {"field_changed": "status"})
 
     def test_group_send_errors_are_logged_and_do_not_escape(self):
         layer = RecordingLayer(fail=True)
         with self._capture(layer):
-            with self.assertLogs("realtime.events", level="ERROR") as logs:
+            with self.assertLogs("core.events", level="ERROR") as logs:
                 with self.captureOnCommitCallbacks(execute=True):
                     publish("ticket.event", 1, 1, {"field_changed": "status"})
         self.assertEqual(len(logs.records), 2)
@@ -79,7 +79,7 @@ class RealtimeEventsCoverageTests(TestCase):
 
     def test_close_errors_are_logged(self):
         with self._capture(RecordingLayer(fail=True)):
-            with self.assertLogs("realtime.events", level="ERROR"):
+            with self.assertLogs("core.events", level="ERROR"):
                 with self.captureOnCommitCallbacks(execute=True):
                     close_user_sockets(42)
 
@@ -106,7 +106,7 @@ class RealtimeEventsCoverageTests(TestCase):
 
     def test_publish_typing_errors_are_logged(self):
         with self._capture(RecordingLayer(fail=True)):
-            with self.assertLogs("realtime.events", level="ERROR"):
+            with self.assertLogs("core.events", level="ERROR"):
                 asyncio.run(publish_typing(9, False, "user:1", "agent", "Sara"))
 
 

@@ -8,9 +8,9 @@ from django.utils import timezone
 from django.utils.translation import gettext
 
 from accounts.permissions import STAFF_ROLES
+from chat import presence
 from chat.assignment import route_queued_chats
-from realtime import presence
-from realtime.events import OFFLINE_EVENT_TYPE, publish
+from core.events import OFFLINE_EVENT_TYPE, publish
 from tickets.events import TicketEventField, record_event
 from tickets.messages import post_message
 from tickets.models import Comment, Ticket

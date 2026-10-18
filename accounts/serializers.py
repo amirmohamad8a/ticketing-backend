@@ -9,9 +9,9 @@ from rest_framework import serializers
 
 from accounts.models import User
 from accounts.services import create_user, update_user
+from core.events import close_user_sockets
 from core.phone import build_phone_field
 from core.uploads import ensure_content_matches
-from realtime.events import close_user_sockets
 
 logger = logging.getLogger(__name__)
 

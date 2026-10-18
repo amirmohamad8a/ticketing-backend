@@ -11,10 +11,10 @@ import redis
 from rest_framework.test import APIClient
 from rest_framework.throttling import SimpleRateThrottle
 
+from chat import presence
 from core.health import check_cache, run_checks
 from core.tests.factories import AgentFactory, UserFactory
-from realtime import presence
-from realtime.tickets import issue_ticket, redeem_ticket
+from core.tickets import issue_ticket, redeem_ticket
 
 KEY_PREFIX = "ticketing-test"
 REQUIRED = os.environ.get("REQUIRE_REDIS") == "1"

@@ -1,9 +1,9 @@
 from django.core.cache import cache
 from django.test import TestCase
 
+from chat import presence
 from chat.availability import agents_available
 from core.tests.factories import AdminFactory, AgentFactory, UserFactory
-from realtime import presence
 
 
 class AvailabilityTests(TestCase):

@@ -38,7 +38,7 @@ from accounts.serializers import (
 from accounts.services import change_own_password, logout_user
 from accounts.throttles import LoginUsernameThrottle
 from core.downloads import build_download_link
-from realtime.events import close_user_sockets
+from core.events import close_user_sockets
 
 AVATAR_MIME_TYPES = {
     extension: content_type for content_type, extension in User.AVATAR_CONTENT_TYPES.items()

@@ -19,8 +19,7 @@ from chat.widget.serializers import (
     WidgetMessageSerializer,
     WidgetUploadSerializer,
 )
-from core.serializers import DownloadLinkSerializer
-from realtime.serializers import SocketTicketSerializer
+from core.serializers import DownloadLinkSerializer, SocketTicketSerializer
 from tickets.exceptions import TicketAlreadyRated, TicketNotResolved
 from tickets.serializers import ReadMarkSerializer, ReadStateSerializer, TicketRatingSerializer
 

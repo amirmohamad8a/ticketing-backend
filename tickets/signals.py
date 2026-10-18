@@ -2,11 +2,22 @@ import logging
 
 from django.db import transaction
 from django.db.models.signals import post_delete
-from django.dispatch import receiver
+from django.dispatch import Signal, receiver
 
+from accounts.signals import user_deactivated, user_demoted
 from tickets.models import Attachment
 
 logger = logging.getLogger(__name__)
+
+tickets_released = Signal()
+
+
+@receiver(user_deactivated)
+@receiver(user_demoted)
+def release_user_tickets(sender, user, actor=None, **kwargs):
+    from tickets.assignment import release_tickets
+
+    release_tickets(user, actor)
 
 
 def _delete_file(storage, name):

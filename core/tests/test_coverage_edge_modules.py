@@ -32,8 +32,8 @@ from core.health import (
     run_checks,
 )
 from core.tests.factories import SiteFactory, TicketFactory, UserFactory, VisitorFactory
+from core.tickets import issue_ticket, redeem_ticket
 from realtime.limits import MessageRateLimiter, TypingThrottle
-from realtime.tickets import issue_ticket, redeem_ticket
 from tickets.models import TicketEvent
 from tickets.signals import delete_attachment_file
 from tickets.tasks import auto_close_resolved, report_orphan_files
@@ -244,7 +244,7 @@ class RealtimeTicketCoverageTests(TestCase):
             with self.subTest(token=token):
                 self.assertIsNone(redeem_ticket(token))
         token = issue_ticket(user=UserFactory())["ticket"]
-        with patch("realtime.tickets.cache.delete", return_value=False):
+        with patch("core.tickets.cache.delete", return_value=False):
             self.assertIsNone(redeem_ticket(token))
 
 
@@ -409,10 +409,10 @@ class MetricsCoverageTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_the_database_collector_swallows_errors(self):
-        from core.metrics import DatabaseCollector
+        from stats.metrics import DatabaseCollector
 
-        with patch("stats.queries.queue_size", side_effect=RuntimeError("db")):
-            with self.assertLogs("core.metrics", level="ERROR"):
+        with patch("stats.metrics.queue_size", side_effect=RuntimeError("db")):
+            with self.assertLogs("stats.metrics", level="ERROR"):
                 self.assertEqual(list(DatabaseCollector().collect()), [])
 
     def test_render_metrics_returns_prometheus_text(self):

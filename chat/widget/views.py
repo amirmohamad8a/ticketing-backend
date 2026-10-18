@@ -53,7 +53,7 @@ from chat.widget.throttles import (
     WidgetVisitorThrottle,
 )
 from core.downloads import build_download_link
-from realtime.tickets import issue_ticket
+from core.tickets import issue_ticket
 from tickets.messages import MESSAGES_PAGE_SIZE, message_page, post_customer_message
 from tickets.models import Attachment, Ticket, TicketRating
 from tickets.ratings import rate_ticket

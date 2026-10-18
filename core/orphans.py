@@ -3,6 +3,12 @@ import posixpath
 from django.core.files.storage import default_storage
 
 FILE_PREFIXES = ("attachments", "avatars")
+_reference_sources = []
+
+
+def register_file_reference_source(source):
+    if source not in _reference_sources:
+        _reference_sources.append(source)
 
 
 def _walk(storage, directory):
@@ -17,11 +23,9 @@ def _walk(storage, directory):
 
 
 def referenced_files():
-    from accounts.models import User
-    from tickets.models import Attachment
-
-    names = set(Attachment.objects.values_list("file", flat=True))
-    names.update(User.objects.exclude(avatar="").values_list("avatar", flat=True))
+    names = set()
+    for source in _reference_sources:
+        names.update(source())
     names.discard("")
     return names
 

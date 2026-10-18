@@ -6,10 +6,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.events import UserEventField, flag, record_user_event
 from accounts.models import User
+from accounts.signals import user_deactivated, user_demoted
 from accounts.tokens import blacklist_user_tokens
 from core.errors import DomainValidationError
-from realtime.events import close_user_sockets
-from tickets.assignment import release_tickets
+from core.events import close_user_sockets
 
 
 def apply_user_side_effects(
@@ -18,15 +18,18 @@ def apply_user_side_effects(
     events=(),
     *,
     revoke_tokens=False,
-    release=False,
+    deactivated=False,
+    demoted=False,
     close_sockets=False,
     close_user_sockets_fn=close_user_sockets,
 ):
     with transaction.atomic():
         if revoke_tokens:
             blacklist_user_tokens(user)
-        if release:
-            release_tickets(user, actor)
+        if deactivated:
+            user_deactivated.send(sender=User, user=user, actor=actor)
+        elif demoted:
+            user_demoted.send(sender=User, user=user, actor=actor)
         for field_changed, old_value, new_value in events:
             record_user_event(
                 user=user,
@@ -96,7 +99,8 @@ def update_user(user, actor, changes, *, close_user_sockets_fn=close_user_socket
             actor,
             events,
             revoke_tokens=password is not None or deactivated,
-            release=deactivated or demoted,
+            deactivated=deactivated,
+            demoted=demoted,
             close_sockets=close_sockets,
             close_user_sockets_fn=close_user_sockets_fn,
         )

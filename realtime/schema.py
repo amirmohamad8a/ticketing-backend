@@ -1,6 +1,7 @@
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
-from realtime.serializers import OnlineAgentSerializer, SocketTicketSerializer
+from core.serializers import SocketTicketSerializer
+from realtime.serializers import OnlineAgentSerializer
 
 socket_ticket_schema = extend_schema_view(
     post=extend_schema(

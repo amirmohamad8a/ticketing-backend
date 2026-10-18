@@ -9,7 +9,7 @@ from channels.middleware import BaseMiddleware
 from accounts.models import User
 from chat.models import Visitor
 from chat.widget.auth import origin_allowed_for_site
-from realtime.tickets import redeem_ticket
+from core.tickets import redeem_ticket
 
 TICKET_PARAM = "ticket"
 

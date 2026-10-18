@@ -18,7 +18,7 @@ from core.tests.factories import (
     UserFactory,
     VisitorFactory,
 )
-from realtime.tickets import issue_ticket
+from core.tickets import issue_ticket
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.django_db(transaction=True)]
 

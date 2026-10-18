@@ -6,6 +6,7 @@ from accounts.models import User
 from tickets.exceptions import TicketAlreadyAssigned
 from tickets.models import Ticket
 from tickets.services import update_ticket
+from tickets.signals import tickets_released
 
 
 def _actor(actor):
@@ -32,14 +33,10 @@ def claim_ticket(ticket_id, claimer, actor=None):
 
 
 def release_tickets(user, actor=None):
-    from chat.assignment import route_new_chat
-
     with transaction.atomic():
         tickets = list(
             Ticket.objects.select_for_update().assigned_to(user).unfinished().order_by("pk")
         )
         released = [update_ticket(ticket, _actor(actor), {"assignee": None}) for ticket in tickets]
-        for ticket in released:
-            if ticket.channel == Ticket.Channel.CHAT:
-                route_new_chat(ticket)
+        tickets_released.send(sender=release_tickets, tickets=released, actor=_actor(actor))
     return released

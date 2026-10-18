@@ -7,10 +7,10 @@ from django.utils import timezone
 
 from rest_framework.test import APIClient
 
+from chat import presence
 from chat.assignment import route_queued_chats
 from chat.offline import convert_due_chats
 from core.tests.factories import AgentFactory, SiteFactory, TicketFactory
-from realtime import presence
 from tickets.models import Ticket
 
 CONVERSATIONS_URL = "/api/widget/conversations/"

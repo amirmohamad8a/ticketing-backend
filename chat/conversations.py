@@ -1,11 +1,11 @@
 from django.db import transaction
 from django.utils.text import Truncator
 
+from chat import presence
 from chat.assignment import route_new_chat
 from chat.models import Visitor
 from chat.tasks import convert_to_offline
 from chat.visitors import start_visitor_session
-from realtime import presence
 from tickets.events import TicketEventField, record_event
 from tickets.messages import post_customer_message
 from tickets.models import Ticket

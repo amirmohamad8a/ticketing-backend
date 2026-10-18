@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.core.cache import cache
 
-from realtime import presence
+from chat import presence
 
 CACHE_KEY = "chat:agents-available"
 DEFAULT_CACHE_SECONDS = 5

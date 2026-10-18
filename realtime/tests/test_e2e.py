@@ -7,7 +7,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from chat.conversations import start_conversation
 from config.asgi import application
 from core.tests.factories import AgentFactory, SiteFactory
-from realtime.tickets import issue_ticket
+from core.tickets import issue_ticket
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.django_db(transaction=True)]
 

@@ -6,9 +6,9 @@ from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from accounts.permissions import STAFF_ROLES
+from chat import presence
+from core.groups import user_group
 from core.metrics import PRESENCE_ENDPOINT, socket_closed, socket_opened
-from realtime import presence
-from realtime.groups import user_group
 from realtime.limits import MessageRateLimiter
 from realtime.protocol import (
     CLIENT_PING,

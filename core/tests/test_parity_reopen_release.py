@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from chat import presence
 from chat.tokens import issue_visitor_token
 from core.tests.factories import (
     AgentFactory,
@@ -14,7 +15,6 @@ from core.tests.factories import (
     UserFactory,
     VisitorFactory,
 )
-from realtime import presence
 from tickets.assignment import release_tickets
 from tickets.models import Ticket, TicketEvent
 
