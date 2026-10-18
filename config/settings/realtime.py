@@ -1,0 +1,9 @@
+from config.settings.environment import env
+
+WS_TICKET_TTL_SECONDS = env.int("WS_TICKET_TTL_SECONDS", default=30)
+WS_MAX_MESSAGE_BYTES = env.int("WS_MAX_MESSAGE_BYTES", default=4096)
+WS_RATE_LIMIT_MESSAGES = env.int("WS_RATE_LIMIT_MESSAGES", default=30)
+WS_RATE_LIMIT_WINDOW_SECONDS = env.int("WS_RATE_LIMIT_WINDOW_SECONDS", default=10)
+WS_TYPING_THROTTLE_SECONDS = env.float("WS_TYPING_THROTTLE_SECONDS", default=2.0)
+
+PRESENCE_TTL_SECONDS = env.int("PRESENCE_TTL_SECONDS", default=30)

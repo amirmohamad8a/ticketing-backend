@@ -1,22 +1,15 @@
-from datetime import timedelta
-from pathlib import Path
-
 from django.core.exceptions import ImproperlyConfigured
 
-import environ
-from corsheaders.defaults import default_headers
-
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
-env = environ.Env()
-environ.Env.read_env(str(BASE_DIR / ".env"))
-
-
-SECRET_KEY = env("SECRET_KEY")
-JWT_SIGNING_KEY = env("JWT_SIGNING_KEY", default=SECRET_KEY)
-DEBUG = env.bool("DEBUG", default=False)
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
-
+from config.settings.celery import *
+from config.settings.environment import env
+from config.settings.jwt import *
+from config.settings.logging import *
+from config.settings.realtime import *
+from config.settings.redis import *
+from config.settings.security import *
+from config.settings.storage import *
+from config.settings.throttling import *
+from config.settings.widget import *
 
 INSTALLED_APPS = [
     "daphne",
@@ -90,86 +83,6 @@ DATABASES = {"default": env.db("DATABASE_URL")}
 AUTH_USER_MODEL = "accounts.User"
 
 
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
-    },
-]
-
-
-NUM_PROXIES = env.int("NUM_PROXIES", default=0)
-
-MAX_REQUEST_BODY_BYTES = env.int("MAX_REQUEST_BODY_BYTES", default=64 * 1024)
-MAX_UPLOAD_BODY_BYTES = env.int("MAX_UPLOAD_BODY_BYTES", default=11 * 1024 * 1024)
-LOGIN_USERNAME_SLOWDOWN_SECONDS = env.float("LOGIN_USERNAME_SLOWDOWN_SECONDS", default=0.5)
-
-ADMIN_LOGIN_PATH = "/admin/login/"
-ADMIN_LOGIN_MAX_ATTEMPTS = env.int("ADMIN_LOGIN_MAX_ATTEMPTS", default=10)
-ADMIN_LOGIN_WINDOW_SECONDS = env.int("ADMIN_LOGIN_WINDOW_SECONDS", default=300)
-
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ("core.authentication.LoggedJWTAuthentication",),
-    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
-    "DEFAULT_THROTTLE_CLASSES": (
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
-    ),
-    "DEFAULT_THROTTLE_RATES": {
-        "anon": "120/min",
-        "user": "300/min",
-        "login": "30/min",
-        "login_username": "20/hour",
-        "login_username_global": "120/hour",
-        "register": "30/hour",
-        "password_change": "5/hour",
-        "user_management": "60/min",
-        "site_management": "60/min",
-        "download": "300/min",
-        "export": "10/min",
-        "attachment_upload": "60/hour",
-        "ws_ticket": "30/min",
-        "widget_ip": "240/min",
-        "widget_visitor": "90/min",
-        "widget_start": "60/hour",
-        "widget_upload": "30/hour",
-    },
-    "NUM_PROXIES": NUM_PROXIES,
-}
-
-
-REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"].update(env.json("LOADTEST_THROTTLE_RATES", default={}))
-
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
-    "AUTH_HEADER_TYPES": ("Bearer",),
-    "SIGNING_KEY": JWT_SIGNING_KEY,
-    "CHECK_REVOKE_TOKEN": True,
-}
-
-VISITOR_TOKEN_LIFETIME_DAYS = env.int("VISITOR_TOKEN_LIFETIME_DAYS", default=30)
-
-WIDGET_SITE_START_LIMIT_PER_HOUR = env.int("WIDGET_SITE_START_LIMIT_PER_HOUR", default=300)
-WIDGET_SITE_MAX_UNASSIGNED_CHATS = env.int("WIDGET_SITE_MAX_UNASSIGNED_CHATS", default=200)
-WIDGET_SITE_UNASSIGNED_WINDOW_MINUTES = env.int("WIDGET_SITE_UNASSIGNED_WINDOW_MINUTES", default=60)
-WIDGET_POW_DIFFICULTY = env.int("WIDGET_POW_DIFFICULTY", default=0)
-WIDGET_POW_TTL_SECONDS = env.int("WIDGET_POW_TTL_SECONDS", default=300)
-
-METRICS_TOKEN = env("METRICS_TOKEN", default="")
-
 SPECTACULAR_SETTINGS = {
     "TITLE": "Ticketing API",
     "DESCRIPTION": (
@@ -228,10 +141,6 @@ SPECTACULAR_SETTINGS = {
     },
 }
 
-CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
-CORS_EXPOSE_HEADERS = ["X-Request-ID"]
-CORS_ALLOW_HEADERS = (*default_headers, "x-visitor-token")
-
 
 LANGUAGE_CODE = "fa"
 
@@ -242,72 +151,6 @@ USE_I18N = True
 USE_TZ = True
 
 
-STATIC_URL = "static/"
-
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
-
-
-STORAGE_BACKEND = env("STORAGE_BACKEND", default="local")
-DOWNLOAD_URL_TTL_SECONDS = env.int("DOWNLOAD_URL_TTL_SECONDS", default=300)
-
-if STORAGE_BACKEND == "local":
-    _DEFAULT_STORAGE = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
-elif STORAGE_BACKEND == "s3":
-    _DEFAULT_STORAGE = {
-        "BACKEND": "core.storage.PresignedS3Storage",
-        "OPTIONS": {
-            "bucket_name": env("S3_BUCKET_NAME"),
-            "access_key": env("S3_ACCESS_KEY"),
-            "secret_key": env("S3_SECRET_KEY"),
-            "endpoint_url": env("S3_ENDPOINT_URL", default=None),
-            "public_endpoint_url": env("S3_PUBLIC_ENDPOINT_URL", default=None),
-            "region_name": env("S3_REGION_NAME", default="us-east-1"),
-            "signature_version": "s3v4",
-            "addressing_style": "path",
-            "default_acl": None,
-            "querystring_auth": True,
-            "querystring_expire": DOWNLOAD_URL_TTL_SECONDS,
-            "file_overwrite": False,
-        },
-    }
-else:
-    raise ImproperlyConfigured("STORAGE_BACKEND must be 'local' or 's3'.")
-
-STORAGES = {
-    "default": _DEFAULT_STORAGE,
-    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
-}
-
-
-REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
-
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL,
-        "KEY_PREFIX": "ticketing",
-    }
-}
-
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [REDIS_URL],
-            "prefix": "ticketing",
-        },
-    }
-}
-
-WS_TICKET_TTL_SECONDS = env.int("WS_TICKET_TTL_SECONDS", default=30)
-WS_MAX_MESSAGE_BYTES = env.int("WS_MAX_MESSAGE_BYTES", default=4096)
-WS_RATE_LIMIT_MESSAGES = env.int("WS_RATE_LIMIT_MESSAGES", default=30)
-WS_RATE_LIMIT_WINDOW_SECONDS = env.int("WS_RATE_LIMIT_WINDOW_SECONDS", default=10)
-WS_TYPING_THROTTLE_SECONDS = env.float("WS_TYPING_THROTTLE_SECONDS", default=2.0)
-
-PRESENCE_TTL_SECONDS = env.int("PRESENCE_TTL_SECONDS", default=30)
-
 SLA_FIRST_RESPONSE_MINUTES = {
     "low": env.int("SLA_FIRST_RESPONSE_LOW_MINUTES", default=1440),
     "medium": env.int("SLA_FIRST_RESPONSE_MEDIUM_MINUTES", default=480),
@@ -317,53 +160,3 @@ SLA_FIRST_RESPONSE_MINUTES = {
 
 AUTO_CLOSE_AFTER_DAYS = env.int("AUTO_CLOSE_AFTER_DAYS", default=7)
 VISITOR_RETENTION_DAYS = env.int("VISITOR_RETENTION_DAYS", default=30)
-
-CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-CELERY_BEAT_SCHEDULE = {
-    "tickets-auto-close-resolved": {
-        "task": "tickets.auto_close_resolved",
-        "schedule": timedelta(hours=1),
-    },
-    "chat-purge-stale-visitors": {
-        "task": "chat.purge_stale_visitors",
-        "schedule": timedelta(days=1),
-    },
-    "chat-sweep-unanswered-chats": {
-        "task": "chat.sweep_unanswered_chats",
-        "schedule": timedelta(minutes=1),
-    },
-    "accounts-flush-expired-tokens": {
-        "task": "accounts.flush_expired_tokens",
-        "schedule": timedelta(days=1),
-    },
-    "tickets-report-orphan-files": {
-        "task": "tickets.report_orphan_files",
-        "schedule": timedelta(days=1),
-    },
-}
-
-
-LOG_LEVEL = env("LOG_LEVEL", default="INFO").upper()
-
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "json": {"()": "core.logs.JsonFormatter"},
-    },
-    "handlers": {
-        "console": {"class": "logging.StreamHandler", "formatter": "json"},
-        "null": {"class": "logging.NullHandler"},
-    },
-    "root": {"handlers": ["console"], "level": LOG_LEVEL},
-    "loggers": {
-        "django": {"handlers": [], "level": LOG_LEVEL, "propagate": True},
-        "django.request": {"level": "ERROR"},
-        "django.server": {"handlers": ["null"], "propagate": False},
-    },
-}

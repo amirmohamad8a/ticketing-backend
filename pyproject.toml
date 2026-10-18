@@ -19,7 +19,9 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "config/asgi.py" = ["E402"]
+"config/settings/base.py" = ["F403", "F405"]
 "config/settings/dev.py" = ["F403"]
+"config/settings/loadtest.py" = ["F403", "F405"]
 "config/settings/prod.py" = ["F403", "F405"]
 "config/settings/test.py" = ["F403", "F405"]
 
@@ -105,7 +107,7 @@ source_modules = ["tickets"]
 forbidden_modules = ["chat", "demo", "realtime", "stats", "audit"]
 ignore_imports = [
     "tickets.tests.** -> **",
-    "tickets.serializers -> chat.models",
+    "tickets.serializers.** -> chat.models",
     "tickets.participants -> chat.models",
 ]
 

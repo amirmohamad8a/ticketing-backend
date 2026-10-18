@@ -1,13 +1,7 @@
-from django.utils.translation import gettext_lazy as _
-
-from rest_framework import serializers, viewsets
-from rest_framework.validators import UniqueValidator
-
 from tickets.events import TAG_FIELD
-from tickets.models import Tag, TicketEvent
-from tickets.permissions import IsAdminOrAgentReadOnly
-from tickets.schema import tag_schema
-from tickets.validators import MAX_TAG_NAME_LENGTH, normalize_tag_name
+from tickets.models import TicketEvent
+from tickets.serializers.tags import TagNameField, TagSerializer
+from tickets.views.tags import TagViewSet
 
 TAG_EVENT_BATCH_SIZE = 1000
 
@@ -29,38 +23,4 @@ def write_tag_delete_events(tag, ticket_ids, actor):
         )
 
 
-class TagNameField(serializers.CharField):
-    def to_internal_value(self, data):
-        return normalize_tag_name(super().to_internal_value(data))
-
-
-class TagSerializer(serializers.ModelSerializer):
-    name = TagNameField(
-        max_length=MAX_TAG_NAME_LENGTH,
-        validators=[
-            UniqueValidator(
-                queryset=Tag.objects.all(),
-                lookup="iexact",
-                message=_("A tag with that name already exists."),
-            ),
-        ],
-    )
-
-    class Meta:
-        model = Tag
-        fields = ["id", "name", "color", "created_at", "updated_at"]
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-
-@tag_schema
-class TagViewSet(viewsets.ModelViewSet):
-    queryset = Tag.objects.all()
-    serializer_class = TagSerializer
-    permission_classes = [IsAdminOrAgentReadOnly]
-    pagination_class = None
-    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
-
-    def perform_destroy(self, instance):
-        from tickets.services import delete_tag
-
-        delete_tag(instance, self.request.user)
+__all__ = ["TagNameField", "TagSerializer", "TagViewSet", "write_tag_delete_events"]

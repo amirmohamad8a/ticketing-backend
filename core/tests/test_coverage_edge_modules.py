@@ -1,8 +1,8 @@
 import hashlib
+import importlib
 import os
-import runpy
+import sys
 from datetime import timedelta
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -425,8 +425,6 @@ class MetricsCoverageTests(SimpleTestCase):
 
 
 class ConfigSettingsCoverageTests(SimpleTestCase):
-    BASE_SETTINGS = Path(__file__).resolve().parents[2] / "config" / "settings" / "base.py"
-
     def _run(self, **overrides):
         environment = {
             "SECRET_KEY": "settings-coverage-secret",
@@ -434,8 +432,11 @@ class ConfigSettingsCoverageTests(SimpleTestCase):
             "STORAGE_BACKEND": "local",
             **overrides,
         }
-        with patch.dict(os.environ, environment):
-            return runpy.run_path(str(self.BASE_SETTINGS))
+        with patch.dict(os.environ, environment), patch.dict(sys.modules):
+            for name in list(sys.modules):
+                if name == "config.settings" or name.startswith("config.settings."):
+                    sys.modules.pop(name, None)
+            return vars(importlib.import_module("config.settings.base"))
 
     def test_the_database_url_is_required(self):
         with self.assertRaises(ImproperlyConfigured):

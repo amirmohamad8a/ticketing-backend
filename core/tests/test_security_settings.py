@@ -26,18 +26,22 @@ PROD_ENV = {
 PROD_LOGGER = "config.settings.prod"
 
 
+def _clear_settings_modules():
+    for name in list(sys.modules):
+        if name == "config.settings" or name.startswith("config.settings."):
+            sys.modules.pop(name, None)
+
+
 def _load_prod(**overrides):
     with patch.dict(os.environ, {**PROD_ENV, **overrides}), patch.dict(sys.modules):
-        sys.modules.pop("config.settings.base", None)
-        sys.modules.pop("config.settings.prod", None)
+        _clear_settings_modules()
         return importlib.import_module("config.settings.prod")
 
 
 def _load_prod_without(*names):
     environment = {key: value for key, value in PROD_ENV.items() if key not in names}
     with patch.dict(os.environ, environment, clear=True), patch.dict(sys.modules):
-        sys.modules.pop("config.settings.base", None)
-        sys.modules.pop("config.settings.prod", None)
+        _clear_settings_modules()
         return importlib.import_module("config.settings.prod")
 
 

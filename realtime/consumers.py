@@ -1,32 +1,22 @@
-import json
-
 from django.conf import settings
-
-from channels.generic.websocket import AsyncWebsocketConsumer
 
 from core.events import publish_typing
 from core.groups import AGENTS_QUEUE_GROUP, ticket_group, user_group
 from core.metrics import TICKETS_ENDPOINT, socket_closed, socket_opened
 from realtime.access import can_join_ticket
-from realtime.limits import MessageRateLimiter, TypingThrottle
+from realtime.base_consumer import BaseRealtimeConsumer
+from realtime.limits import TypingThrottle
 from realtime.protocol import (
     CLIENT_JOIN,
     CLIENT_LEAVE,
     CLIENT_PING,
     CLIENT_TYPING,
-    CLOSE_FORBIDDEN,
-    CLOSE_MESSAGE_TOO_BIG,
-    CLOSE_RATE_LIMITED,
     CLOSE_UNAUTHENTICATED,
-    CLOSE_UNSUPPORTED_DATA,
-    ERROR_INVALID_JSON,
     ERROR_INVALID_MESSAGE,
     ERROR_INVALID_TICKET_ID,
     ERROR_NOT_FOUND,
     ERROR_NOT_JOINED,
     ERROR_TOO_MANY_TICKETS,
-    ERROR_UNKNOWN_TYPE,
-    EVENT_ERROR,
     EVENT_JOINED,
     EVENT_LEFT,
     EVENT_PONG,
@@ -40,7 +30,14 @@ def _is_valid_id(value):
     return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= MAX_ID
 
 
-class RealtimeConsumer(AsyncWebsocketConsumer):
+class RealtimeConsumer(BaseRealtimeConsumer):
+    message_handlers = {
+        CLIENT_PING: "_handle_ping",
+        CLIENT_JOIN: "_handle_join",
+        CLIENT_LEAVE: "_handle_leave",
+        CLIENT_TYPING: "_handle_typing",
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.participant = None
@@ -63,9 +60,7 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         self.identity = participant.socket_identity
         self.sender_type = participant.sender_type
         self.sender_name = participant.display_name
-        self.limiter = MessageRateLimiter(
-            settings.WS_RATE_LIMIT_MESSAGES, settings.WS_RATE_LIMIT_WINDOW_SECONDS
-        )
+        self._start_limiter()
         self.typing = TypingThrottle(settings.WS_TYPING_THROTTLE_SECONDS)
         if not self.participant.is_visitor:
             await self.channel_layer.group_add(
@@ -95,36 +90,6 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_discard(AGENTS_QUEUE_GROUP, self.channel_name)
             self.is_staff = False
 
-    async def receive(self, text_data=None, bytes_data=None):
-        if text_data is None:
-            await self.close(code=CLOSE_UNSUPPORTED_DATA)
-            return
-        if len(text_data.encode("utf-8")) > settings.WS_MAX_MESSAGE_BYTES:
-            await self.close(code=CLOSE_MESSAGE_TOO_BIG)
-            return
-        if not self.limiter.allow():
-            await self.close(code=CLOSE_RATE_LIMITED)
-            return
-        try:
-            content = json.loads(text_data)
-        except (ValueError, RecursionError):
-            await self._send_error(ERROR_INVALID_JSON)
-            return
-        if not isinstance(content, dict):
-            await self._send_error(ERROR_INVALID_MESSAGE)
-            return
-        message_type = content.get("type")
-        if message_type == CLIENT_PING:
-            await self._send({"type": EVENT_PONG})
-        elif message_type == CLIENT_JOIN:
-            await self._join(content.get("ticket_id"))
-        elif message_type == CLIENT_LEAVE:
-            await self._leave(content.get("ticket_id"))
-        elif message_type == CLIENT_TYPING:
-            await self._typing(content.get("ticket_id"), content.get("is_typing"))
-        else:
-            await self._send_error(ERROR_UNKNOWN_TYPE)
-
     async def realtime_event(self, event):
         if self.is_staff:
             if event["group"] != AGENTS_QUEUE_GROUP:
@@ -138,8 +103,17 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
             return
         await self._send(event["payload"])
 
-    async def realtime_close(self, event):
-        await self.close(code=CLOSE_FORBIDDEN)
+    async def _handle_ping(self, content):
+        await self._send({"type": EVENT_PONG})
+
+    async def _handle_join(self, content):
+        await self._join(content.get("ticket_id"))
+
+    async def _handle_leave(self, content):
+        await self._leave(content.get("ticket_id"))
+
+    async def _handle_typing(self, content):
+        await self._typing(content.get("ticket_id"), content.get("is_typing"))
 
     async def _join(self, ticket_id):
         if not _is_valid_id(ticket_id):
@@ -187,12 +161,3 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         await publish_typing(
             ticket_id, is_typing, self.identity, self.sender_type, self.sender_name
         )
-
-    async def _send(self, payload):
-        await self.send(text_data=json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
-
-    async def _send_error(self, code, ticket_id=None):
-        payload = {"type": EVENT_ERROR, "code": code}
-        if ticket_id is not None:
-            payload["ticket_id"] = ticket_id
-        await self._send(payload)
