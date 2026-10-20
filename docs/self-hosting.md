@@ -34,6 +34,13 @@ commands target the right stack.
 
 ## Reverse proxy
 
+The production stack includes a `caddy` service configured by `Caddyfile`. Set
+`DOMAIN` in `.env`; Caddy gets and renews the certificate, redirects HTTP to
+HTTPS and proxies WebSocket upgrades to `web:8000`. It caps request bodies at
+11 MiB (the upload limit), answers `/metrics/` with 404 and allows `/admin/` only
+from `ADMIN_ALLOWED_IPS` (default: nothing outside the host itself). The
+points below apply to any proxy you use instead.
+
 - Cap the request body at the proxy first (`client_max_body_size` in nginx or
   the equivalent in Caddy). The ASGI layer enforces `MAX_REQUEST_BODY_BYTES`
   (64 KB by default) on normal routes and `MAX_UPLOAD_BODY_BYTES` (11 MB) on
@@ -50,13 +57,16 @@ commands target the right stack.
 - Set `NUM_PROXIES` to the number of proxies in front of the app. Production
   refuses to start without it. Use `ALLOW_ZERO_PROXIES=true` only for a
   deliberate direct-access deployment.
-- Set `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` and each
+- With the bundled Caddy, Compose sets `ALLOWED_HOSTS` to `DOMAIN`, `CSRF_TRUSTED_ORIGINS` to
+  `https://DOMAIN` and `CORS_ALLOWED_ORIGINS` to `https://DOMAIN` (override only the last one in
+  `.env`), and the production section sets `NUM_PROXIES=1` and
+  `SECURE_SSL_REDIRECT=True`. With another proxy, set `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` and each
   site's `allowed_origins` for the real host names.
 
 The development stack (`docker-compose.yml` plus `docker-compose.dev.yml`) publishes PostgreSQL, Redis, MinIO,
-Prometheus and the app on `127.0.0.1` only. The production Compose file defaults
-`WEB_PORT` to `127.0.0.1:8000`, so a reverse proxy on the same host is the only
-way in.
+Prometheus and the app on `127.0.0.1` only. The production stack publishes
+nothing but Caddy's ports 80 and 443 (plus 443/udp for HTTP/3); `web` is only
+reachable inside the Compose network.
 
 ## Backups and restore
 

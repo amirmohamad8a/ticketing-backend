@@ -40,11 +40,10 @@ Settings are split under `config/settings/`:
 | `METRICS_TOKEN` | No | empty | Bearer token for `GET /metrics/`. Empty disables the endpoint |
 | `PROMETHEUS_MULTIPROC_DIR` | No | unset | Directory for metric files when several server processes run. Must exist and be empty at start |
 | `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated origins allowed to call the API. Widget routes accept any origin and check the site's `allowed_origins` instead |
-| `CSRF_TRUSTED_ORIGINS` | No | empty | Production only. Comma-separated trusted origins |
+| `CSRF_TRUSTED_ORIGINS` | No | empty | Production only. Comma-separated trusted origins. The production Compose file sets it to `https://$DOMAIN` |
 | `SECURE_SSL_REDIRECT` | No | `true` | Production only. Redirect HTTP to HTTPS (`/health/`, `/ready/` and `/metrics/` are exempt). Set `false` for plain HTTP without a proxy |
 | `SECURE_HSTS_SECONDS` | No | `31536000` | Production only. HSTS lifetime |
 | `PORT` | No | `8000` | Port Daphne listens on |
-| `WEB_PORT` | No | `127.0.0.1:8000` | Host address and port the production Compose file publishes |
 | `STORAGE_BACKEND` | No | `local` | `local` for disk or `s3` for an S3-compatible bucket |
 | `DOWNLOAD_URL_TTL_SECONDS` | No | `300` | Lifetime of signed download URLs |
 | `VISITOR_TOKEN_LIFETIME_DAYS` | No | `30` | Lifetime of a widget visitor token |

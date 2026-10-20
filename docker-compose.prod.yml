@@ -10,6 +10,10 @@ x-prod-app: &prod-app
       PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
   env_file:
     - .env
+  environment:
+    ALLOWED_HOSTS: ${DOMAIN:?set DOMAIN in .env}
+    CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
+    CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://${DOMAIN}}
   restart: unless-stopped
 
 services:
@@ -20,8 +24,6 @@ services:
   web:
     <<: *prod-app
     command: ["sh", "-c", "exec daphne -b 0.0.0.0 -p ${PORT:-8000} --access-log /dev/null config.asgi:application"]
-    ports:
-      - "${WEB_PORT:-127.0.0.1:8000}:${PORT:-8000}"
     volumes:
       - media_data:/app/media
     healthcheck:
@@ -37,6 +39,24 @@ services:
 
   beat:
     <<: *prod-app
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      ADMIN_ALLOWED_IPS: ${ADMIN_ALLOWED_IPS:-127.0.0.1}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
 
   db:
     environment:
@@ -54,3 +74,5 @@ services:
 volumes:
   redis_data:
   media_data:
+  caddy_data:
+  caddy_config:
