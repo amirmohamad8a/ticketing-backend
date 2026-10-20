@@ -73,6 +73,8 @@ class RealtimeConsumer(BaseRealtimeConsumer):
         self.metrics_client = self.sender_type
 
     async def disconnect(self, code):
+        if self.participant is None:
+            return
         if self.metrics_client is not None:
             socket_closed(TICKETS_ENDPOINT, self.metrics_client)
             self.metrics_client = None
