@@ -1,10 +1,44 @@
 # Configuration
 
-Settings are read from environment variables. Each machine has a single `.env`. Copy `.env.example` to `.env`. It has a
-development section (active) and a clearly marked production section
-(commented out; delete the development section and uncomment it). Its `COMPOSE_FILE`
-line selects the Compose files, and Compose reads the same file for variable
-interpolation and `env_file`.
+Settings are read from environment variables.
+
+## The env file
+
+Each machine has a single `.env`, which is the only env file. Compose reads it for
+variable interpolation and for `env_file`, and the settings read the same
+variables. Create it with `sh scripts/bootstrap.sh dev|prod`, or copy
+`.env.example` by hand.
+
+`.env.example` has two sections:
+
+- **Development** (active): working local defaults, with `COMPOSE_FILE` set to the
+  dev files.
+- **Production** (commented out, clearly marked): delete the development section,
+  uncomment the production section and replace every `change-me` value. The two
+  sections define the same keys, so keep only one.
+
+Production refuses to start when `SECRET_KEY` or `JWT_SIGNING_KEY` is shorter than
+50 characters, contains `change-me` or starts with `dev-`, when the two are equal,
+or when `METRICS_TOKEN` is an example value. `scripts/bootstrap.sh` generates
+64-character hex values that pass these checks.
+
+In production, Compose derives `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` and, unless
+you set it, `CORS_ALLOWED_ORIGINS` from `DOMAIN`, so they are not listed in the
+production section.
+
+### Compose variables
+
+These are read by Compose, not by the Django settings.
+
+| Variable | Used in | Default | Description |
+| --- | --- | --- | --- |
+| `COMPOSE_FILE` | both | set in `.env.example` | Colon-separated Compose files: base plus `docker-compose.dev.yml` or `docker-compose.prod.yml` |
+| `COMPOSE_PATH_SEPARATOR` | both | `:` | Separator used in `COMPOSE_FILE`, fixed so it also works on Windows |
+| `DOMAIN` | production | none, required | Public host name Caddy serves. `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` and `CORS_ALLOWED_ORIGINS` derive from it |
+| `ADMIN_ALLOWED_IPS` | production | `127.0.0.1` | Space-separated IPs or CIDRs allowed to reach `/admin/`. Everyone else gets `403` |
+| `DB_PORT` | development | `5432` | Host port the dev database is published on, on `127.0.0.1` |
+| `PYTHON_IMAGE` | both | `python:3.12-slim` | Base image for the Docker build |
+| `PIP_INDEX_URL` | both | `https://pypi.org/simple` | Package index used during the Docker build |
 
 Settings are split under `config/settings/`:
 
@@ -24,9 +58,9 @@ Settings are split under `config/settings/`:
 | `SECRET_KEY` | Yes | none | Django secret key |
 | `JWT_SIGNING_KEY` | Production | `SECRET_KEY` | Key that signs JWTs and visitor tokens. Production refuses to start without one that differs from `SECRET_KEY` |
 | `DEBUG` | No | `False` | Debug mode. Development settings force it on |
-| `ALLOWED_HOSTS` | No | empty | Comma-separated host names. Include `web` when Prometheus scrapes the app |
+| `ALLOWED_HOSTS` | No | empty | Comma-separated host names. Include `web` when Prometheus scrapes the app. The production Compose file sets it to `DOMAIN` |
 | `DATABASE_URL` | Yes | none | PostgreSQL connection URL. Startup fails for any other scheme |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | With prod | `ticketing` | Credentials the production Compose database container creates. `DATABASE_URL` must match them |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | With prod | `ticketing` | Credentials the production Compose database container creates. `DATABASE_URL` must match them; `scripts/bootstrap.sh` builds it from them |
 | `DJANGO_SETTINGS_MODULE` | No | `config.settings.dev` | `config.settings.prod` in production; `config.settings.loadtest` for load tests |
 | `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend, Django cache (throttle counters, WebSocket tickets, presence) and the Channels layer |
 | `NUM_PROXIES` | Production | `0` in dev | Number of reverse proxies in front of the app, used for the client IP in throttling and logging. Production refuses to start unless it is set |
@@ -39,7 +73,7 @@ Settings are split under `config/settings/`:
 | `LOG_LEVEL` | No | `INFO` | Verbosity of the JSON logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `METRICS_TOKEN` | No | empty | Bearer token for `GET /metrics/`. Empty disables the endpoint |
 | `PROMETHEUS_MULTIPROC_DIR` | No | unset | Directory for metric files when several server processes run. Must exist and be empty at start |
-| `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated origins allowed to call the API. Widget routes accept any origin and check the site's `allowed_origins` instead |
+| `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated origins allowed to call the API. Widget routes accept any origin and check the site's `allowed_origins` instead. The production Compose file defaults it to `https://$DOMAIN` |
 | `CSRF_TRUSTED_ORIGINS` | No | empty | Production only. Comma-separated trusted origins. The production Compose file sets it to `https://$DOMAIN` |
 | `SECURE_SSL_REDIRECT` | No | `true` | Production only. Redirect HTTP to HTTPS (`/health/`, `/ready/` and `/metrics/` are exempt). Set `false` for plain HTTP without a proxy |
 | `SECURE_HSTS_SECONDS` | No | `31536000` | Production only. HSTS lifetime |

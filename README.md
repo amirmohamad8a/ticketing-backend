@@ -32,24 +32,23 @@ is served at `/api/docs/` and the JSON schema at `/api/schema/`.
 
 ## Run it
 
-You need Docker with Compose.
+You need Docker with Compose. `make` is optional.
 
 ```bash
-cp .env.example .env
-docker compose up --build
+make setup MODE=dev
 ```
 
-In a second terminal, migrate the database and seed the demo data:
+Without `make`: `sh scripts/bootstrap.sh dev`.
+
+The script checks Docker and Compose, writes `.env` from `.env.example` with
+freshly generated secrets, builds and starts the stack (migrations run in a
+`migrate` service before `web`, `worker` and `beat` start) and can create the
+first admin. It never overwrites an existing `.env`.
+
+Seed the demo data once the stack is up:
 
 ```bash
 make demo
-```
-
-Without `make`:
-
-```bash
-docker compose exec -T web python manage.py migrate
-docker compose exec -T web python manage.py seed_demo
 ```
 
 - API: http://localhost:8000
@@ -61,11 +60,27 @@ docker compose exec -T web python manage.py seed_demo
 password `demo-ticketing-2026`. `make reset-demo` removes the demo data and
 seeds a clean state again.
 
-Create a superuser with:
+Day to day:
+
+| Command | What it does |
+| --- | --- |
+| `make up` | Build the images and start the stack |
+| `make demo` | Migrate and seed the demo data |
+| `make reset-demo` | Remove the demo data and seed it again |
+| `make migrate` | Run migrations against the running stack |
+| `docker compose down` | Stop the stack |
+
+`createsuperuser` makes a user with the `admin` role, so the account works in
+the API as well as in Django admin:
 
 ```bash
 docker compose exec web python manage.py createsuperuser
 ```
+
+To set up by hand, copy `.env.example` to `.env`, then run `docker compose
+build` and `docker compose up -d`. The `COMPOSE_FILE` line in `.env` selects
+the development Compose files, so plain `docker compose` commands work. To run
+in production, see [Self-hosting](docs/self-hosting.md).
 
 ## Tests
 
