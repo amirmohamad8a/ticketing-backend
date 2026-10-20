@@ -1,8 +1,10 @@
 # Configuration
 
-Settings are read from environment variables. Copy `.env.example` to `.env` for
-local development and `.env.prod.example` to `.env.prod` for the production
-image.
+Settings are read from environment variables. Each machine has a single `.env`. Copy `.env.example` to `.env`. It has a
+development section (active) and a clearly marked production section
+(commented out; delete the development section and uncomment it). Its `COMPOSE_FILE`
+line selects the Compose files, and Compose reads the same file for variable
+interpolation and `env_file`.
 
 Settings are split under `config/settings/`:
 

@@ -2,7 +2,6 @@ venv/
 __pycache__/
 *.pyc
 .env
-.env.prod
 .git/
 .github/
 db.sqlite3
