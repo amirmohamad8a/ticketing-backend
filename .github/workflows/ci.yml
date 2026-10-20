@@ -158,3 +158,33 @@ jobs:
           push: false
           cache-from: type=gha,scope=prod
           cache-to: type=gha,mode=max,scope=prod
+
+  compose-smoke:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the production .env
+        run: printf 'localhost\n\nn\n' | sh scripts/bootstrap.sh prod
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Start the production stack
+        run: docker compose up -d --wait --wait-timeout 180
+
+      - name: Check /health/ and /ready/
+        run: |
+          curl -fsSk --retry 5 --retry-delay 3 --retry-connrefused https://localhost/health/
+          curl -fsSk --retry 5 --retry-delay 3 --retry-connrefused https://localhost/ready/
+
+      - name: Show logs
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
