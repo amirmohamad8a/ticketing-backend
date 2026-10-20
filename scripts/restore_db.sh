@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-COMPOSE="${COMPOSE:-docker compose -f docker-compose.prod.yml}"
+COMPOSE="${COMPOSE:-docker compose}"
 DB_SERVICE="${DB_SERVICE:-db}"
 POSTGRES_USER="${POSTGRES_USER:-ticketing}"
 POSTGRES_DB="${POSTGRES_DB:-ticketing}"

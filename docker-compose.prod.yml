@@ -1,69 +1,29 @@
 name: ticketing
 
-x-app: &app
+x-prod-app: &prod-app
   image: ticketing-backend:prod
+  build:
+    context: .
+    target: prod
+    args:
+      PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+      PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
   env_file:
-    - .env.prod
+    - .env
   restart: unless-stopped
 
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-ticketing}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-ticketing}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-ticketing} -d $${POSTGRES_DB:-ticketing}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
   migrate:
-    <<: *app
-    build:
-      context: .
-      dockerfile: Dockerfile.prod
-      args:
-        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
-        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
-    command: ["python", "manage.py", "migrate", "--noinput"]
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    <<: *prod-app
     restart: "no"
 
   web:
-    <<: *app
+    <<: *prod-app
     command: ["sh", "-c", "exec daphne -b 0.0.0.0 -p ${PORT:-8000} --access-log /dev/null config.asgi:application"]
     ports:
       - "${WEB_PORT:-127.0.0.1:8000}:${PORT:-8000}"
     volumes:
       - media_data:/app/media
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "scripts/healthcheck.py"]
       interval: 10s
@@ -71,30 +31,26 @@ services:
       retries: 5
 
   worker:
-    <<: *app
-    command: ["celery", "-A", "config", "worker", "--loglevel=info"]
+    <<: *prod-app
     volumes:
       - media_data:/app/media
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
   beat:
-    <<: *app
-    command: ["celery", "-A", "config", "beat", "--loglevel=info", "--schedule", "/tmp/celerybeat-schedule"]
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    <<: *prod-app
+
+  db:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ticketing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ticketing}
+    restart: unless-stopped
+
+  redis:
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
 
 volumes:
-  postgres_data:
   redis_data:
   media_data:

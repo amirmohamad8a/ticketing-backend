@@ -7,7 +7,8 @@ anywhere by the maintainers.
 
 ## Production image
 
-`Dockerfile.prod` is a multi-stage build. It installs runtime dependencies into
+The `prod` target of the multi-stage `Dockerfile` (the `dev` target is the
+development image) installs runtime dependencies into
 a virtualenv, runs `collectstatic` at build time and drops to a non-root user.
 It runs Daphne (ASGI), so one process serves both HTTP and WebSocket. Daphne's
 access log is disabled because the app writes its own JSON access line; see
@@ -18,7 +19,7 @@ inside Iran. Both default to upstream.
 
 ## Compose stack
 
-`docker-compose.prod.yml` runs:
+`docker-compose.yml` plus the `docker-compose.prod.yml` override runs:
 
 - `web`: Daphne.
 - `worker` and `beat`: Celery.
@@ -26,7 +27,10 @@ inside Iran. Both default to upstream.
 - PostgreSQL and Redis.
 
 Migrations are a separate service, not part of the entrypoint.
-`.env.prod.example` lists everything the stack needs.
+The production section of `.env.example` lists everything the stack needs. Copy
+the file to `.env`, delete the development section and uncomment the production
+one; its `COMPOSE_FILE` line selects the prod override, so plain `docker compose`
+commands target the right stack.
 
 ## Reverse proxy
 
@@ -49,18 +53,18 @@ Migrations are a separate service, not part of the entrypoint.
 - Set `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` and each
   site's `allowed_origins` for the real host names.
 
-The development `docker-compose.yml` publishes PostgreSQL, Redis, MinIO,
+The development stack (`docker-compose.yml` plus `docker-compose.dev.yml`) publishes PostgreSQL, Redis, MinIO,
 Prometheus and the app on `127.0.0.1` only. The production Compose file defaults
 `WEB_PORT` to `127.0.0.1:8000`, so a reverse proxy on the same host is the only
 way in.
 
 ## Backups and restore
 
-The scripts under `scripts/` default to the production Compose file. Export
-`COMPOSE` to target another stack:
+The scripts under `scripts/` run plain `docker compose`, which uses the
+`COMPOSE_FILE` from `.env`. Export `COMPOSE` to target a different stack:
 
 ```bash
-COMPOSE="docker compose -f docker-compose.yml" sh scripts/backup_db.sh
+COMPOSE="docker compose -f docker-compose.yml -f docker-compose.dev.yml" sh scripts/backup_db.sh
 ```
 
 - `backup_db.sh` prints the Compose command and database it targets.
