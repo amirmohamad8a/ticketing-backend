@@ -72,7 +72,8 @@ docker compose up -d
 
 ## Compose stack
 
-- `web`: Daphne.
+- `web`: Daphne, two replicas by default (`WEB_REPLICAS`). Each replica is one
+  process; Redis carries WebSocket fan-out, so any replica can serve any socket.
 - `worker` and `beat`: Celery.
 - `migrate`: a one-shot service that runs `migrate` and must finish before `web`,
   `worker` and `beat` start. Migrations are not part of the entrypoint.
@@ -83,7 +84,8 @@ docker compose up -d
 
 The production stack includes a `caddy` service configured by `Caddyfile`. Set
 `DOMAIN` in `.env`; Caddy gets and renews the certificate, redirects HTTP to
-HTTPS and proxies WebSocket upgrades to `web:8000`. It caps request bodies at
+HTTPS and proxies WebSocket upgrades to the `web` replicas on port 8000. Caddy
+resolves `web` with `dynamic a`, so it picks up replicas as they start and stop. It caps request bodies at
 11 MiB (the upload limit), answers `/metrics/` with 404 and allows `/admin/` only
 from `ADMIN_ALLOWED_IPS` (space-separated IPs or CIDRs; by default nobody outside
 the host itself). The production stack publishes nothing but Caddy's ports 80

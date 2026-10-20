@@ -12,5 +12,7 @@
 	}
 	respond @admin_blocked 403
 
-	reverse_proxy web:8000
+	reverse_proxy {
+		dynamic a web 8000
+	}
 }

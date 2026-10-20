@@ -24,6 +24,8 @@ services:
   web:
     <<: *prod-app
     command: ["sh", "-c", "exec daphne -b 0.0.0.0 -p ${PORT:-8000} --access-log /dev/null config.asgi:application"]
+    deploy:
+      replicas: ${WEB_REPLICAS:-2}
     volumes:
       - media_data:/app/media
     healthcheck:

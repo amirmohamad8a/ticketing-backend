@@ -79,6 +79,8 @@ if not DATABASE_URL.startswith(("postgres://", "postgresql://")):
     raise ImproperlyConfigured("DATABASE_URL must point to PostgreSQL.")
 
 DATABASES = {"default": env.db("DATABASE_URL")}
+DATABASES["default"]["CONN_MAX_AGE"] = 60
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 AUTH_USER_MODEL = "accounts.User"
 
