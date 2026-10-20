@@ -3,6 +3,7 @@ import uuid
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import UserManager as DjangoUserManager
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models.functions import Lower
@@ -20,6 +21,12 @@ def avatar_upload_path(instance, filename):
     if extension not in AVATAR_EXTENSIONS:
         extension = ""
     return f"avatars/{uuid.uuid4().hex}{extension}"
+
+
+class UserManager(DjangoUserManager):
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
+        extra_fields.setdefault("role", User.Role.ADMIN)
+        return super().create_superuser(username, email, password, **extra_fields)
 
 
 class User(AbstractUser):
@@ -47,6 +54,8 @@ class User(AbstractUser):
         validators=[MinValueValidator(1), MaxValueValidator(MAX_CONCURRENT_CHATS_LIMIT)],
     )
     last_chat_assigned_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    objects = UserManager()
 
     class Meta:
         verbose_name = _("user")

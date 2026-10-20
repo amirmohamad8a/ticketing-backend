@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from django.contrib.admin.sites import site
+from django.core.management import call_command
 from django.test import TestCase
 
 from rest_framework.test import APIClient
@@ -29,7 +30,33 @@ class UserModelTests(TestCase):
         user = User.objects.create_superuser(username="root", password="pass12345")
         self.assertTrue(user.is_superuser)
         self.assertTrue(user.is_staff)
-        self.assertEqual(user.role, User.Role.CUSTOMER)
+        self.assertEqual(user.role, User.Role.ADMIN)
+
+    def test_create_superuser_respects_explicit_role(self):
+        user = User.objects.create_superuser(
+            username="root2", password="pass12345", role=User.Role.AGENT
+        )
+        self.assertEqual(user.role, User.Role.AGENT)
+
+    def test_createsuperuser_command_produces_api_admin(self):
+        call_command(
+            "createsuperuser",
+            interactive=False,
+            username="cli-root",
+            email="root@example.com",
+            verbosity=0,
+        )
+        user = User.objects.get(username="cli-root")
+        user.set_password("pass12345")
+        user.save()
+        self.assertEqual(user.role, User.Role.ADMIN)
+
+        client = APIClient()
+        token = client.post(
+            "/api/token/", {"username": "cli-root", "password": "pass12345"}, format="json"
+        ).json()["access"]
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(client.get("/api/users/").status_code, 200)
 
     def test_default_role_is_customer(self):
         user = User.objects.create_user(username="noRole", password="pass12345")
