@@ -367,7 +367,7 @@ class UserThrottleCoverageTests(SimpleTestCase):
             self.assertTrue(throttle._consume("missing", "raw"))
         self.assertIsNone(throttle.get_cache_key(self._request({}), None))
 
-    def test_missing_username_parse_rate_and_expired_history_paths(self):
+    def test_missing_username_parse_rate_and_window_reset_paths(self):
         from accounts.throttles import LoginUsernameThrottle
 
         cache.clear()
@@ -378,8 +378,11 @@ class UserThrottleCoverageTests(SimpleTestCase):
             with patch.object(throttle, "parse_rate", return_value=(None, None)):
                 self.assertTrue(throttle._consume("raw", "raw"))
         key = throttle._key("login_username", "raw")
-        cache.set(key, [0], 60)
+        cache.set(key, 5, 60)
         with patch.object(throttle, "THROTTLE_RATES", {"login_username": "2/min"}):
+            self.assertFalse(throttle._consume("login_username", "raw"))
+            self.assertEqual(throttle.wait(), 60)
+            cache.delete(key)
             self.assertTrue(throttle._consume("login_username", "raw"))
 
     def test_an_api_exception_while_reading_the_request_means_no_username(self):

@@ -7,6 +7,7 @@ from rest_framework.exceptions import APIException
 from rest_framework.throttling import SimpleRateThrottle
 
 from accounts.models import User
+from core.counters import increment_fixed_window
 
 
 class LoginUsernameThrottle(SimpleRateThrottle):
@@ -40,17 +41,11 @@ class LoginUsernameThrottle(SimpleRateThrottle):
         num_requests, duration = self.parse_rate(rate)
         if num_requests is None:
             return True
-        key = self._key(scope, raw)
-        now = self.timer()
-        history = self.cache.get(key, [])
-        while history and history[-1] <= now - duration:
-            history.pop()
-        if len(history) >= num_requests:
-            self.retry_after = max(0, int(duration - (now - history[-1])) + 1)
-            return False
-        history.insert(0, now)
-        self.cache.set(key, history, duration)
-        return True
+        attempts = increment_fixed_window(self._key(scope, raw), duration)
+        if attempts <= num_requests:
+            return True
+        self.retry_after = duration
+        return False
 
     def _key(self, scope, raw):
         ident = hashlib.sha256(raw.encode("utf-8")).hexdigest()

@@ -1,3 +1,7 @@
+import sys
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.cache import cache
@@ -7,6 +11,7 @@ from rest_framework.test import APIClient
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from accounts.throttles import LoginUsernameThrottle
 from core.tests.factories import AdminFactory, UserFactory
 
 REGISTER_URL = "/api/auth/register/"
@@ -199,3 +204,29 @@ class LoginUsernameGlobalThrottleTests(ThrottleTestCase):
             response = self._login(password="pass12345", ip="10.0.0.2")
         self.assertEqual(response.status_code, 200)
         sleep.assert_called_once()
+
+
+class LoginUsernameConcurrencyTests(ThrottleTestCase):
+    def test_parallel_attempts_never_exceed_the_per_username_limit(self):
+        limit = 5
+        attempts = 40
+        previous_interval = sys.getswitchinterval()
+        sys.setswitchinterval(1e-6)
+        self.addCleanup(sys.setswitchinterval, previous_interval)
+        barrier = Barrier(attempts)
+        request = SimpleNamespace(
+            data={"username": "Sara"}, headers={}, META={"REMOTE_ADDR": "10.0.0.1"}
+        )
+
+        def attempt():
+            barrier.wait()
+            return LoginUsernameThrottle().allow_request(request, None)
+
+        with (
+            _rates(login_username=f"{limit}/hour", login_username_global="1000/hour"),
+            patch("accounts.throttles.time.sleep"),
+            ThreadPoolExecutor(max_workers=attempts) as pool,
+        ):
+            results = list(pool.map(lambda _: attempt(), range(attempts)))
+        self.assertEqual(results.count(True), limit)
+        self.assertEqual(results.count(False), attempts - limit)
