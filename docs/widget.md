@@ -41,6 +41,12 @@ When `WIDGET_POW_DIFFICULTY` is nonzero, the client first reads
 and a valid `nonce` as `pow_challenge` and `pow_nonce` when starting a
 conversation.
 
+Proof of work is friction, not protection. A solution needs about `2^bits`
+SHA-256 hashes, so a script with a fast CPU pays a small cost per conversation,
+and a browser on a slow phone pays more. The production default is 18 bits. The
+throttles are what limit abuse: the per-IP and per-site start limits and the
+widget rate scopes in [Rate limits](operations.md#rate-limits).
+
 ## Starting and continuing a conversation
 
 `POST /api/widget/conversations/` accepts:

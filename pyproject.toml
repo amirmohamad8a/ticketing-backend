@@ -23,6 +23,7 @@ ignore = ["E501"]
 "config/settings/dev.py" = ["F403"]
 "config/settings/loadtest.py" = ["F403", "F405"]
 "config/settings/prod.py" = ["F403", "F405"]
+"config/settings/schema.py" = ["F403"]
 "config/settings/test.py" = ["F403", "F405"]
 
 [tool.vulture]

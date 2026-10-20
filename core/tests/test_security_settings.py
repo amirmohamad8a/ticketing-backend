@@ -77,7 +77,7 @@ class ProductionSettingsTests(SimpleTestCase):
     def test_the_cache_is_redis_so_throttle_counters_are_shared(self):
         cache = self.prod.CACHES["default"]
         self.assertEqual(cache["BACKEND"], "django.core.cache.backends.redis.RedisCache")
-        self.assertEqual(cache["LOCATION"], self.prod.REDIS_URL)
+        self.assertEqual(cache["LOCATION"], self.prod.CACHE_REDIS_URL)
 
     def test_throttling_is_configured_for_every_scope(self):
         rest_framework = self.prod.REST_FRAMEWORK
@@ -128,8 +128,21 @@ class ProductionSettingsTests(SimpleTestCase):
         self.assertEqual(_load_prod(MAX_UPLOAD_BODY_BYTES="2048").MAX_UPLOAD_BODY_BYTES, 2048)
 
     def test_proof_of_work_is_on_by_default_in_production(self):
-        self.assertGreater(self.prod.WIDGET_POW_DIFFICULTY, 0)
+        self.assertEqual(self.prod.WIDGET_POW_DIFFICULTY, 18)
         self.assertEqual(_load_prod(WIDGET_POW_DIFFICULTY="0").WIDGET_POW_DIFFICULTY, 0)
+
+    def test_the_demo_app_is_not_installed_in_production(self):
+        self.assertNotIn("demo", self.prod.INSTALLED_APPS)
+
+    def test_api_docs_are_off_in_production_by_default(self):
+        self.assertFalse(self.prod.API_DOCS_ENABLED)
+        self.assertTrue(_load_prod(API_DOCS_ENABLED="true").API_DOCS_ENABLED)
+
+    def test_api_docs_are_admin_only_when_they_are_enabled_in_production(self):
+        self.assertEqual(
+            self.prod.SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"],
+            ["accounts.permissions.IsAdmin"],
+        )
 
     def test_revoking_access_tokens_after_a_password_change_is_enabled(self):
         self.assertTrue(self.prod.SIMPLE_JWT["CHECK_REVOKE_TOKEN"])

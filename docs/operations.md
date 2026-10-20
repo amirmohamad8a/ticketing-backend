@@ -80,11 +80,24 @@ With `0` the header is ignored, which prevents spoofing. Production refuses to
 start without `NUM_PROXIES`; `ALLOW_ZERO_PROXIES=true` opts into the
 direct-access case.
 
-Reset counters while testing by hand:
+Reset counters while testing by hand. This flushes only the cache database
+(`CACHE_REDIS_URL`, DB 0). Never flush the broker: it holds queued Celery tasks,
+and the channel layer (DB 2) holds in-flight WebSocket messages.
 
 ```bash
-docker compose exec redis redis-cli FLUSHDB
+docker compose exec redis redis-cli -n 0 FLUSHDB
 ```
+
+Redis runs as two services. `redis` holds the cache (DB 0) and the Channels
+layer (DB 2). It has `maxmemory` set by `REDIS_CACHE_MAXMEMORY` (256 MB by
+default) and `volatile-lru`, so when memory is full the least recently used keys
+with a TTL are evicted. Every cache key has a TTL, so none of them is kept
+forever. `broker` holds Celery tasks and results (DB 1). It runs with AOF
+persistence and `noeviction`, so a full broker refuses writes instead of losing
+queued tasks. Its visibility timeout is 25 hours (`CELERY_BROKER_TRANSPORT_OPTIONS`),
+which is longer than the longest offline countdown. A `convert_to_offline` task can
+wait up to 24 hours, and a shorter timeout would make Redis redeliver it while it
+is still waiting.
 
 WebSocket limits are in [Realtime](realtime.md#limits).
 

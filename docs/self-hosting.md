@@ -35,8 +35,8 @@ record must already resolve.
 
 ## How the files fit together
 
-- `docker-compose.yml` is the shared base: `db`, `redis`, `migrate`, `web`,
-  `worker` and `beat`, with the same service names in every environment.
+- `docker-compose.yml` is the shared base: `db`, `redis`, `broker`, `migrate`,
+  `web`, `worker` and `beat`, with the same service names in every environment.
 - `docker-compose.dev.yml` adds the dev differences: the `dev` image target, the
   source bind mount, `runserver`, published loopback ports, MinIO and Prometheus.
 - `docker-compose.prod.yml` adds the production differences: the `prod` image
@@ -78,7 +78,8 @@ docker compose up -d
 - `migrate`: a one-shot service that runs `migrate` and must finish before `web`,
   `worker` and `beat` start. Migrations are not part of the entrypoint.
 - `caddy`: the reverse proxy and the only service that publishes ports.
-- PostgreSQL and Redis.
+- PostgreSQL, the `redis` service (cache and Channels layer, `volatile-lru`) and
+  the `broker` service (Celery, AOF and `noeviction`, with its own volume).
 
 ## Reverse proxy
 

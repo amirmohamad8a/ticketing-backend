@@ -611,7 +611,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این canned reply را شناسایی میکند.
+        description: A unique integer value identifying this canned reply.
         required: true
       tags:
       - Canned replies
@@ -660,7 +660,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این canned reply را شناسایی میکند.
+        description: A unique integer value identifying this canned reply.
         required: true
       tags:
       - Canned replies
@@ -726,7 +726,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این canned reply را شناسایی میکند.
+        description: A unique integer value identifying this canned reply.
         required: true
       tags:
       - Canned replies
@@ -771,7 +771,7 @@ paths:
       - name: cursor
         required: false
         in: query
-        description: مقدار نشانگر صفحه‌بندی.
+        description: The pagination cursor value.
         schema:
           type: string
       - in: query
@@ -884,7 +884,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این site را شناسایی میکند.
+        description: A unique integer value identifying this site.
         required: true
       tags:
       - Sites
@@ -933,7 +933,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این site را شناسایی میکند.
+        description: A unique integer value identifying this site.
         required: true
       tags:
       - Sites
@@ -1000,7 +1000,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این site را شناسایی میکند.
+        description: A unique integer value identifying this site.
         required: true
       tags:
       - Sites
@@ -1197,7 +1197,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این tag را شناسایی میکند.
+        description: A unique integer value identifying this tag.
         required: true
       tags:
       - Tags
@@ -1246,7 +1246,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این tag را شناسایی میکند.
+        description: A unique integer value identifying this tag.
         required: true
       tags:
       - Tags
@@ -1312,7 +1312,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این tag را شناسایی میکند.
+        description: A unique integer value identifying this tag.
         required: true
       tags:
       - Tags
@@ -1373,7 +1373,7 @@ paths:
       - name: cursor
         required: false
         in: query
-        description: مقدار نشانگر صفحه‌بندی.
+        description: The pagination cursor value.
         schema:
           type: string
       - in: query
@@ -1524,7 +1524,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -1573,7 +1573,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -1640,7 +1640,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -1706,7 +1706,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -1752,7 +1752,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -1803,7 +1803,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -1865,7 +1865,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -1923,7 +1923,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -1975,7 +1975,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -2054,7 +2054,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -2110,7 +2110,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -2172,7 +2172,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -2228,7 +2228,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -2284,7 +2284,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -2333,7 +2333,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -2408,7 +2408,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -2475,7 +2475,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این ticket را شناسایی میکند.
+        description: A unique integer value identifying this ticket.
         required: true
       tags:
       - Tickets
@@ -2733,7 +2733,7 @@ paths:
       - name: cursor
         required: false
         in: query
-        description: مقدار نشانگر صفحه‌بندی.
+        description: The pagination cursor value.
         schema:
           type: string
       - in: query
@@ -2854,7 +2854,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این کاربر را شناسایی میکند.
+        description: A unique integer value identifying this user.
         required: true
       tags:
       - Users
@@ -2903,7 +2903,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: یک مقداد عدد یکتا که این کاربر را شناسایی میکند.
+        description: A unique integer value identifying this user.
         required: true
       tags:
       - Users
@@ -4335,11 +4335,9 @@ components:
       properties:
         first_name:
           type: string
-          title: نام
           maxLength: 150
         last_name:
           type: string
-          title: نام خانوادگی
           maxLength: 150
         phone:
           type: string
@@ -4392,9 +4390,9 @@ components:
           $ref: '#/components/schemas/RoleEnum'
         is_active:
           type: boolean
-          title: فعال
-          description: نشان می‌دهد که آیا این کاربر اجازهٔ فعالیت دارد یا خیر. به
-            جای حذف کاربر این تیک را بردارید.
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
         password:
           type: string
           writeOnly: true
@@ -4437,16 +4435,13 @@ components:
         username:
           type: string
           readOnly: true
-          title: نام کاربری
-          description: الزامی. 150 کاراکتر یا کمتر. فقط شامل حروف، اعداد، و علامات
-            @/./+/-/_
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
         first_name:
           type: string
-          title: نام
           maxLength: 150
         last_name:
           type: string
-          title: نام خانوادگی
           maxLength: 150
         phone:
           type: string
@@ -4493,18 +4488,15 @@ components:
           readOnly: true
         username:
           type: string
-          title: نام کاربری
-          description: الزامی. 150 کاراکتر یا کمتر. فقط شامل حروف، اعداد، و علامات
-            @/./+/-/_
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
           pattern: ^[\w.@+-]+$
           maxLength: 150
         first_name:
           type: string
-          title: نام
           maxLength: 150
         last_name:
           type: string
-          title: نام خانوادگی
           maxLength: 150
         phone:
           type: string
@@ -4524,9 +4516,8 @@ components:
         username:
           type: string
           minLength: 1
-          title: نام کاربری
-          description: الزامی. 150 کاراکتر یا کمتر. فقط شامل حروف، اعداد، و علامات
-            @/./+/-/_
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
           pattern: ^[\w.@+-]+$
           maxLength: 150
         password:
@@ -4536,11 +4527,9 @@ components:
           maxLength: 128
         first_name:
           type: string
-          title: نام
           maxLength: 150
         last_name:
           type: string
-          title: نام خانوادگی
           maxLength: 150
         phone:
           type: string
@@ -4665,16 +4654,13 @@ components:
         username:
           type: string
           readOnly: true
-          title: نام کاربری
-          description: الزامی. 150 کاراکتر یا کمتر. فقط شامل حروف، اعداد، و علامات
-            @/./+/-/_
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
         first_name:
           type: string
-          title: نام
           maxLength: 150
         last_name:
           type: string
-          title: نام خانوادگی
           maxLength: 150
         phone:
           type: string
@@ -5073,17 +5059,14 @@ components:
         username:
           type: string
           readOnly: true
-          title: نام کاربری
-          description: الزامی. 150 کاراکتر یا کمتر. فقط شامل حروف، اعداد، و علامات
-            @/./+/-/_
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
         first_name:
           type: string
           readOnly: true
-          title: نام
         last_name:
           type: string
           readOnly: true
-          title: نام خانوادگی
         phone:
           type: string
           readOnly: true
@@ -5095,14 +5078,13 @@ components:
         is_active:
           type: boolean
           readOnly: true
-          title: فعال
-          description: نشان می‌دهد که آیا این کاربر اجازهٔ فعالیت دارد یا خیر. به
-            جای حذف کاربر این تیک را بردارید.
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
         date_joined:
           type: string
           format: date-time
           readOnly: true
-          title: تاریخ پیوستن
       required:
       - date_joined
       - first_name
@@ -5118,9 +5100,8 @@ components:
         username:
           type: string
           minLength: 1
-          title: نام کاربری
-          description: الزامی. 150 کاراکتر یا کمتر. فقط شامل حروف، اعداد، و علامات
-            @/./+/-/_
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
           pattern: ^[\w.@+-]+$
           maxLength: 150
         password:
@@ -5130,11 +5111,9 @@ components:
           maxLength: 128
         first_name:
           type: string
-          title: نام
           maxLength: 150
         last_name:
           type: string
-          title: نام خانوادگی
           maxLength: 150
         phone:
           type: string

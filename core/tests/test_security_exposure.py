@@ -4,6 +4,7 @@ from django.test import TestCase, override_settings
 
 from rest_framework.test import APIClient
 
+from core.health import clear_cached_checks
 from core.tests.factories import (
     AdminFactory,
     AgentFactory,
@@ -65,6 +66,10 @@ class MetricsAccessTests(TestCase):
 
 
 class ReadinessLeakTests(TestCase):
+    def setUp(self):
+        clear_cached_checks()
+        self.addCleanup(clear_cached_checks)
+
     def test_a_failing_check_never_exposes_its_error(self):
         def failing():
             raise RuntimeError("postgres://user:hunter2@db.internal:5432/ticketing")

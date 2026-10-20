@@ -17,6 +17,12 @@ at `/api/docs/` and the JSON schema at `/api/schema/`.
 - Every failed request uses the same envelope:
   `{"error": {"code": "...", "message": "...", "details": ...}}`. Clients should
   branch on `code`, not on `message`.
+- `message` is not localized by this project. The project has no translation
+  catalog and does not read `Accept-Language`. Messages written in the project
+  are English. Field messages from Django and DRF, such as "This field is
+  required.", come from Django's own catalog in the default language (`fa`). The
+  text may change between releases, so clients should branch on `code`.
+- `details` maps each field to a list of messages, even when there is one.
 - List endpoints use cursor pagination where the schema shows a `cursor`
   parameter. The ticket list returns `{next, previous, results}` with ticket
   results, while messages use an id-based `after` cursor.
@@ -230,10 +236,10 @@ attachments, ratings, contact details and downloads.
 | Method | Route | Who | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/health/` | Anyone | Database-free liveness check |
-| `GET` | `/ready/` | Anyone | Dependency readiness check |
+| `GET` | `/ready/` | Anyone | Dependency readiness check, cached for 5 seconds |
 | `GET` | `/metrics/` | Metrics token | Prometheus metrics |
-| `GET` | `/api/schema/` | Anyone | OpenAPI schema |
-| `GET` | `/api/docs/` | Anyone | Swagger UI |
+| `GET` | `/api/schema/` | Anyone in development; admin only when enabled in production | OpenAPI schema |
+| `GET` | `/api/docs/` | Anyone in development; admin only when enabled in production | Swagger UI |
 
 `/health/`, `/ready/` and `/metrics/` are not in the OpenAPI schema. See
 [Operations](operations.md) for logging, throttling and metrics.

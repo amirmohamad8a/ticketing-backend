@@ -22,7 +22,7 @@ REQUIRED = os.environ.get("REQUIRE_REDIS") == "1"
 
 
 def _test_url():
-    parts = urlsplit(settings.REDIS_URL)
+    parts = urlsplit(settings.CACHE_REDIS_URL)
     return urlunsplit(parts._replace(path="/15"))
 
 

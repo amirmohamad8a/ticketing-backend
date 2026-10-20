@@ -1,4 +1,5 @@
 from django.db import IntegrityError, transaction
+from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 
 from rest_framework_simplejwt.exceptions import TokenError
@@ -61,6 +62,11 @@ def create_user(actor=None, changes=None, *, record_created=True, **fields):
             raise DomainValidationError(
                 {"username": _("A user with that username already exists.")}
             )
+        phone = data.get("phone")
+        if phone and User.objects.filter(phone=phone).exists():
+            raise DomainValidationError(
+                {"phone": [_("A user with that phone number already exists.")]}
+            )
         raise
     return user
 
@@ -69,28 +75,31 @@ def update_user(user, actor, changes, *, close_user_sockets_fn=close_user_socket
     data = dict(changes)
     password = data.pop("password", None)
 
-    events = []
-    deactivated = False
-    demoted = False
-    close_sockets = False
-    if "role" in data and data["role"] != user.role:
-        events.append((UserEventField.ROLE, user.role, data["role"]))
-        demoted = data["role"] == User.Role.CUSTOMER
-        close_sockets = True
-    if "is_active" in data and data["is_active"] != user.is_active:
-        new_state = data["is_active"]
-        events.append((UserEventField.IS_ACTIVE, flag(user.is_active), flag(new_state)))
-        deactivated = not new_state
-        close_sockets = True
-    if password is not None:
-        events.append((UserEventField.PASSWORD, "", ""))
-        close_sockets = True
-
     with transaction.atomic():
+        get_object_or_404(User.objects.select_for_update(), pk=user.pk)
+        user.refresh_from_db()
+
+        events = []
+        deactivated = False
+        demoted = False
+        close_sockets = False
+        if "role" in data and data["role"] != user.role:
+            events.append((UserEventField.ROLE, user.role, data["role"]))
+            demoted = data["role"] == User.Role.CUSTOMER
+            close_sockets = True
+        if "is_active" in data and data["is_active"] != user.is_active:
+            new_state = data["is_active"]
+            events.append((UserEventField.IS_ACTIVE, flag(user.is_active), flag(new_state)))
+            deactivated = not new_state
+            close_sockets = True
+        if password is not None:
+            events.append((UserEventField.PASSWORD, "", ""))
+            close_sockets = True
+
         for attr, value in data.items():
             setattr(user, attr, value)
         if data:
-            user.save()
+            user.save(update_fields=list(data))
         if password is not None:
             user.set_password(password)
             user.save(update_fields=["password"])

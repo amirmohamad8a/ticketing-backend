@@ -47,7 +47,7 @@ jobs:
       DEBUG: "True"
       ALLOWED_HOSTS: localhost,127.0.0.1
       DATABASE_URL: postgres://ticketing:ticketing@localhost:5432/ticketing
-      REDIS_URL: redis://localhost:6379/0
+      CACHE_REDIS_URL: redis://localhost:6379/0
       # Fails the run instead of skipping when Redis is unreachable.
       REQUIRE_REDIS: "1"
       DJANGO_SETTINGS_MODULE: config.settings.dev
@@ -92,7 +92,7 @@ jobs:
 
       - name: Check API schema
         run: |
-          python manage.py spectacular --file schema.yml --validate --fail-on-warn
+          python manage.py spectacular --settings=config.settings.schema --file schema.yml --validate --fail-on-warn
           git diff --exit-code -- schema.yml
 
       - name: Test

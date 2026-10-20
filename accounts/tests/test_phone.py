@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.admin.sites import site
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -6,7 +8,9 @@ from django.test import TestCase
 import pytest
 
 from accounts.models import User
+from accounts.services import create_user
 from accounts.validators import normalize_phone, validate_iranian_mobile
+from core.errors import DomainValidationError
 
 CANONICAL = "09123456789"
 
@@ -98,6 +102,32 @@ class UserPhoneModelTests(TestCase):
         with self.assertRaises(ValidationError) as caught:
             self._user("another", phone=CANONICAL).full_clean()
         self.assertIn("phone", caught.exception.message_dict)
+
+
+class CreateUserPhoneRaceTests(TestCase):
+    def setUp(self):
+        User.objects.create_user(username="owner", password="pass12345", phone=CANONICAL)
+
+    def _create(self, phone):
+        changes = {"username": "racer", "password": "pass12345", "phone": phone}
+        return create_user(None, changes, record_created=False)
+
+    def test_a_phone_taken_during_the_insert_is_a_validation_error(self):
+        with patch.object(User.objects, "create_user", side_effect=IntegrityError("duplicate")):
+            with self.assertRaises(DomainValidationError) as caught:
+                self._create(CANONICAL)
+        self.assertIn("phone", caught.exception.detail)
+        self.assertNotIn("username", caught.exception.detail)
+
+    def test_an_integrity_error_without_a_phone_clash_is_re_raised(self):
+        with patch.object(User.objects, "create_user", side_effect=IntegrityError("other")):
+            with self.assertRaises(IntegrityError):
+                self._create("09121111111")
+
+    def test_a_user_without_a_phone_is_not_checked_for_one(self):
+        with patch.object(User.objects, "create_user", side_effect=IntegrityError("other")):
+            with self.assertRaises(IntegrityError):
+                self._create(None)
 
 
 class UserAdminPhoneTests(TestCase):

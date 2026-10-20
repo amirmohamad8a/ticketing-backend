@@ -8,7 +8,9 @@ x-dev-app: &dev-app
     - .env
   environment:
     DATABASE_URL: postgres://ticketing:ticketing@db:5432/ticketing
-    REDIS_URL: redis://redis:6379/0
+    CACHE_REDIS_URL: redis://redis:6379/0
+    BROKER_REDIS_URL: redis://broker:6379/1
+    CHANNEL_REDIS_URL: redis://redis:6379/2
     S3_ENDPOINT_URL: http://minio:9000
 
 services:

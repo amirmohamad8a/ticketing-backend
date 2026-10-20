@@ -252,7 +252,7 @@ class TicketEvent(AuditEvent):
     )
 
     class Meta:
-        ordering = ["created_at"]
+        ordering = ["created_at", "id"]
         indexes = [
             models.Index(fields=["created_at", "id"], name="ticketevent_created_id_idx"),
         ]
@@ -289,7 +289,7 @@ class Comment(TimeStampedModel):
     is_internal = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ["created_at"]
+        ordering = ["created_at", "id"]
         constraints = [
             models.UniqueConstraint(
                 fields=["ticket", "client_msg_id"],

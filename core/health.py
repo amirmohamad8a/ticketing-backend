@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import threading
+import time
 import uuid
 
 from django.core.cache import cache
@@ -14,8 +16,13 @@ CHECK_TIMEOUT_SECONDS = 3
 CACHE_KEY_PREFIX = "ready-probe:"
 CACHE_PROBE_TTL_SECONDS = 10
 CHANNEL_PROBE_TYPE = "ready.probe"
+RESULTS_TTL_SECONDS = 5
 OK = "ok"
 ERROR = "error"
+
+_results_lock = threading.Lock()
+_cached_results = None
+_cached_at = 0.0
 
 
 def check_database():
@@ -72,6 +79,23 @@ def run_checks():
         else:
             results[name] = OK
     return results
+
+
+def cached_run_checks():
+    global _cached_results, _cached_at
+    with _results_lock:
+        now = time.monotonic()
+        if _cached_results is None or now - _cached_at >= RESULTS_TTL_SECONDS:
+            _cached_results = run_checks()
+            _cached_at = now
+        return dict(_cached_results)
+
+
+def clear_cached_checks():
+    global _cached_results, _cached_at
+    with _results_lock:
+        _cached_results = None
+        _cached_at = 0.0
 
 
 def all_passed(results):

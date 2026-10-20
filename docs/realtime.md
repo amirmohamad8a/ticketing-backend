@@ -3,7 +3,7 @@
 The app is an ASGI application (`config/asgi.py`). HTTP goes to Django and
 WebSocket connections go to `/ws/` and `/ws/presence/` (`config/routing.py`). In
 development `runserver` is served by Daphne, so it handles both. The channel
-layer is `channels_redis` on `REDIS_URL` with the key prefix `ticketing`. Tests
+layer is `channels_redis` on `CHANNEL_REDIS_URL` with the key prefix `ticketing`. Tests
 use the in-memory channel layer.
 
 ## Connecting

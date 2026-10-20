@@ -16,6 +16,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      broker:
+        condition: service_healthy
 
   worker:
     command: celery -A config worker --loglevel=info
@@ -26,6 +28,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      broker:
+        condition: service_healthy
 
   beat:
     command: celery -A config beat --loglevel=info --schedule /tmp/celerybeat-schedule
@@ -35,6 +39,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      broker:
         condition: service_healthy
 
   db:
@@ -52,6 +58,16 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: ["redis-server", "--maxmemory", "${REDIS_CACHE_MAXMEMORY:-256mb}", "--maxmemory-policy", "volatile-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  broker:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

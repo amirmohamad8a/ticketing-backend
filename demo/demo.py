@@ -5,7 +5,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.management.base import CommandError
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
 from django.utils.text import Truncator
@@ -458,8 +458,18 @@ def _discard_files(names):
             logger.warning("Could not delete a demo file", extra={"file_name": name}, exc_info=True)
 
 
+def _demo_canned_reply_query():
+    query = Q(pk__in=[])
+    for shortcut, title, body in CANNED_REPLIES:
+        query |= Q(shortcut=shortcut, title=title, body=body)
+    return query
+
+
+@transaction.atomic
 def _purge():
     files = []
+    with connection.cursor() as cursor:
+        cursor.execute("SET LOCAL app.allow_audit_purge = 'on'")
     ticket_ids = list(
         Ticket.all_objects.filter(
             Q(customer__username__in=DEMO_USERNAMES)
@@ -476,7 +486,7 @@ def _purge():
         QuerySet.delete(Ticket.all_objects.filter(pk__in=ticket_ids))
     Visitor.objects.filter(site__key=SITE_KEY).delete()
     Site.objects.filter(key=SITE_KEY).delete()
-    CannedReply.objects.filter(shortcut__in=CANNED_SHORTCUTS).delete()
+    CannedReply.objects.filter(_demo_canned_reply_query()).delete()
     unused_tag_ids = list(
         Tag.objects.annotate(ticket_total=Count("tickets"))
         .filter(name__in=TAG_NAMES, ticket_total=0)

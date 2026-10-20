@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from tickets.events import TicketEventField, record_event, tag_changes
@@ -61,44 +62,46 @@ def create_ticket(actor, changes=None, **fields):
 def update_ticket(ticket, actor, changes):
     data = dict(changes)
     tags = data.pop("tags", None)
-    if "status" in data:
-        validate_status_transition(ticket, data["status"])
-    if "assignee" in data:
-        validate_assignee(data["assignee"], ticket.assignee)
     if tags is not None:
         tags = validate_tags(tags)
 
-    events = []
-    if "status" in data and data["status"] != ticket.status:
-        new_status = data["status"]
-        events.append((TicketEventField.STATUS, ticket.status, new_status))
-        if new_status in Ticket.FINISHED_STATUSES:
-            if ticket.resolved_at is None:
-                data["resolved_at"] = timezone.now()
-        else:
-            data["resolved_at"] = None
-    if "assignee" in data and data["assignee"] != ticket.assignee:
-        old_assignee = ticket.assignee.username if ticket.assignee else ""
-        new_assignee = data["assignee"].username if data["assignee"] else ""
-        events.append((TicketEventField.ASSIGNEE, old_assignee, new_assignee))
-    for field in AUDITED_TEXT_FIELDS:
-        if field in data and data[field] != getattr(ticket, field):
-            events.append(
-                (
-                    field,
-                    _event_value(getattr(ticket, field)),
-                    _event_value(data[field]),
-                )
-            )
-    if tags is not None:
-        events.extend(tag_changes(ticket.tags.all(), tags))
-
-    changed_fields = [attr for attr, value in data.items() if getattr(ticket, attr) != value]
-
     with transaction.atomic():
-        for attr in changed_fields:
-            setattr(ticket, attr, data[attr])
-        ticket.save(update_fields=[*changed_fields, "updated_at"])
+        get_object_or_404(Ticket.objects.select_for_update(), pk=ticket.pk)
+        ticket.refresh_from_db()
+
+        if "status" in data:
+            validate_status_transition(ticket, data["status"])
+        if "assignee" in data:
+            validate_assignee(data["assignee"], ticket.assignee)
+
+        events = []
+        if "status" in data and data["status"] != ticket.status:
+            new_status = data["status"]
+            events.append((TicketEventField.STATUS, ticket.status, new_status))
+            if new_status in Ticket.FINISHED_STATUSES:
+                if ticket.resolved_at is None:
+                    data["resolved_at"] = timezone.now()
+            else:
+                data["resolved_at"] = None
+        if "assignee" in data and data["assignee"] != ticket.assignee:
+            old_assignee = ticket.assignee.username if ticket.assignee else ""
+            new_assignee = data["assignee"].username if data["assignee"] else ""
+            events.append((TicketEventField.ASSIGNEE, old_assignee, new_assignee))
+        for field in AUDITED_TEXT_FIELDS:
+            if field in data and data[field] != getattr(ticket, field):
+                events.append(
+                    (
+                        field,
+                        _event_value(getattr(ticket, field)),
+                        _event_value(data[field]),
+                    )
+                )
+        if tags is not None:
+            events.extend(tag_changes(ticket.tags.all(), tags))
+
+        for attr, value in data.items():
+            setattr(ticket, attr, value)
+        ticket.save(update_fields=[*data, "updated_at"])
         if tags is not None:
             ticket.tags.set(tags)
         for field_changed, old_value, new_value in events:

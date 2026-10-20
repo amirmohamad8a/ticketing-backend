@@ -9,6 +9,13 @@ The OpenAPI schema in [`schema.yml`](schema.yml) is the source of truth for
 routes, request and response bodies, operation ids and permissions. Swagger UI
 is served at `/api/docs/` and the JSON schema at `/api/schema/`.
 
+To regenerate it, use the schema settings, which set `LANGUAGE_CODE` to `en`, so
+the descriptions do not depend on the locale:
+
+```bash
+python manage.py spectacular --settings=config.settings.schema --file schema.yml --validate --fail-on-warn
+```
+
 ## Features
 
 - Tickets with a status workflow, field-level permissions, soft delete and
@@ -58,7 +65,8 @@ make demo
 `seed_demo` creates a demo customer (`demo_customer`), a demo agent
 (`demo_agent`), a chat site and sample conversations. Both accounts use the
 password `demo-ticketing-2026`. `make reset-demo` removes the demo data and
-seeds a clean state again.
+seeds a clean state again. The demo app is installed only by the development
+settings, so `seed_demo` and `reset_demo` do not exist in production.
 
 Day to day:
 

@@ -152,6 +152,18 @@ class ResetDemoTests(TestCase):
         self.assertEqual(Tag.objects.filter(name__iexact="billing").count(), 1)
         self.assertIn(shared_tag.pk, ticket.tags.values_list("pk", flat=True))
 
+    def test_reset_keeps_a_real_reply_that_reuses_a_demo_shortcut(self):
+        seed_demo_data()
+        CannedReply.objects.filter(shortcut="greeting").update(
+            title="Ours", body="Our own greeting."
+        )
+        reset_demo_data()
+        self.assertTrue(
+            CannedReply.objects.filter(
+                shortcut="greeting", title="Ours", body="Our own greeting."
+            ).exists()
+        )
+
     def test_reset_is_repeatable(self):
         seed_demo_data()
         reset_demo_data()

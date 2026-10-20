@@ -62,7 +62,10 @@ Settings are split under `config/settings/`:
 | `DATABASE_URL` | Yes | none | PostgreSQL connection URL. Startup fails for any other scheme |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | With prod | `ticketing` | Credentials the production Compose database container creates. `DATABASE_URL` must match them; `scripts/bootstrap.sh` builds it from them |
 | `DJANGO_SETTINGS_MODULE` | No | `config.settings.dev` | `config.settings.prod` in production; `config.settings.loadtest` for load tests |
-| `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend, Django cache (throttle counters, WebSocket tickets, presence) and the Channels layer |
+| `CACHE_REDIS_URL` | No | `redis://localhost:6379/0` | Django cache: throttle counters, WebSocket tickets, presence, chat availability and widget proof-of-work replay keys. Flush only this database |
+| `BROKER_REDIS_URL` | No | `redis://localhost:6379/1` | Celery broker and result backend. Compose runs it as a separate `broker` service |
+| `CHANNEL_REDIS_URL` | No | `redis://localhost:6379/2` | Channels layer for WebSocket fan-out |
+| `REDIS_CACHE_MAXMEMORY` | No | `256mb` | Compose only. Memory limit for the `redis` service, which evicts with `volatile-lru` |
 | `NUM_PROXIES` | Production | `0` in dev | Number of reverse proxies in front of the app, used for the client IP in throttling and logging. Production refuses to start unless it is set |
 | `ALLOW_ZERO_PROXIES` | No | `false` | Production only. Allows `NUM_PROXIES=0` for a deliberate direct-access deployment and logs a warning |
 | `WEB_REPLICAS` | No | `2` | Production Compose only. Number of `web` containers that Caddy load-balances across |
@@ -72,6 +75,7 @@ Settings are split under `config/settings/`:
 | `ADMIN_LOGIN_WINDOW_SECONDS` | No | `300` | Length of the Django admin login attempt window |
 | `LOG_LEVEL` | No | `INFO` | Verbosity of the JSON logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `METRICS_TOKEN` | No | empty | Bearer token for `GET /metrics/`. Empty disables the endpoint |
+| `API_DOCS_ENABLED` | No | `True` in dev, `False` in prod | Serves `/api/schema/` and `/api/docs/`. In production, when enabled, both are limited to `IsAdmin` (role `admin`) and the docs need a bearer token, so a browser cannot load them |
 | `PROMETHEUS_MULTIPROC_DIR` | No | unset | Directory for metric files when several server processes run. Must exist and be empty at start |
 | `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated origins allowed to call the API. Widget routes accept any origin and check the site's `allowed_origins` instead. The production Compose file defaults it to `https://$DOMAIN` |
 | `CSRF_TRUSTED_ORIGINS` | No | empty | Production only. Comma-separated trusted origins. The production Compose file sets it to `https://$DOMAIN` |
@@ -82,7 +86,7 @@ Settings are split under `config/settings/`:
 | `DOWNLOAD_URL_TTL_SECONDS` | No | `300` | Lifetime of signed download URLs |
 | `VISITOR_TOKEN_LIFETIME_DAYS` | No | `30` | Lifetime of a widget visitor token |
 | `VISITOR_RETENTION_DAYS` | No | `30` | Age after which visitors without tickets are deleted and finished-conversation contact details are cleared |
-| `WIDGET_POW_DIFFICULTY` | No | `0` in dev, `16` in prod | Leading zero bits a widget conversation challenge must satisfy. `0` disables proof of work |
+| `WIDGET_POW_DIFFICULTY` | No | `0` in dev, `18` in prod | Leading zero bits a widget conversation challenge must satisfy. `0` disables proof of work. This is friction against scripts, not protection; the throttles are the protection (see [Widget](widget.md)) |
 | `WIDGET_POW_TTL_SECONDS` | No | `300` | Lifetime of a widget proof-of-work challenge |
 | `WIDGET_SITE_START_LIMIT_PER_HOUR` | No | `300` | New conversations per site per hour |
 | `WIDGET_SITE_MAX_UNASSIGNED_CHATS` | No | `200` | Recent unassigned chats a site may have before new starts get `429` |

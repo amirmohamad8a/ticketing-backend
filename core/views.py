@@ -17,7 +17,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from core.downloads import read_download_token
-from core.health import all_passed, run_checks
+from core.health import all_passed, cached_run_checks
 from core.metrics import render_metrics
 
 DOWNLOAD_CHUNK_SIZE = 64 * 1024
@@ -38,7 +38,7 @@ def health(request):
 @require_http_methods(["GET", "HEAD"])
 @never_cache
 def ready(request):
-    checks = run_checks()
+    checks = cached_run_checks()
     passed = all_passed(checks)
     body = {"status": "ok" if passed else "unavailable", "checks": checks}
     if settings.NUM_PROXIES == 0 and request.META.get("HTTP_X_FORWARDED_FOR"):

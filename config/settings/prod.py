@@ -31,7 +31,13 @@ NUM_PROXIES = resolve_num_proxies(
 )
 REST_FRAMEWORK["NUM_PROXIES"] = NUM_PROXIES
 
-WIDGET_POW_DIFFICULTY = env.int("WIDGET_POW_DIFFICULTY", default=16)
+WIDGET_POW_DIFFICULTY = env.int("WIDGET_POW_DIFFICULTY", default=18)
+
+API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=False)
+SPECTACULAR_SETTINGS = {
+    **SPECTACULAR_SETTINGS,
+    "SERVE_PERMISSIONS": ["accounts.permissions.IsAdmin"],
+}
 
 _security_index = MIDDLEWARE.index("django.middleware.security.SecurityMiddleware")
 MIDDLEWARE = [

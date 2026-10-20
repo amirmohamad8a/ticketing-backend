@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_filters",
     "drf_spectacular",
+    "drf_spectacular_sidecar",
     "accounts",
     "tickets",
     "chat",
@@ -33,7 +34,6 @@ INSTALLED_APPS = [
     "stats",
     "audit",
     "core",
-    "demo",
 ]
 
 MIDDLEWARE = [
@@ -84,6 +84,8 @@ DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 AUTH_USER_MODEL = "accounts.User"
 
+AUTHENTICATION_BACKENDS = ["accounts.backends.CaseInsensitiveModelBackend"]
+
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Ticketing API",
@@ -102,6 +104,10 @@ SPECTACULAR_SETTINGS = {
     ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "REDOC_DIST": "SIDECAR",
     "COMPONENT_SPLIT_REQUEST": True,
     "TAGS": [
         {
@@ -142,6 +148,8 @@ SPECTACULAR_SETTINGS = {
         "AuditKindEnum": "audit.cursors.KINDS",
     },
 }
+
+API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=True)
 
 
 LANGUAGE_CODE = "fa"

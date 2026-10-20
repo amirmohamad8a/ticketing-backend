@@ -1,13 +1,14 @@
 from datetime import timedelta
 
-from config.settings.redis import REDIS_URL
+from config.settings.redis import BROKER_REDIS_URL
 
-CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_BROKER_URL = BROKER_REDIS_URL
+CELERY_RESULT_BACKEND = BROKER_REDIS_URL
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 90000}
 CELERY_BEAT_SCHEDULE = {
     "tickets-auto-close-resolved": {
         "task": "tickets.auto_close_resolved",
