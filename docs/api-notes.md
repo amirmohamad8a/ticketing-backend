@@ -254,8 +254,10 @@ transaction that creates it.
 3. Drop agents whose open chats have reached `max_concurrent_chats`.
 4. Pick the agent with the fewest open chats, then the one assigned a chat
    longest ago, then the lowest id.
-5. Assign through the ticket serializer so the assignee rules and audit event
-   apply.
+5. Assign through `assign_ticket`, which calls `update_ticket`. That applies
+   `validate_assignee` and records the assignee event, so routed chats follow the
+   same rules and audit trail as a manual assignment. If the assignee is rejected,
+   the chat stays queued.
 
 With no available agent the conversation stays queued. Later messages do not
 retry routing. The minute sweep assigns queued chats in creation order when an

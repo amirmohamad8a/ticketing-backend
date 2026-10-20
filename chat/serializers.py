@@ -12,7 +12,7 @@ class OriginField(serializers.CharField):
         try:
             return normalize_origin(value)
         except DjangoValidationError as exc:
-            raise serializers.ValidationError(exc.messages)
+            raise serializers.ValidationError(exc.messages) from exc
 
 
 class SiteSerializer(serializers.ModelSerializer):

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from django.db import transaction
 
@@ -10,7 +10,7 @@ from chat import presence
 from tickets.assignment import assign_ticket
 from tickets.models import Ticket
 
-EPOCH = datetime.min.replace(tzinfo=timezone.utc)
+EPOCH = datetime.min.replace(tzinfo=UTC)
 
 
 def _lock_available_agents():

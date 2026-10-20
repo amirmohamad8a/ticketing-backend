@@ -37,8 +37,3 @@ def resolve_visitor(token):
 def start_visitor_session(site, name="", phone="", email=""):
     visitor = Visitor.objects.create(site=site, name=name, phone=phone, email=email)
     return VisitorSession(visitor=visitor, token=issue_visitor_token(visitor))
-
-
-def resume_visitor_session(token):
-    visitor = resolve_visitor(token)
-    return VisitorSession(visitor=visitor, token=issue_visitor_token(visitor))

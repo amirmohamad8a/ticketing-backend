@@ -55,6 +55,6 @@ def start_new_conversation(request, data):
 def continue_conversation(visitor, data, request):
     ensure_origin_allowed(request, visitor.site)
     ticket, comment, created = open_conversation(
-        visitor, data["body"], data.get("client_msg_id") or None, request=request
+        visitor, data["body"], data.get("client_msg_id") or None
     )
     return visitor, issue_visitor_token(visitor), ticket, comment, created

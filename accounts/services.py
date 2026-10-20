@@ -57,16 +57,16 @@ def create_user(actor=None, changes=None, *, record_created=True, **fields):
                     old_value="",
                     new_value=user.role,
                 )
-    except IntegrityError:
+    except IntegrityError as exc:
         if User.objects.filter(username__iexact=data.get("username", "")).exists():
             raise DomainValidationError(
                 {"username": _("A user with that username already exists.")}
-            )
+            ) from exc
         phone = data.get("phone")
         if phone and User.objects.filter(phone=phone).exists():
             raise DomainValidationError(
                 {"phone": [_("A user with that phone number already exists.")]}
-            )
+            ) from exc
         raise
     return user
 
@@ -151,8 +151,8 @@ def logout_user(refresh_token, user, *, close_user_sockets_fn=close_user_sockets
         raise DomainValidationError({"refresh": _("Refresh token is required.")})
     try:
         token = RefreshToken(refresh_token)
-    except TokenError:
-        raise DomainValidationError({"refresh": _("Invalid or expired token.")})
+    except TokenError as exc:
+        raise DomainValidationError({"refresh": _("Invalid or expired token.")}) from exc
     with transaction.atomic():
         token.blacklist()
         close_user_sockets_fn(user.pk)

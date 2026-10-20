@@ -31,15 +31,15 @@ def normalize_origin(value):
         parts = urlsplit(f"//{match.group(2)}")
         host = parts.hostname
         port = parts.port
-    except ValueError:
-        raise _invalid_origin()
+    except ValueError as exc:
+        raise _invalid_origin() from exc
     if not host:
         raise _invalid_origin()
     if ":" in host:
         try:
             host = f"[{ipaddress.IPv6Address(host).compressed}]"
-        except ValueError:
-            raise _invalid_origin()
+        except ValueError as exc:
+            raise _invalid_origin() from exc
     elif not _HOSTNAME.fullmatch(host):
         raise _invalid_origin()
     if port is not None and port != DEFAULT_PORTS[scheme]:

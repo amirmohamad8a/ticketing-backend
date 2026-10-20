@@ -106,7 +106,7 @@ def post_message(
             )
             _record_first_response(ticket, comment)
             _publish_created(comment)
-    except IntegrityError:
+    except IntegrityError as exc:
         if not client_msg_id:
             raise
         existing = _find_existing(ticket, client_msg_id, participant)
@@ -115,7 +115,7 @@ def post_message(
         if Comment.objects.filter(ticket=ticket, client_msg_id=client_msg_id).exists():
             raise ValidationError(
                 {"client_msg_id": _("This client message ID is already used in this conversation.")}
-            )
+            ) from exc
         raise
     return comment, True
 

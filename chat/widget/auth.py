@@ -22,8 +22,8 @@ class VisitorTokenAuthentication(BaseAuthentication):
             return None
         try:
             visitor = resolve_visitor(token)
-        except InvalidVisitorToken:
-            raise AuthenticationFailed(_("The visitor token is invalid or has expired."))
+        except InvalidVisitorToken as exc:
+            raise AuthenticationFailed(_("The visitor token is invalid or has expired.")) from exc
         return AnonymousUser(), visitor
 
     def authenticate_header(self, request):

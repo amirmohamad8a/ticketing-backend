@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 REDACTED = "[redacted]"
 
@@ -61,7 +61,7 @@ def sanitize(value):
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         payload = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(
                 timespec="milliseconds"
             ),
             "level": record.levelname,

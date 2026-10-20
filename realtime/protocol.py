@@ -25,11 +25,3 @@ EVENT_LEFT = "left"
 EVENT_TYPING = "typing"
 EVENT_ERROR = "error"
 EVENT_PRESENCE = "presence"
-
-CHANNEL_EVENT_TYPE = "realtime.event"
-CHANNEL_TYPING_TYPE = "realtime.typing"
-CHANNEL_CLOSE_TYPE = "realtime.close"
-
-TICKET_EVENT_TYPE = "ticket.event"
-MESSAGE_EVENT_TYPE = "message.created"
-OFFLINE_EVENT_TYPE = "conversation.offline"

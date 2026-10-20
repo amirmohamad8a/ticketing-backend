@@ -18,5 +18,5 @@ def read_download_token(token):
             salt=DOWNLOAD_SALT,
             max_age=settings.DOWNLOAD_URL_TTL_SECONDS,
         )
-    except signing.BadSignature:
-        raise PermissionDenied(_("The download link is invalid or has expired."))
+    except signing.BadSignature as exc:
+        raise PermissionDenied(_("The download link is invalid or has expired.")) from exc

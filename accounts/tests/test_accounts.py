@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from django.contrib.admin.sites import site
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import call_command
 from django.test import TestCase
 
@@ -68,7 +69,7 @@ class UserModelTests(TestCase):
 
     def test_invalid_role_fails_full_clean(self):
         user = User(username="badrole", role="not-a-role")
-        with self.assertRaises(Exception):
+        with self.assertRaises(DjangoValidationError):
             user.full_clean()
 
 

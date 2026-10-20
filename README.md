@@ -106,6 +106,7 @@ docker compose exec -T web black --check .
 docker compose exec -T web isort --check-only .
 docker compose exec -T web ruff check .
 docker compose exec -T web lint-imports
+docker compose exec -T web vulture .
 ```
 
 ## Documentation

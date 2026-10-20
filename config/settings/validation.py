@@ -42,8 +42,8 @@ def resolve_num_proxies(raw, allow_zero_proxies, logger):
         )
     try:
         num_proxies = int(raw)
-    except (TypeError, ValueError):
-        raise ImproperlyConfigured("NUM_PROXIES must be a whole number.")
+    except (TypeError, ValueError) as exc:
+        raise ImproperlyConfigured("NUM_PROXIES must be a whole number.") from exc
     if num_proxies < 0:
         raise ImproperlyConfigured("NUM_PROXIES cannot be negative.")
     if num_proxies == 0:

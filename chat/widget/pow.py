@@ -45,11 +45,11 @@ def verify_solution(site, challenge, nonce):
     ttl = settings.WIDGET_POW_TTL_SECONDS
     try:
         payload = signing.loads(challenge, salt=SALT, max_age=ttl)
-    except signing.BadSignature:
-        raise _invalid()
+    except signing.BadSignature as exc:
+        raise _invalid() from exc
     if payload.get("site") != site.pk or payload.get("bits", 0) < settings.WIDGET_POW_DIFFICULTY:
         raise _invalid()
-    digest = hashlib.sha256(f"{challenge}:{nonce}".encode("utf-8")).digest()
+    digest = hashlib.sha256(f"{challenge}:{nonce}".encode()).digest()
     if _leading_zero_bits(digest) < payload["bits"]:
         raise _invalid()
     used_key = USED_PREFIX + hashlib.sha256(challenge.encode("utf-8")).hexdigest()

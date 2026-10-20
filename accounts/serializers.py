@@ -57,7 +57,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         try:
             validate_password(attrs["password"], candidate)
         except DjangoValidationError as exc:
-            raise serializers.ValidationError({"password": list(exc.messages)})
+            raise serializers.ValidationError({"password": list(exc.messages)}) from exc
         return attrs
 
     def create(self, validated_data):
@@ -159,14 +159,8 @@ class PasswordChangeSerializer(serializers.Serializer):
         try:
             validate_password(attrs["new_password"], user)
         except DjangoValidationError as exc:
-            raise serializers.ValidationError({"new_password": list(exc.messages)})
+            raise serializers.ValidationError({"new_password": list(exc.messages)}) from exc
         return attrs
-
-    def save(self, **kwargs):
-        user = self.context["request"].user
-        user.set_password(self.validated_data["new_password"])
-        user.save(update_fields=["password"])
-        return user
 
 
 class TokenPairSerializer(serializers.Serializer):
@@ -253,7 +247,7 @@ class UserUpdateSerializer(ActorMixin, serializers.ModelSerializer):
             try:
                 validate_password(attrs["password"], user)
             except DjangoValidationError as exc:
-                raise serializers.ValidationError({"password": list(exc.messages)})
+                raise serializers.ValidationError({"password": list(exc.messages)}) from exc
         return attrs
 
     def update(self, instance, validated_data):

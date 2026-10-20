@@ -12,14 +12,14 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from rest_framework.exceptions import APIException, Throttled
+from rest_framework.exceptions import APIException, Throttled, ValidationError
 
 from accounts.tasks import flush_expired_tokens
 from chat.availability import agents_available
 from chat.contact import save_contact
 from chat.tasks import convert_to_offline, purge_stale_visitors, sweep_unanswered_chats
 from chat.tokens import InvalidVisitorToken, issue_visitor_token
-from chat.visitors import resolve_visitor, resume_visitor_session, start_visitor_session
+from chat.visitors import resolve_visitor
 from chat.widget.limits import _count_start, ensure_site_capacity
 from chat.widget.pow import SALT as POW_SALT
 from chat.widget.pow import issue_challenge, verify_solution
@@ -156,21 +156,21 @@ class ProofOfWorkCoverageTests(TestCase):
             >= 1
         )
         verify_solution(self.site, challenge, str(nonce))
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValidationError):
             verify_solution(self.site, challenge, str(nonce))
 
     @override_settings(WIDGET_POW_DIFFICULTY=1, WIDGET_POW_TTL_SECONDS=300)
     def test_missing_wrong_site_and_weak_challenges_are_rejected(self):
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValidationError):
             verify_solution(self.site, None, "1")
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValidationError):
             verify_solution(self.site, "not-a-token", "1")
         other = SiteFactory()
         challenge = issue_challenge(other)["challenge"]
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValidationError):
             verify_solution(self.site, challenge, "1")
         weak = signing.dumps({"site": self.site.pk, "bits": 0}, salt=POW_SALT)
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValidationError):
             verify_solution(self.site, weak, "1")
 
 
@@ -189,12 +189,6 @@ class VisitorSessionCoverageTests(TestCase):
         site.save(update_fields=["is_active"])
         with self.assertRaises(InvalidVisitorToken):
             resolve_visitor(token)
-
-    def test_starting_and_resuming_a_session_returns_the_same_visitor(self):
-        site = SiteFactory()
-        session = start_visitor_session(site, name="Sara")
-        resumed = resume_visitor_session(session.token)
-        self.assertEqual(resumed.visitor, session.visitor)
 
     def test_resolving_touches_an_old_last_seen_timestamp(self):
         site = SiteFactory()

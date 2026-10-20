@@ -16,8 +16,8 @@ class AuditQuerySerializer(serializers.Serializer):
     def validate_cursor(self, value):
         try:
             return decode_cursor(value)
-        except InvalidCursor:
-            raise serializers.ValidationError(_("The cursor is invalid."))
+        except InvalidCursor as exc:
+            raise serializers.ValidationError(_("The cursor is invalid.")) from exc
 
     def validate(self, attrs):
         date_from = attrs.get("date_from")

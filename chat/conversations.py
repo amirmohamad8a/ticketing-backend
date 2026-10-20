@@ -32,7 +32,7 @@ def _schedule_offline_conversion(ticket):
     )
 
 
-def open_conversation(visitor, body, client_msg_id=None, request=None):
+def open_conversation(visitor, body, client_msg_id=None):
     with transaction.atomic():
         Visitor.objects.select_for_update().get(pk=visitor.pk)
         ticket = active_conversation(visitor)

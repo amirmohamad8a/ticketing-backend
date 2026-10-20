@@ -59,7 +59,7 @@ class TicketRouteIdorTests(TestCase):
                 self.assertEqual(response.data["error"]["code"], "not_found")
 
     def test_an_intruder_cannot_tell_a_foreign_ticket_from_a_missing_one(self):
-        for real, missing in zip(self._routes(self.ticket.id), self._routes(999999)):
+        for real, missing in zip(self._routes(self.ticket.id), self._routes(999999), strict=True):
             with self.subTest(url=real):
                 first = self.intruder_client.get(real)
                 second = self.intruder_client.get(missing)
