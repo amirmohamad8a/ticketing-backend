@@ -7,6 +7,7 @@ from unittest.mock import patch
 from django.core.cache import cache
 from django.test import TestCase
 
+from prometheus_client import REGISTRY
 from rest_framework.test import APIClient
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -22,6 +23,10 @@ NEW_PASSWORD = "New-pass-7390"
 
 def _rates(**rates):
     return patch.dict(SimpleRateThrottle.THROTTLE_RATES, rates)
+
+
+def _global_budget_exceeded():
+    return REGISTRY.get_sample_value("ticketing_login_global_budget_exceeded_total") or 0
 
 
 def _client_for(user):
@@ -174,14 +179,12 @@ class LoginUsernameGlobalThrottleTests(ThrottleTestCase):
             REMOTE_ADDR=ip,
         )
 
-    def test_a_botnet_from_many_addresses_hits_one_per_username_bucket(self):
-        with (
-            _rates(
-                login="100/min",
-                login_username="100/hour",
-                login_username_global="1/hour",
-            ),
-            patch("accounts.throttles.time.sleep") as sleep,
+    def test_a_botnet_from_many_addresses_is_counted_but_not_delayed(self):
+        before = _global_budget_exceeded()
+        with _rates(
+            login="100/min",
+            login_username="100/hour",
+            login_username_global="1/hour",
         ):
             first = self._login(ip="10.0.0.1")
             second = self._login(ip="10.0.0.2")
@@ -189,21 +192,20 @@ class LoginUsernameGlobalThrottleTests(ThrottleTestCase):
         self.assertEqual(
             (first.status_code, second.status_code, third.status_code), (401, 401, 401)
         )
-        self.assertEqual(sleep.call_count, 2)
+        self.assertEqual(_global_budget_exceeded(), before + 2)
 
-    def test_the_global_bucket_slows_down_instead_of_locking_the_account(self):
-        with (
-            _rates(
-                login="100/min",
-                login_username="100/hour",
-                login_username_global="1/hour",
-            ),
-            patch("accounts.throttles.time.sleep") as sleep,
+    def test_the_global_bucket_logs_and_counts_without_locking_the_account(self):
+        before = _global_budget_exceeded()
+        with _rates(
+            login="100/min",
+            login_username="100/hour",
+            login_username_global="1/hour",
         ):
             self._login(ip="10.0.0.1")
-            response = self._login(password="pass12345", ip="10.0.0.2")
+            with self.assertLogs("accounts.throttles", level="WARNING"):
+                response = self._login(password="pass12345", ip="10.0.0.2")
         self.assertEqual(response.status_code, 200)
-        sleep.assert_called_once()
+        self.assertEqual(_global_budget_exceeded(), before + 1)
 
 
 class LoginUsernameConcurrencyTests(ThrottleTestCase):
@@ -224,7 +226,6 @@ class LoginUsernameConcurrencyTests(ThrottleTestCase):
 
         with (
             _rates(login_username=f"{limit}/hour", login_username_global="1000/hour"),
-            patch("accounts.throttles.time.sleep"),
             ThreadPoolExecutor(max_workers=attempts) as pool,
         ):
             results = list(pool.map(lambda _: attempt(), range(attempts)))

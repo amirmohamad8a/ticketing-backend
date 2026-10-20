@@ -67,9 +67,11 @@ request returns `429` with the standard error envelope (`error.code` is
 | `widget_start` | `POST /api/widget/conversations/` | IP address | 60/hour |
 | `widget_upload` | `POST /api/widget/conversations/{id}/attachments/` | Visitor | 30/hour |
 
-When the per-username global login budget is spent, login is delayed by
-`LOGIN_USERNAME_SLOWDOWN_SECONDS` instead of rejected, so a botnet cannot lock
-an account out. The per-username + IP and per-IP budgets still return `429`.
+When the per-username global login budget is spent, the request is not delayed
+or rejected by that budget. It is logged as a warning (without the username) and
+counted in `ticketing_login_global_budget_exceeded_total`. The per-username + IP
+and per-IP budgets still return `429`, which is what stops a botnet from
+guessing one account.
 
 The limits live in `REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]` in
 `config/settings/throttling.py`. Behind a reverse proxy set `NUM_PROXIES` to the
@@ -116,9 +118,11 @@ curl -H "Authorization: Bearer dev-metrics-token" http://localhost:8000/metrics/
 docker compose --profile monitoring up -d prometheus
 ```
 
-Open http://localhost:9090/targets; the `ticketing` target should be `UP`. The
-token comes from `METRICS_TOKEN`, and `web` must be in `ALLOWED_HOSTS` because
-Prometheus calls `http://web:8000`.
+Open http://localhost:9090/targets; the `ticketing` job should list one target
+per `web` replica, each `UP`. Prometheus finds them with `dns_sd_configs` on the
+`web` service name, so scaling `web` adds targets without editing
+`monitoring/prometheus.yml`. The token comes from `METRICS_TOKEN`, and `web` must
+be in `ALLOWED_HOSTS` because Prometheus calls the replicas at `web:8000`.
 
 ## Production settings check
 

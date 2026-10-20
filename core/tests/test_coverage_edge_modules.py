@@ -395,15 +395,19 @@ class UserThrottleCoverageTests(SimpleTestCase):
 
         self.assertIsNone(LoginUsernameThrottle()._username(BrokenRequest()))
 
-    def test_the_global_limit_slowdown_is_applied(self):
+    def test_the_global_limit_is_logged_and_counted_without_a_delay(self):
+        from prometheus_client import REGISTRY
+
         from accounts.throttles import LoginUsernameThrottle
 
         throttle = LoginUsernameThrottle()
         request = self._request({"username": "Sara"})
+        before = REGISTRY.get_sample_value("ticketing_login_global_budget_exceeded_total") or 0
         with patch.object(throttle, "_consume", side_effect=[True, False]):
-            with patch("accounts.throttles.time.sleep") as sleep:
+            with self.assertLogs("accounts.throttles", level="WARNING"):
                 self.assertTrue(throttle.allow_request(request, None))
-        sleep.assert_called_once_with(0.5)
+        after = REGISTRY.get_sample_value("ticketing_login_global_budget_exceeded_total")
+        self.assertEqual(after, before + 1)
 
 
 class MetricsCoverageTests(SimpleTestCase):

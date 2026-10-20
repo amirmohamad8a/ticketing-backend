@@ -65,9 +65,9 @@ Settings are split under `config/settings/`:
 | `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker and result backend, Django cache (throttle counters, WebSocket tickets, presence) and the Channels layer |
 | `NUM_PROXIES` | Production | `0` in dev | Number of reverse proxies in front of the app, used for the client IP in throttling and logging. Production refuses to start unless it is set |
 | `ALLOW_ZERO_PROXIES` | No | `false` | Production only. Allows `NUM_PROXIES=0` for a deliberate direct-access deployment and logs a warning |
+| `WEB_REPLICAS` | No | `2` | Production Compose only. Number of `web` containers that Caddy load-balances across |
 | `MAX_REQUEST_BODY_BYTES` | No | `65536` | Largest body for normal routes. The ASGI layer answers `413` before Django spools it to disk |
 | `MAX_UPLOAD_BODY_BYTES` | No | `11534336` | Largest body on `/attachments/` and `/api/auth/me/`, where multipart uploads go |
-| `LOGIN_USERNAME_SLOWDOWN_SECONDS` | No | `0.5` | Delay added when the per-username global login budget is spent |
 | `ADMIN_LOGIN_MAX_ATTEMPTS` | No | `10` | Django admin login attempts per IP address per window. `0` disables the limiter |
 | `ADMIN_LOGIN_WINDOW_SECONDS` | No | `300` | Length of the Django admin login attempt window |
 | `LOG_LEVEL` | No | `INFO` | Verbosity of the JSON logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |

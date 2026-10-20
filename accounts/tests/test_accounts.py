@@ -134,6 +134,40 @@ class TokenAuthTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
         response = self.client.post("/api/auth/logout/", {})
         self.assertEqual(response.status_code, 400)
+        self.assertIn("refresh", response.data["error"]["details"])
+
+    def test_logout_with_a_json_array_body_is_a_validation_error(self):
+        obtain = self.client.post("/api/token/", {"username": "tokenuser", "password": "pass12345"})
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {obtain.data['access']}")
+        response = self.client.post("/api/auth/logout/", [obtain.data["refresh"]], format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "validation_error")
+
+    def test_logout_with_a_json_string_body_is_a_validation_error(self):
+        obtain = self.client.post("/api/token/", {"username": "tokenuser", "password": "pass12345"})
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {obtain.data['access']}")
+        response = self.client.post("/api/auth/logout/", obtain.data["refresh"], format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "validation_error")
+
+    def test_logout_with_a_non_string_refresh_value_is_a_validation_error(self):
+        obtain = self.client.post("/api/token/", {"username": "tokenuser", "password": "pass12345"})
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {obtain.data['access']}")
+        response = self.client.post(
+            "/api/auth/logout/", {"refresh": {"token": obtain.data["refresh"]}}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "validation_error")
+        self.assertIn("refresh", response.data["error"]["details"])
+
+    def test_logout_with_a_list_refresh_value_is_a_validation_error(self):
+        obtain = self.client.post("/api/token/", {"username": "tokenuser", "password": "pass12345"})
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {obtain.data['access']}")
+        response = self.client.post(
+            "/api/auth/logout/", {"refresh": [obtain.data["refresh"]]}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("refresh", response.data["error"]["details"])
 
     def test_logout_closes_the_users_live_sockets(self):
         obtain = self.client.post("/api/token/", {"username": "tokenuser", "password": "pass12345"})

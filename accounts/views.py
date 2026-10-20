@@ -27,6 +27,7 @@ from accounts.schema import (
 )
 from accounts.serializers import (
     AgentSerializer,
+    LogoutSerializer,
     PasswordChangeSerializer,
     ProfileSerializer,
     RegisterSerializer,
@@ -93,8 +94,10 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         logout_user(
-            request.data.get("refresh"),
+            serializer.validated_data["refresh"],
             request.user,
             close_user_sockets_fn=close_user_sockets,
         )

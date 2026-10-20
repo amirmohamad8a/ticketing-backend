@@ -38,6 +38,12 @@ http_request_duration = Histogram(
 )
 
 
+login_global_budget_exceeded = Counter(
+    "ticketing_login_global_budget_exceeded_total",
+    "Login attempts that spent the per-username global login budget.",
+)
+
+
 def socket_opened(endpoint, client):
     connected_sockets.labels(endpoint=endpoint, client=client).inc()
 

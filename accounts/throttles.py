@@ -1,13 +1,14 @@
 import hashlib
-import time
-
-from django.conf import settings
+import logging
 
 from rest_framework.exceptions import APIException
 from rest_framework.throttling import SimpleRateThrottle
 
 from accounts.models import User
 from core.counters import increment_fixed_window
+from core.metrics import login_global_budget_exceeded
+
+logger = logging.getLogger(__name__)
 
 
 class LoginUsernameThrottle(SimpleRateThrottle):
@@ -28,7 +29,8 @@ class LoginUsernameThrottle(SimpleRateThrottle):
         if not self._consume(self.scope, f"{username}|{self.get_ident(request)}"):
             return False
         if not self._consume(self.global_scope, username):
-            time.sleep(settings.LOGIN_USERNAME_SLOWDOWN_SECONDS)
+            logger.warning("Per-username global login budget spent")
+            login_global_budget_exceeded.inc()
         return True
 
     def wait(self):

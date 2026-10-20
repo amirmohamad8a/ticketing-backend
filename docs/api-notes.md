@@ -32,7 +32,7 @@ at `/api/docs/` and the JSON schema at `/api/schema/`.
 | `POST` | `/api/token/` | Anyone | Log in |
 | `POST` | `/api/token/refresh/` | Anyone | Refresh an access token |
 | `POST` | `/api/auth/register/` | Anyone | Register a customer |
-| `POST` | `/api/auth/logout/` | Signed in | Blacklist a refresh token |
+| `POST` | `/api/auth/logout/` | Signed in | Blacklist a refresh token and close the user's open WebSockets |
 | `GET`, `PATCH` | `/api/auth/me/` | Signed in | Read or update the own profile |
 | `POST` | `/api/auth/password/change/` | Signed in | Change the own password |
 
@@ -44,6 +44,13 @@ last name, phone and avatar. Agents and admins may also set
 A password change needs the current password, revokes every refresh token of the
 user and returns a fresh token pair. There is no email password reset: an admin
 sets a new password with `PATCH /api/users/{id}/`.
+
+Logout takes `{"refresh": "<token>"}` and answers `205`. A body that is not an
+object, or a `refresh` that is missing or not a string, is a `400` validation
+error. Logout closes every open WebSocket of the user, on every device, not only
+the one that logged out. Sockets are not tied to a refresh token, so this is the
+only way to stop a logged-out device receiving live events. Other devices
+reconnect with a new ticket from `POST /api/ws/ticket/`.
 
 ### Users and agents
 
