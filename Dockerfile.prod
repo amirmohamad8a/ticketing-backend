@@ -52,6 +52,4 @@ RUN SECRET_KEY=collectstatic-only-secret-key-0123456789-abcdefghijklmnopqrstuvwx
 
 EXPOSE 8000
 
-ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
-
 CMD ["sh", "-c", "exec daphne -b 0.0.0.0 -p ${PORT:-8000} --access-log /dev/null config.asgi:application"]
