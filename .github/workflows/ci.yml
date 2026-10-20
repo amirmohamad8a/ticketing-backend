@@ -145,7 +145,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile
+          target: dev
           push: false
           cache-from: type=gha,scope=dev
           cache-to: type=gha,mode=max,scope=dev
@@ -154,7 +154,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.prod
+          target: prod
           push: false
           cache-from: type=gha,scope=prod
           cache-to: type=gha,mode=max,scope=prod
