@@ -1,8 +1,11 @@
-.PHONY: setup demo reset-demo migrate
+.PHONY: up setup demo reset-demo migrate
+
+up:
+	docker compose build
+	docker compose up -d
 
 setup:
-	docker compose up -d --build
-	docker compose exec -T web python manage.py seed_demo
+	sh scripts/bootstrap.sh $(MODE)
 
 demo:
 	docker compose exec -T web python manage.py migrate
