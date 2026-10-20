@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
 from accounts.models import User
+from accounts.permissions import STAFF_ROLES
 from tickets.schema import attachments_schema, comment_attachments_schema
 from tickets.selectors import visible_attachments
 from tickets.serializers import AttachmentSerializer
@@ -17,7 +18,7 @@ UPLOAD_THROTTLES = [UserRateThrottle, AttachmentUploadThrottle]
 
 
 class AttachmentsMixin:
-    def _attachments_response(self, request, queryset, **parent):
+    def _attachments_response(self, request, queryset, *, allow_internal=False, **parent):
         context = {"request": request}
         if request.method == "GET":
             queryset = visible_attachments(request.user, queryset)
@@ -25,7 +26,12 @@ class AttachmentsMixin:
 
         serializer = AttachmentSerializer(data=request.data, context=context)
         serializer.is_valid(raise_exception=True)
-        attachment = serializer.save(uploaded_by=request.user, **parent)
+        is_internal = (
+            allow_internal
+            and request.user.role in STAFF_ROLES
+            and serializer.validated_data.get("is_internal", False)
+        )
+        attachment = serializer.save(uploaded_by=request.user, is_internal=is_internal, **parent)
         return Response(
             AttachmentSerializer(attachment, context=context).data,
             status=status.HTTP_201_CREATED,
@@ -40,7 +46,9 @@ class AttachmentsMixin:
     )
     def attachments(self, request, pk=None):
         ticket = self.get_object()
-        return self._attachments_response(request, ticket.attachments.all(), ticket=ticket)
+        return self._attachments_response(
+            request, ticket.attachments.all(), allow_internal=True, ticket=ticket
+        )
 
     @comment_attachments_schema
     @action(

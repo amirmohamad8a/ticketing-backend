@@ -134,6 +134,10 @@ attachments_schema = _stack(
     extend_schema(
         methods=["POST"],
         tags=TAGS,
+        description=(
+            "Agents and admins can set `is_internal` to keep the file hidden from the "
+            "customer. The flag is ignored for customers."
+        ),
         request=MULTIPART_ATTACHMENT,
         responses={201: AttachmentSerializer},
     ),

@@ -10,4 +10,4 @@ def reroute_released_chat_tickets(sender, tickets, **kwargs):
 
     for ticket in tickets:
         if ticket.channel == Ticket.Channel.CHAT:
-            route_new_chat(ticket)
+            route_new_chat(ticket, skip_locked=True)

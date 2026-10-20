@@ -123,6 +123,24 @@ class AttachmentUploadValidationTests(TestCase):
         )
         self.assertEqual(response.status_code, 201)
 
+    def test_agent_can_upload_a_ticket_attachment_hidden_from_customers(self):
+        self._auth(self.agent)
+        response = self.client.post(
+            f"/api/tickets/{self.ticket.id}/attachments/", {"file": _file(), "is_internal": True}
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["is_internal"])
+        self.assertTrue(Attachment.objects.get(id=response.data["id"]).is_internal)
+
+    def test_customer_cannot_mark_a_ticket_attachment_internal(self):
+        self._auth(self.customer)
+        response = self.client.post(
+            f"/api/tickets/{self.ticket.id}/attachments/", {"file": _file(), "is_internal": True}
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(response.data["is_internal"])
+        self.assertFalse(Attachment.objects.get(id=response.data["id"]).is_internal)
+
     def test_other_customer_cannot_upload_to_ticket_they_dont_own(self):
         self._auth(self.other_customer)
         response = self.client.post(
@@ -182,3 +200,32 @@ class AttachmentListingTests(TestCase):
         self._auth(self.other_customer)
         response = self.client.get(f"/api/tickets/{self.ticket.id}/attachments/")
         self.assertEqual(response.status_code, 404)
+
+    def test_customer_cannot_see_a_staff_internal_ticket_attachment(self):
+        internal = Attachment.objects.create(
+            ticket=self.ticket,
+            file=_file(name="private.txt"),
+            uploaded_by=self.agent,
+            size=11,
+            content_type="text/plain",
+            is_internal=True,
+        )
+        self._auth(self.customer)
+        response = self.client.get(f"/api/tickets/{self.ticket.id}/attachments/")
+        self.assertEqual([a["id"] for a in response.data], [self.attachment.id])
+        self.assertEqual(
+            self.client.get(f"/api/attachments/{internal.id}/download/").status_code, 404
+        )
+
+    def test_agent_sees_a_staff_internal_ticket_attachment(self):
+        internal = Attachment.objects.create(
+            ticket=self.ticket,
+            file=_file(name="private.txt"),
+            uploaded_by=self.agent,
+            size=11,
+            content_type="text/plain",
+            is_internal=True,
+        )
+        self._auth(self.agent)
+        response = self.client.get(f"/api/tickets/{self.ticket.id}/attachments/")
+        self.assertEqual({a["id"] for a in response.data}, {self.attachment.id, internal.id})

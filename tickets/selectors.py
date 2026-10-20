@@ -30,7 +30,7 @@ def visible_attachments(viewer, queryset=None):
     queryset = Attachment.objects.all() if queryset is None else queryset
     role = getattr(viewer, "role", None)
     if role == User.Role.CUSTOMER:
-        ticket_scope = Q(ticket__is_deleted=False, ticket__customer=viewer)
+        ticket_scope = Q(ticket__is_deleted=False, ticket__customer=viewer, is_internal=False)
         comment_scope = Q(
             comment__ticket__is_deleted=False,
             comment__ticket__customer=viewer,

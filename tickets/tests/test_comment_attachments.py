@@ -165,6 +165,14 @@ class CommentAttachmentUploadTests(CommentAttachmentFixture):
                 self.assertEqual(response.status_code, 201)
                 self.assertEqual(response.data["comment"], comment.id)
 
+    def test_is_internal_is_ignored_on_comment_attachments(self):
+        response = _client_for(self.agent).post(
+            self._url(self.agent_comment), {"file": _file(), "is_internal": True}
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(response.data["is_internal"])
+        self.assertFalse(Attachment.objects.get(pk=response.data["id"]).is_internal)
+
     def test_uploaded_internal_attachment_stays_hidden_from_customers(self):
         _client_for(self.agent).post(self._url(self.internal_comment), {"file": _file()})
         self.assertEqual(self._count(self.internal_comment), 2)

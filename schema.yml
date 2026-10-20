@@ -1798,6 +1798,8 @@ paths:
                 type: integer
     post:
       operationId: tickets_attachments_create
+      description: Agents and admins can set `is_internal` to keep the file hidden
+        from the customer. The flag is ignored for customers.
       parameters:
       - in: path
         name: id
@@ -3786,6 +3788,8 @@ components:
         content_type:
           type: string
           readOnly: true
+        is_internal:
+          type: boolean
         created_at:
           type: string
           format: date-time
@@ -3807,6 +3811,8 @@ components:
           type: string
           format: binary
           writeOnly: true
+        is_internal:
+          type: boolean
       required:
       - file
     AuditEntry:

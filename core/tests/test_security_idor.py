@@ -177,6 +177,12 @@ class DownloadIdorTests(TestCase):
         self.assertEqual(client_for(self.owner).get(url).status_code, 404)
         self.assertEqual(client_for(self.agent).get(url).status_code, 200)
 
+    def test_a_customer_never_gets_a_link_to_a_staff_internal_ticket_file(self):
+        private = AttachmentFactory(ticket=self.ticket, uploaded_by=self.agent, is_internal=True)
+        url = f"/api/attachments/{private.id}/download/"
+        self.assertEqual(client_for(self.owner).get(url).status_code, 404)
+        self.assertEqual(client_for(self.agent).get(url).status_code, 200)
+
     def test_avatar_lookups_do_not_reveal_who_has_an_avatar(self):
         self.owner.avatar.save("avatar.png", ContentFile(b"avatar"), save=True)
         without_avatar = UserFactory()

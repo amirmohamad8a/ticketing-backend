@@ -416,6 +416,7 @@ class Attachment(TimeStampedModel):
     )
     size = models.PositiveIntegerField()
     content_type = models.CharField(max_length=255)
+    is_internal = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["created_at"]

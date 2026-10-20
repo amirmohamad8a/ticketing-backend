@@ -21,6 +21,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "uploaded_by",
             "size",
             "content_type",
+            "is_internal",
             "created_at",
         ]
         read_only_fields = [

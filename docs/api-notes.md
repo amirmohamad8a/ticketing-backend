@@ -97,6 +97,12 @@ The status workflow is validated: illegal transitions return `400` and write
 nothing. Deletion is soft; comments, attachments and audit rows survive, and an
 admin can restore the ticket.
 
+`POST /api/tickets/{id}/attachments/` accepts an optional `is_internal`. Only agents
+and admins can set it, and a customer's value is ignored. Internal ticket files are
+hidden from customers in the list and on download. Files uploaded before the flag
+existed stay visible. Comment attachments ignore `is_internal` and follow the
+comment's own `is_internal` flag.
+
 Tickets have exactly one owner, either `customer` or `visitor`, enforced by a
 database constraint. `channel` is `portal`, `chat` or `offline_form`. Visitor
 tickets have `customer: null`; customers never see them.
@@ -263,6 +269,13 @@ With no available agent the conversation stays queued. Later messages do not
 retry routing. The minute sweep assigns queued chats in creation order when an
 agent has capacity. `last_chat_assigned_at` drives the round-robin tie-break.
 
+When a user is deactivated or demoted, their released chats are rerouted with a
+non-blocking lock: agent rows another transaction already holds are skipped, so the
+user update never waits on routing and the two cannot deadlock. A released chat
+with no free agent stays queued, and the minute sweep assigns it later. Normal
+routing still waits for each agent row, so a burst of new chats does not skip
+agents and queue up unnecessarily.
+
 `POST /api/tickets/{id}/claim/` is the manual path. An unassigned ticket is
 assigned to the caller; the caller's own ticket is returned unchanged; another
 agent's ticket returns `409` with `ticket_already_assigned`. A claim does not
@@ -277,6 +290,12 @@ When a new conversation cannot be routed, `chat.convert_to_offline` is scheduled
 after the transaction commits. With nobody online the countdown is `0`;
 otherwise it is the site's `offline_timeout_minutes`. The minute sweep also
 converts chats that passed their timeout without a public staff reply.
+
+The timeout counts from the latest assignee event, or from `created_at` when the
+chat was never assigned, so a chat that is rerouted or assigned late gets the full
+timeout. A scheduled conversion does nothing while the assignee is online and the
+timeout counted from that assignment has not passed. The minute sweep converts the
+chat once it has.
 
 Conversion is skipped when the ticket is missing or deleted, is no longer a chat,
 is resolved or closed, or already has a public staff message. Otherwise, in one

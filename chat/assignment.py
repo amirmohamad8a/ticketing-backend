@@ -13,12 +13,12 @@ from tickets.models import Ticket
 EPOCH = datetime.min.replace(tzinfo=UTC)
 
 
-def _lock_available_agents():
+def _lock_available_agents(skip_locked=False):
     candidate_ids = presence.available_agent_ids()
     if not candidate_ids:
         return []
     return list(
-        User.objects.select_for_update()
+        User.objects.select_for_update(skip_locked=skip_locked)
         .filter(pk__in=candidate_ids, is_active=True, role__in=STAFF_ROLES)
         .order_by("pk")
         .values_list("pk", flat=True)
@@ -29,8 +29,8 @@ def _routing_key(agent):
     return (agent.open_chats, agent.last_chat_assigned_at or EPOCH, agent.pk)
 
 
-def _pick_agent():
-    locked_ids = _lock_available_agents()
+def _pick_agent(skip_locked=False):
+    locked_ids = _lock_available_agents(skip_locked=skip_locked)
     if not locked_ids:
         return None
     eligible = presence.accepting_agents(locked_ids)
@@ -39,9 +39,9 @@ def _pick_agent():
     return min(eligible, key=_routing_key)
 
 
-def route_new_chat(ticket):
+def route_new_chat(ticket, skip_locked=False):
     with transaction.atomic():
-        agent = _pick_agent()
+        agent = _pick_agent(skip_locked=skip_locked)
         if agent is None:
             return None
         try:

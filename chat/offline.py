@@ -3,7 +3,8 @@ from datetime import timedelta
 
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, F, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.translation import gettext
 
@@ -13,7 +14,7 @@ from chat.assignment import route_queued_chats
 from core.events import OFFLINE_EVENT_TYPE, publish
 from tickets.events import TicketEventField, record_event
 from tickets.messages import post_message
-from tickets.models import Comment, Ticket
+from tickets.models import Comment, Ticket, TicketEvent
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +38,34 @@ def _agent_replied(ticket):
 
 def _offline_notice():
     return gettext(
-        "No agent is available right now. Leave your contact details and we will get back to you."
+        "We could not reach an agent in time. Leave your contact details and we will get back "
+        "to you."
     )
 
 
 def _unanswered_chats():
     return Ticket.objects.chat().unfinished().filter(~Exists(_public_staff_replies(OuterRef("pk"))))
+
+
+def _waiting_since():
+    latest_assignment = (
+        TicketEvent.objects.filter(ticket=OuterRef("pk"), field_changed=TicketEventField.ASSIGNEE)
+        .order_by("-created_at", "-pk")
+        .values("created_at")[:1]
+    )
+    return Coalesce(Subquery(latest_assignment), F("created_at"))
+
+
+def _online_assignee_within_timeout(ticket, now):
+    if ticket.assignee_id is None or ticket.assignee_id not in presence.online_agent_ids():
+        return False
+    waiting_since = (
+        Ticket.objects.annotate(waiting_since=_waiting_since())
+        .values_list("waiting_since", flat=True)
+        .get(pk=ticket.pk)
+    )
+    timeout = ticket.site.offline_timeout_minutes if ticket.site_id else 0
+    return waiting_since + timedelta(minutes=timeout) > now
 
 
 class EarlyCandidateConfirmation:
@@ -66,13 +89,14 @@ def due_chat_ticket_ids(now=None):
     nobody_online = not online_ids
     rows = list(
         _unanswered_chats()
+        .annotate(waiting_since=_waiting_since())
         .order_by("created_at", "pk")
-        .values_list("pk", "created_at", "site__offline_timeout_minutes", "assignee_id")
+        .values_list("pk", "waiting_since", "site__offline_timeout_minutes", "assignee_id")
     )
     expired = set()
     early = set()
-    for pk, created_at, timeout, assignee_id in rows:
-        if created_at + timedelta(minutes=timeout or 0) <= now:
+    for pk, waiting_since, timeout, assignee_id in rows:
+        if waiting_since + timedelta(minutes=timeout or 0) <= now:
             expired.add(pk)
         elif assignee_id is None:
             if nobody_online:
@@ -89,6 +113,8 @@ def convert_unanswered_chat(ticket_id):
         if ticket is None or ticket.channel != Ticket.Channel.CHAT:
             return False
         if ticket.status in Ticket.FINISHED_STATUSES or _agent_replied(ticket):
+            return False
+        if _online_assignee_within_timeout(ticket, timezone.now()):
             return False
         old_channel = Ticket.Channel.CHAT.value
         ticket.channel = Ticket.Channel.OFFLINE_FORM
