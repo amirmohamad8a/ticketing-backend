@@ -1,8 +1,13 @@
+from datetime import timedelta
+from unittest.mock import patch
+
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from rest_framework.test import APIClient
 
+from chat.models import Visitor
 from core.tests.factories import SiteFactory
 from tickets.models import Attachment, Comment, Ticket
 
@@ -241,3 +246,111 @@ class WidgetReplyReopenTests(TestCase):
         res = self.client.post(CONVERSATIONS_URL, {"body": "Still there?"})
         self.assertEqual(res.status_code, 200)
         self.assertEqual(Ticket.objects.get(pk=self.ticket_id).status, Ticket.Status.IN_PROGRESS)
+
+
+class WidgetIdempotentStartTests(TestCase):
+    ORIGIN = "https://example.com"
+
+    def setUp(self):
+        self.client = APIClient()
+        self.site = SiteFactory(allowed_origins=[self.ORIGIN])
+
+    def _start(self, body="Hello", client_msg_id="first-attempt-1", site=None, **extra):
+        payload = {
+            "site_key": (site or self.site).key,
+            "body": body,
+            "client_msg_id": client_msg_id,
+            **extra,
+        }
+        return self.client.post(CONVERSATIONS_URL, payload, HTTP_ORIGIN=self.ORIGIN)
+
+    def test_a_retry_without_a_token_returns_the_same_conversation(self):
+        first = self._start()
+        retry = self._start()
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual(retry.data["conversation"]["id"], first.data["conversation"]["id"])
+        self.assertEqual(retry.data["message"]["id"], first.data["message"]["id"])
+        self.assertEqual(Ticket.objects.count(), 1)
+        self.assertEqual(Visitor.objects.count(), 1)
+        self.assertEqual(Comment.objects.count(), 1)
+
+    def test_the_retry_gets_a_working_token_for_the_same_visitor(self):
+        first = self._start()
+        retry = self._start()
+        ticket_id = first.data["conversation"]["id"]
+        client = APIClient()
+        res = client.get(
+            _messages_url(ticket_id),
+            HTTP_X_VISITOR_TOKEN=retry.data["token"],
+            HTTP_ORIGIN=self.ORIGIN,
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data["results"]), 1)
+
+    @override_settings(WIDGET_POW_DIFFICULTY=18)
+    def test_a_retry_does_not_need_a_new_proof_of_work(self):
+        with patch("chat.widget.admission.verify_solution"):
+            first = self._start(pow_challenge="spent", pow_nonce="1")
+        self.assertEqual(first.status_code, 201)
+        retry = self._start(pow_challenge="spent", pow_nonce="1")
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual(Visitor.objects.count(), 1)
+
+    @override_settings(WIDGET_POW_DIFFICULTY=18)
+    def test_a_new_conversation_still_needs_a_proof_of_work(self):
+        res = self._start(client_msg_id="brand-new-1")
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(Visitor.objects.count(), 0)
+
+    def test_the_same_id_with_another_body_is_rejected(self):
+        self._start(body="Hello")
+        res = self._start(body="Something else")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("client_msg_id", res.data["error"]["details"])
+        self.assertEqual(Ticket.objects.count(), 1)
+
+    def test_the_same_id_on_another_site_is_a_separate_conversation(self):
+        other = SiteFactory(allowed_origins=[self.ORIGIN])
+        self._start()
+        res = self._start(site=other)
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(Ticket.objects.count(), 2)
+
+    def test_an_old_conversation_is_not_replayed(self):
+        first = self._start()
+        Ticket.objects.filter(pk=first.data["conversation"]["id"]).update(
+            created_at=timezone.now() - timedelta(minutes=11)
+        )
+        res = self._start()
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(Ticket.objects.count(), 2)
+
+    def test_a_later_message_id_cannot_be_used_to_get_the_visitors_token(self):
+        first = self._start()
+        client = APIClient()
+        client.post(
+            _messages_url(first.data["conversation"]["id"]),
+            {"body": "Second", "client_msg_id": "second-message-1"},
+            HTTP_X_VISITOR_TOKEN=first.data["token"],
+            HTTP_ORIGIN=self.ORIGIN,
+        )
+        res = self._start(body="Second", client_msg_id="second-message-1")
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(Visitor.objects.count(), 2)
+
+    def test_a_replay_still_checks_the_origin(self):
+        self._start()
+        res = self.client.post(
+            CONVERSATIONS_URL,
+            {"site_key": self.site.key, "body": "Hello", "client_msg_id": "first-attempt-1"},
+            HTTP_ORIGIN="https://evil.com",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_starting_without_an_id_never_replays(self):
+        first = self._start(client_msg_id="")
+        second = self._start(client_msg_id="")
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+        self.assertEqual(Ticket.objects.count(), 2)

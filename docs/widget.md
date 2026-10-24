@@ -55,7 +55,7 @@ widget rate scopes in [Rate limits](operations.md#rate-limits).
 - `site_key` (required without a token).
 - `name`, `phone`, `email`: stored on the new visitor. The site's
   `require_name` and `require_contact` are enforced.
-- `client_msg_id`: optional idempotency key.
+- `client_msg_id`: optional idempotency key. See below for retries of the first message.
 - `pow_challenge`, `pow_nonce`: proof-of-work fields.
 
 Without a token, the backend creates a visitor and a conversation. With a token,
@@ -63,6 +63,18 @@ the token is replaced by a fresh one and the message goes into the visitor's
 current open conversation; if there is none, a new conversation is created. A
 message into a `waiting_on_customer` conversation moves it back to
 `in_progress`.
+
+Retrying the first message is safe when it carries the same `client_msg_id` and
+`body`. If a conversation that started with that message already exists on the
+site, created within the last 10 minutes, the response is `200` with the same
+`conversation` and `message`, and a fresh token for the same visitor. A replay
+is detected before the proof of work, so the retry needs no new solution and
+no second visitor or conversation is created. The same `client_msg_id` with a
+different `body` is a `400` on `client_msg_id`. Use a random value of at least
+122 bits (such as a UUID): knowing it, together with the body, is what lets a
+caller receive the visitor's token again. Only the first message of a
+conversation can be replayed this way. A visitor that already has a token
+retries through the normal message routes.
 
 The response is `201` when a conversation was created and `200` otherwise. It
 contains `token`, `conversation`, `message` and `agents_available`.

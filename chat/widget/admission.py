@@ -2,7 +2,12 @@ from django.utils.translation import gettext_lazy as _
 
 from rest_framework.exceptions import NotFound
 
-from chat.conversations import open_conversation, start_conversation
+from chat.conversations import (
+    find_replayed_start,
+    open_conversation,
+    replay_session,
+    start_or_replay,
+)
 from chat.models import Site
 from chat.tokens import issue_visitor_token
 from chat.widget.auth import ensure_origin_allowed
@@ -30,9 +35,7 @@ def check_required_fields(site, data):
         raise DomainValidationError(errors)
 
 
-def admit_new_visitor(request, data):
-    site = find_site(data.get("site_key"), "site_key")
-    ensure_origin_allowed(request, site)
+def admit_new_visitor(site, data):
     check_required_fields(site, data)
     verify_solution(site, data.get("pow_challenge"), data.get("pow_nonce"))
     ensure_site_capacity(site)
@@ -40,16 +43,23 @@ def admit_new_visitor(request, data):
 
 
 def start_new_conversation(request, data):
-    site = admit_new_visitor(request, data)
-    session, ticket, comment = start_conversation(
+    site = find_site(data.get("site_key"), "site_key")
+    ensure_origin_allowed(request, site)
+    client_msg_id = data.get("client_msg_id") or None
+    replay = find_replayed_start(site, client_msg_id, data["body"])
+    if replay is not None:
+        session = replay_session(replay)
+        return session.visitor, session.token, replay.ticket, replay, False
+    admit_new_visitor(site, data)
+    session, ticket, comment, created = start_or_replay(
         site,
         data["body"],
         name=data.get("name") or "",
         phone=data.get("phone") or "",
         email=data.get("email") or "",
-        client_msg_id=data.get("client_msg_id") or None,
+        client_msg_id=client_msg_id,
     )
-    return session.visitor, session.token, ticket, comment, True
+    return session.visitor, session.token, ticket, comment, created
 
 
 def continue_conversation(visitor, data, request):
