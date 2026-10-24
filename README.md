@@ -63,8 +63,8 @@ make demo
 - Django admin: http://localhost:8000/admin/
 
 `seed_demo` creates a demo customer (`demo_customer`), a demo agent
-(`demo_agent`), a chat site and sample conversations. Both accounts use the
-password `demo-ticketing-2026`. `make reset-demo` removes the demo data and
+(`demo_agent`), a demo admin (`demo_admin`), a chat site and sample
+conversations. All three accounts use the password `demo-ticketing-2026`. `make reset-demo` removes the demo data and
 seeds a clean state again. The demo app is installed only by the development
 settings, so `seed_demo` and `reset_demo` do not exist in production.
 

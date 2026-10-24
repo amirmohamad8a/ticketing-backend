@@ -21,12 +21,14 @@ logger = logging.getLogger(__name__)
 
 CUSTOMER_USERNAME = "demo_customer"
 AGENT_USERNAME = "demo_agent"
-DEMO_USERNAMES = (CUSTOMER_USERNAME, AGENT_USERNAME)
+ADMIN_USERNAME = "demo_admin"
+DEMO_USERNAMES = (CUSTOMER_USERNAME, AGENT_USERNAME, ADMIN_USERNAME)
 DEMO_PASSWORD = "demo-ticketing-2026"
 
 USER_PROFILES = {
     CUSTOMER_USERNAME: (User.Role.CUSTOMER, "علی", "رضایی"),
     AGENT_USERNAME: (User.Role.AGENT, "پریسا", "کریمی"),
+    ADMIN_USERNAME: (User.Role.ADMIN, "سارا", "محمدی"),
 }
 
 SITE_KEY = "demo-store-widget-key"

@@ -12,6 +12,7 @@ from rest_framework.test import APIClient
 from accounts.models import User
 from chat.models import Site, Visitor
 from demo.demo import (
+    ADMIN_USERNAME,
     AGENT_USERNAME,
     CANNED_REPLIES,
     CHAT_TICKETS,
@@ -83,7 +84,9 @@ class SeedDemoDataTests(TestCase):
         agent = User.objects.get(username=AGENT_USERNAME)
         self.assertEqual(customer.role, User.Role.CUSTOMER)
         self.assertEqual(agent.role, User.Role.AGENT)
-        for user in (customer, agent):
+        admin = User.objects.get(username=ADMIN_USERNAME)
+        self.assertEqual(admin.role, User.Role.ADMIN)
+        for user in (customer, agent, admin):
             self.assertEqual(user.email, "")
             self.assertTrue(user.check_password(DEMO_PASSWORD))
             self.assertFalse(user.is_staff)
@@ -295,9 +298,9 @@ class SeedDemoApiTests(TestCase):
     def setUp(self):
         _seed()
 
-    def test_both_demo_users_can_sign_in(self):
+    def test_every_demo_user_can_sign_in(self):
         client = APIClient()
-        for username in (CUSTOMER_USERNAME, AGENT_USERNAME):
+        for username in (CUSTOMER_USERNAME, AGENT_USERNAME, ADMIN_USERNAME):
             with self.subTest(username=username):
                 response = client.post(
                     "/api/token/", {"username": username, "password": DEMO_PASSWORD}
