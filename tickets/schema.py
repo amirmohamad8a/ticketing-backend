@@ -80,7 +80,28 @@ ticket_schema = extend_schema_view(
     ),
     messages=extend_schema(
         tags=TAGS,
-        parameters=[OpenApiParameter("after", int, OpenApiParameter.QUERY)],
+        parameters=[
+            OpenApiParameter(
+                "after",
+                int,
+                OpenApiParameter.QUERY,
+                description=(
+                    "Return messages with an id above this value, oldest first. The default 0 "
+                    "starts at the first message. Cannot be combined with `before`."
+                ),
+            ),
+            OpenApiParameter(
+                "before",
+                int,
+                OpenApiParameter.QUERY,
+                description=(
+                    "Return the newest page of messages with an id below this value, in "
+                    "ascending order. `0` starts from the newest message, so passing the "
+                    "smallest id of the previous page walks back through the history. "
+                    "`has_more` then means older messages exist. Cannot be combined with `after`."
+                ),
+            ),
+        ],
         responses=MessageListSerializer,
     ),
     events=extend_schema(

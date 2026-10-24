@@ -268,6 +268,9 @@ class Comment(TimeStampedModel):
         MESSAGE = "message", "Message"
         SYSTEM = "system", "System"
 
+    class SystemCode(models.TextChoices):
+        OFFLINE_NOTICE = "offline_notice", "Offline notice"
+
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="comments")
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -284,6 +287,9 @@ class Comment(TimeStampedModel):
         related_name="comments",
     )
     kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.MESSAGE)
+    system_code = models.CharField(
+        max_length=32, choices=SystemCode.choices, blank=True, default=""
+    )
     client_msg_id = models.CharField(max_length=64, null=True, blank=True)
     body = models.TextField()
     is_internal = models.BooleanField(default=False)

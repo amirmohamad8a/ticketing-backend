@@ -23,7 +23,12 @@ def comment_sender_type(comment):
     return SenderType.AGENT
 
 
-def message_page(queryset, after, page_size):
+def message_page(queryset, after, page_size, before=None):
+    if before is not None:
+        if before:
+            queryset = queryset.filter(id__lt=before)
+        rows = list(queryset.order_by("-id")[: page_size + 1])
+        return rows[:page_size][::-1], len(rows) > page_size
     rows = list(queryset.filter(id__gt=after).order_by("id")[: page_size + 1])
     return rows[:page_size], len(rows) > page_size
 
@@ -45,6 +50,7 @@ def _publish_created(comment):
         {
             "message_id": comment.pk,
             "kind": comment.kind,
+            "system_code": comment.system_code,
             "sender_type": comment_sender_type(comment),
             "is_internal": comment.is_internal,
             "client_msg_id": comment.client_msg_id,
@@ -79,6 +85,7 @@ def post_message(
     is_internal=False,
     client_msg_id=None,
     kind=Comment.Kind.MESSAGE,
+    system_code="",
 ):
     if kind != Comment.Kind.SYSTEM and participant is None:
         raise ValueError("A message needs a participant.")
@@ -100,6 +107,7 @@ def post_message(
                 author=author,
                 visitor=visitor,
                 kind=kind,
+                system_code=system_code,
                 client_msg_id=client_msg_id,
                 body=body,
                 is_internal=is_internal,

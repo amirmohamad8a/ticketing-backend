@@ -181,6 +181,7 @@ class AssignmentWindowTests(TestCase):
         self._assign(self.now - timedelta(minutes=6))
         convert_unanswered_chat(self.ticket.pk)
         notice = Comment.objects.get(ticket=self.ticket, kind=Comment.Kind.SYSTEM)
+        self.assertEqual(notice.system_code, Comment.SystemCode.OFFLINE_NOTICE)
         self.assertEqual(
             notice.body,
             "We could not reach an agent in time. Leave your contact details and we will get "

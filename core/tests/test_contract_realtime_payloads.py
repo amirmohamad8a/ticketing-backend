@@ -5,7 +5,13 @@ from django.test import TestCase
 
 from chat.offline import convert_unanswered_chat
 from core.groups import AGENTS_QUEUE_GROUP, ticket_group
-from core.tests.factories import AgentFactory, TicketFactory, VisitorFactory
+from core.tests.factories import (
+    AgentFactory,
+    AttachmentFactory,
+    CommentFactory,
+    TicketFactory,
+    VisitorFactory,
+)
 from tickets.events import record_event
 from tickets.messages import post_message
 from tickets.models import Ticket
@@ -57,6 +63,7 @@ class RealtimePayloadContractTests(TestCase):
             {
                 "message_id": comment.pk,
                 "kind": "message",
+                "system_code": "",
                 "sender_type": "agent",
                 "is_internal": False,
                 "client_msg_id": None,
@@ -142,6 +149,82 @@ class RealtimePayloadContractTests(TestCase):
             ["ticket.event", "ticket.event", "message.created", "message.created"]
             + ["conversation.offline", "conversation.offline"],
         )
+
+    def test_the_offline_notice_carries_its_system_code(self):
+        ticket = TicketFactory(from_visitor=True)
+        layer = RecordingLayer()
+        with self._capture() as get_layer:
+            get_layer.return_value = layer
+            with self.captureOnCommitCallbacks(execute=True):
+                self.assertTrue(convert_unanswered_chat(ticket.pk))
+
+        notice = ticket.comments.get()
+        self.assertEqual(notice.system_code, "offline_notice")
+        data = [
+            message["payload"]["data"]
+            for _group, message in layer.messages
+            if message["payload"]["type"] == "message.created"
+        ]
+        self.assertEqual([item["system_code"] for item in data], ["offline_notice"] * 2)
+
+    def test_attachment_created_is_published_for_a_ticket_file(self):
+        ticket = TicketFactory()
+        layer = RecordingLayer()
+        with self._capture() as get_layer:
+            get_layer.return_value = layer
+            with self.captureOnCommitCallbacks(execute=True):
+                attachment = AttachmentFactory(ticket=ticket)
+
+        payload = _payload(
+            "attachment.created",
+            attachment.pk,
+            ticket.pk,
+            {"attachment_id": attachment.pk, "comment_id": None, "is_internal": False},
+        )
+        self.assertEqual(
+            layer.messages,
+            [(group, _message(group, payload, False)) for group in self._groups(ticket.pk)],
+        )
+
+    def test_attachment_created_on_a_comment_names_the_comment(self):
+        ticket = TicketFactory()
+        comment = CommentFactory(ticket=ticket)
+        layer = RecordingLayer()
+        with self._capture() as get_layer:
+            get_layer.return_value = layer
+            with self.captureOnCommitCallbacks(execute=True):
+                attachment = AttachmentFactory(ticket=None, comment=comment)
+
+        payload = _payload(
+            "attachment.created",
+            attachment.pk,
+            ticket.pk,
+            {"attachment_id": attachment.pk, "comment_id": comment.pk, "is_internal": False},
+        )
+        self.assertEqual(
+            layer.messages,
+            [(group, _message(group, payload, False)) for group in self._groups(ticket.pk)],
+        )
+
+    def test_an_internal_attachment_event_is_staff_only(self):
+        ticket = TicketFactory()
+        internal_comment = CommentFactory(ticket=ticket, is_internal=True)
+        layer = RecordingLayer()
+        with self._capture() as get_layer:
+            get_layer.return_value = layer
+            with self.captureOnCommitCallbacks(execute=True):
+                AttachmentFactory(ticket=ticket, is_internal=True)
+                AttachmentFactory(ticket=None, comment=internal_comment)
+
+        attachment_messages = [
+            message
+            for _group, message in layer.messages
+            if message["payload"]["type"] == "attachment.created"
+        ]
+        self.assertEqual(len(attachment_messages), 4)
+        for message in attachment_messages:
+            self.assertTrue(message["staff_only"])
+            self.assertTrue(message["payload"]["data"]["is_internal"])
 
     def test_nothing_is_sent_when_the_transaction_rolls_back(self):
         ticket = TicketFactory()

@@ -16,6 +16,7 @@ TYPING_EVENT_TYPE = "typing"
 TICKET_EVENT_TYPE = "ticket.event"
 MESSAGE_EVENT_TYPE = "message.created"
 OFFLINE_EVENT_TYPE = "conversation.offline"
+ATTACHMENT_EVENT_TYPE = "attachment.created"
 
 
 async def _send_to_groups(layer, payload, staff_only):

@@ -126,7 +126,12 @@ def convert_unanswered_chat(ticket_id):
             old_value=old_channel,
             new_value=Ticket.Channel.OFFLINE_FORM.value,
         )
-        post_message(ticket, _offline_notice(), kind=Comment.Kind.SYSTEM)
+        post_message(
+            ticket,
+            _offline_notice(),
+            kind=Comment.Kind.SYSTEM,
+            system_code=Comment.SystemCode.OFFLINE_NOTICE,
+        )
         visitor = ticket.visitor
         has_contact = bool(visitor is not None and (visitor.phone or visitor.email))
         publish(OFFLINE_EVENT_TYPE, event.pk, ticket.pk, {"has_contact": has_contact})

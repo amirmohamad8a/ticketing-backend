@@ -72,6 +72,7 @@ class WidgetMessageSerializer(CommentSerializer):
             "sender_type",
             "sender_name",
             "kind",
+            "system_code",
             "client_msg_id",
             "body",
             "attachments",

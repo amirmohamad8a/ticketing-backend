@@ -14,6 +14,67 @@ def _auth(client, user):
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
 
 
+class MessagesBeforeCursorTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.customer = User.objects.create_user(
+            username="mb_cust", password="pass12345", role=User.Role.CUSTOMER
+        )
+        self.agent = User.objects.create_user(
+            username="mb_agent", password="pass12345", role=User.Role.AGENT
+        )
+        self.ticket = Ticket.objects.create(title="t", description="d", customer=self.customer)
+        total = MESSAGES_PAGE_SIZE + 30
+        self.comments = Comment.objects.bulk_create(
+            [
+                Comment(ticket=self.ticket, author=self.customer, body=f"m{index}")
+                for index in range(total)
+            ]
+        )
+        self.comments = list(self.ticket.comments.order_by("id"))
+        self.url = f"/api/tickets/{self.ticket.id}/messages/"
+        _auth(self.client, self.customer)
+
+    def _ids(self, response):
+        return [row["id"] for row in response.data["results"]]
+
+    def test_before_zero_returns_the_newest_page_in_ascending_order(self):
+        response = self.client.get(self.url, {"before": 0})
+        self.assertEqual(response.status_code, 200)
+        expected = [comment.id for comment in self.comments[-MESSAGES_PAGE_SIZE:]]
+        self.assertEqual(self._ids(response), expected)
+        self.assertTrue(response.data["has_more"])
+
+    def test_before_an_id_walks_back_to_the_oldest_messages(self):
+        newest = self.client.get(self.url, {"before": 0})
+        oldest_seen = self._ids(newest)[0]
+        older = self.client.get(self.url, {"before": oldest_seen})
+        expected = [
+            comment.id for comment in self.comments[: len(self.comments) - MESSAGES_PAGE_SIZE]
+        ]
+        self.assertEqual(self._ids(older), expected)
+        self.assertFalse(older.data["has_more"])
+
+    def test_before_cannot_be_combined_with_after(self):
+        response = self.client.get(self.url, {"before": 0, "after": 1})
+        self.assertEqual(response.status_code, 400)
+
+    def test_after_still_pages_forward_from_the_start(self):
+        response = self.client.get(self.url)
+        self.assertEqual(self._ids(response), [c.id for c in self.comments[:MESSAGES_PAGE_SIZE]])
+        self.assertTrue(response.data["has_more"])
+
+    def test_before_hides_internal_notes_from_customers(self):
+        note = Comment.objects.create(
+            ticket=self.ticket, author=self.agent, body="note", is_internal=True
+        )
+        response = self.client.get(self.url, {"before": 0})
+        self.assertNotIn(note.id, self._ids(response))
+        _auth(self.client, self.agent)
+        staff = self.client.get(self.url, {"before": 0})
+        self.assertIn(note.id, self._ids(staff))
+
+
 class CommentVisibilityTests(TestCase):
     def setUp(self):
         self.client = APIClient()

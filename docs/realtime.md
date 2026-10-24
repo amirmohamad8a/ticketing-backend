@@ -59,7 +59,8 @@ Changes are pushed as events with the shape `{"type", "id", "ticket_id",
 
 | Type | `id` | `data` | Recipients |
 | --- | --- | --- | --- |
-| `message.created` | Message id | `message_id`, `kind`, `sender_type`, `is_internal`, `client_msg_id` | Everyone in the ticket; internal notes reach staff only |
+| `message.created` | Message id | `message_id`, `kind`, `system_code`, `sender_type`, `is_internal`, `client_msg_id` | Everyone in the ticket; internal notes reach staff only |
+| `attachment.created` | Attachment id | `attachment_id`, `comment_id` (null for a ticket-level file), `is_internal` | Everyone in the ticket and the agents queue; internal files reach staff only |
 | `ticket.event` | Audit event id | `field_changed`, `old_value`, `new_value` | Everyone in the ticket; assignee changes reach staff only |
 | `conversation.offline` | Audit event id of the channel change | `has_contact` | Everyone in the ticket and the agents queue |
 
@@ -68,6 +69,9 @@ Changes are pushed as events with the shape `{"type", "id", "ticket_id",
 - `data.message_id` of `message.created` is the id to use as the `after` cursor.
   The `id` of `ticket.event` and `conversation.offline` is from another sequence
   and must never be used as a message cursor.
+- `attachment.created` has its own id sequence too. Use it to refetch the ticket or message
+  attachments, never as a message cursor. A file sent with a message arrives after that
+  message's `message.created`.
 - `conversation.offline` tells the widget that the chat became offline.
   `has_contact` is `true` when the visitor already left a phone or email. The
   widget can then use `POST /api/widget/conversations/{id}/contact/`.

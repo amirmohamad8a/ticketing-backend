@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from rest_framework import serializers
 
 from tickets.messages import comment_sender_type
@@ -10,6 +12,13 @@ class CommentSerializer(serializers.ModelSerializer):
         max_length=64, required=False, allow_null=True, allow_blank=True
     )
     sender_type = serializers.SerializerMethodField()
+    system_code = serializers.CharField(
+        read_only=True,
+        help_text=(
+            "Machine-readable reason of a system message, empty for other messages. "
+            "Known values: `offline_notice`. Unknown values should be shown with a neutral label."
+        ),
+    )
 
     class Meta:
         model = Comment
@@ -20,6 +29,7 @@ class CommentSerializer(serializers.ModelSerializer):
             "visitor",
             "sender_type",
             "kind",
+            "system_code",
             "client_msg_id",
             "body",
             "is_internal",
@@ -32,6 +42,7 @@ class CommentSerializer(serializers.ModelSerializer):
             "author",
             "visitor",
             "kind",
+            "system_code",
             "created_at",
             "updated_at",
         ]
@@ -46,6 +57,14 @@ class CommentSerializer(serializers.ModelSerializer):
 
 class MessageQuerySerializer(serializers.Serializer):
     after = serializers.IntegerField(min_value=0, max_value=2**63 - 1, default=0)
+    before = serializers.IntegerField(min_value=0, max_value=2**63 - 1, required=False)
+
+    def validate(self, attrs):
+        if "before" in attrs and self.initial_data.get("after") not in (None, ""):
+            raise serializers.ValidationError(
+                {"before": _("Use either after or before, not both.")}
+            )
+        return attrs
 
 
 class MessageListSerializer(serializers.Serializer):

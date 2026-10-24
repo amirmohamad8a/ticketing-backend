@@ -2226,6 +2226,16 @@ paths:
         name: after
         schema:
           type: integer
+        description: Return messages with an id above this value, oldest first. The
+          default 0 starts at the first message. Cannot be combined with `before`.
+      - in: query
+        name: before
+        schema:
+          type: integer
+        description: Return the newest page of messages with an id below this value,
+          in ascending order. `0` starts from the newest message, so passing the smallest
+          id of the previous page walks back through the history. `has_more` then
+          means older messages exist. Cannot be combined with `after`.
       - in: path
         name: id
         schema:
@@ -4007,6 +4017,12 @@ components:
           allOf:
           - $ref: '#/components/schemas/KindEnum'
           readOnly: true
+        system_code:
+          type: string
+          readOnly: true
+          description: 'Machine-readable reason of a system message, empty for other
+            messages. Known values: `offline_notice`. Unknown values should be shown
+            with a neutral label.'
         client_msg_id:
           type: string
           nullable: true
@@ -4031,6 +4047,7 @@ components:
       - id
       - kind
       - sender_type
+      - system_code
       - ticket
       - updated_at
       - visitor
@@ -5303,6 +5320,12 @@ components:
           allOf:
           - $ref: '#/components/schemas/KindEnum'
           readOnly: true
+        system_code:
+          type: string
+          readOnly: true
+          description: 'Machine-readable reason of a system message, empty for other
+            messages. Known values: `offline_notice`. Unknown values should be shown
+            with a neutral label.'
         client_msg_id:
           type: string
           nullable: true
@@ -5328,6 +5351,7 @@ components:
       - kind
       - sender_name
       - sender_type
+      - system_code
     WidgetMessageInputRequest:
       type: object
       properties:

@@ -38,7 +38,7 @@ at `/api/docs/` and the JSON schema at `/api/schema/`.
 | `POST` | `/api/token/` | Anyone | Log in |
 | `POST` | `/api/token/refresh/` | Anyone | Refresh an access token |
 | `POST` | `/api/auth/register/` | Anyone | Register a customer |
-| `POST` | `/api/auth/logout/` | Signed in | Blacklist a refresh token and close the user's open WebSockets |
+| `POST` | `/api/auth/logout/` | Signed in | Blacklist every refresh token of the user and close the user's open WebSockets |
 | `GET`, `PATCH` | `/api/auth/me/` | Signed in | Read or update the own profile |
 | `POST` | `/api/auth/password/change/` | Signed in | Change the own password |
 
@@ -53,10 +53,9 @@ sets a new password with `PATCH /api/users/{id}/`.
 
 Logout takes `{"refresh": "<token>"}` and answers `205`. A body that is not an
 object, or a `refresh` that is missing or not a string, is a `400` validation
-error. Logout closes every open WebSocket of the user, on every device, not only
-the one that logged out. Sockets are not tied to a refresh token, so this is the
-only way to stop a logged-out device receiving live events. Other devices
-reconnect with a new ticket from `POST /api/ws/ticket/`.
+error. Logout blacklists every refresh token of the user, so every device is
+signed out, as with a password change. It also closes every open WebSocket of the
+user. A new login is needed on each device.
 
 ### Users and agents
 
@@ -81,7 +80,7 @@ themselves or reset their own password through user management.
 | `POST` | `/api/tickets/{id}/restore/` | Admins | Restore a deleted ticket |
 | `POST` | `/api/tickets/{id}/claim/` | Agents, admins | Claim an unassigned ticket |
 | `POST` | `/api/tickets/{id}/read/` | Signed in | Mark a conversation read |
-| `GET` | `/api/tickets/{id}/messages/` | Signed in | Messages after an `after` id |
+| `GET` | `/api/tickets/{id}/messages/` | Signed in | Messages after an `after` id, or the newest page before a `before` id |
 | `GET` | `/api/tickets/{id}/events/` | Signed in | Ticket audit events |
 | `GET`, `POST` | `/api/tickets/{id}/comments/` | Signed in | Deprecated message route |
 | `GET`, `POST` | `/api/tickets/{id}/attachments/` | Signed in | Ticket attachments |
@@ -118,6 +117,16 @@ with `200` instead of `201`. The same id from a different sender is rejected wit
 `GET /api/tickets/{id}/messages/?after=<id>` is the preferred recovery route. It
 returns `{results, has_more, unread_count}` with at most 100 messages, oldest
 first. `after` defaults to `0` and must be an integer from 0 to 2^63-1.
+
+`before=<id>` loads the history latest-first instead. `before=0` returns the
+newest 100 messages and `before=<smallest id of the previous page>` returns the
+page of older messages. Each page is in ascending order and `has_more` means
+older messages exist. `before` cannot be combined with `after`. The widget route
+supports only `after`.
+
+System messages carry a `system_code` (`offline_notice` today) that clients can
+map to their own text. It is an empty string for every other message, and an
+unknown code should be shown with a neutral label.
 
 #### Read state
 
@@ -303,7 +312,8 @@ transaction with the ticket row locked, it:
 
 1. Sets `channel` to `offline_form`.
 2. Writes a `channel` audit event.
-3. Adds a `system` message asking the visitor to leave contact details.
+3. Adds a `system` message with `system_code` `offline_notice` asking the visitor to leave
+   contact details.
 4. Publishes `conversation.offline` with `has_contact`.
 
 The assignee is kept and the conversation continues in the same ticket. The

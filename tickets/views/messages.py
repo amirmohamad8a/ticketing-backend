@@ -16,9 +16,10 @@ class MessagesMixin:
         query = MessageQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
         after = query.validated_data["after"]
+        before = query.validated_data.get("before")
         participant = Participant.from_request(request)
         queryset = visible_comments(ticket, participant).select_related("author")
-        rows, has_more = message_page(queryset, after, MESSAGES_PAGE_SIZE)
+        rows, has_more = message_page(queryset, after, MESSAGES_PAGE_SIZE, before)
         payload = {
             "results": rows,
             "has_more": has_more,
