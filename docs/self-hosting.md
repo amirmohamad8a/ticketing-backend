@@ -77,6 +77,7 @@ docker compose up -d
 - `worker` and `beat`: Celery.
 - `migrate`: a one-shot service that runs `migrate` and must finish before `web`,
   `worker` and `beat` start. Migrations are not part of the entrypoint.
+- `frontend`: the Next.js web app, built from the `../ticketing-frontend` repository. It talks to `web` over the Compose network.
 - `caddy`: the reverse proxy and the only service that publishes ports.
 - PostgreSQL, the `redis` service (cache and Channels layer, `volatile-lru`) and
   the `broker` service (Celery, AOF and `noeviction`, with its own volume).
@@ -85,7 +86,7 @@ docker compose up -d
 
 The production stack includes a `caddy` service configured by `Caddyfile`. Set
 `DOMAIN` in `.env`; Caddy gets and renews the certificate, redirects HTTP to
-HTTPS and proxies WebSocket upgrades to the `web` replicas on port 8000. Caddy
+HTTPS and serves everything from one domain: `/api/*`, `/ws/*`, `/admin/*` and `/static/*` go to the `web` replicas on port 8000 (WebSocket upgrades included) and every other path goes to `frontend` on port 3000. Caddy
 resolves `web` with `dynamic a`, so it picks up replicas as they start and stop. It caps request bodies at
 11 MiB (the upload limit), answers `/metrics/` with 404 and allows `/admin/` only
 from `ADMIN_ALLOWED_IPS` (space-separated IPs or CIDRs; by default nobody outside
@@ -98,6 +99,8 @@ From `DOMAIN` the production Compose file derives `ALLOWED_HOSTS` (the domain),
 (`https://DOMAIN`, overridable in `.env` when the frontend lives elsewhere). The
 production section of `.env.example` sets `NUM_PROXIES=1` and
 `SECURE_SSL_REDIRECT=True`.
+
+`NUM_PROXIES=1` is right for the single-domain layout. Caddy replaces any inbound `X-Forwarded-For` with the peer address, and the frontend server copies that header to Django without adding an entry, so Django reads the real client address from the last entry for direct API calls and for requests through the frontend. After a change to the proxy chain, check that `client_ip` in the `core.access` log lines for `/api/token/` equals the client address and ignores a spoofed `X-Forwarded-For` header sent with the request.
 
 If you use a different proxy instead:
 
@@ -147,4 +150,4 @@ COMPOSE="docker compose -f docker-compose.yml -f docker-compose.dev.yml" sh scri
 - `backup_media.sh` prints the volume it archives.
 - `restore_db.sh` and `restore_media.sh` restore those archives.
 
-The frontend is a separate application; this repository is the API only.
+The frontend is a separate repository. The production Compose file builds it from `../ticketing-frontend` and needs `FRONTEND_SESSION_SECRET` (at least 32 random characters) in `.env`.

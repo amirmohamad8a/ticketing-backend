@@ -1,18 +1,31 @@
 {$DOMAIN} {
+	log
+
 	request_body {
 		max_size 11MiB
 	}
 
 	@metrics path /metrics /metrics/*
-	respond @metrics 404
+	handle @metrics {
+		respond 404
+	}
 
 	@admin_blocked {
 		path /admin /admin/*
 		not remote_ip {$ADMIN_ALLOWED_IPS:127.0.0.1}
 	}
-	respond @admin_blocked 403
+	handle @admin_blocked {
+		respond 403
+	}
 
-	reverse_proxy {
-		dynamic a web 8000
+	@django path /api/* /ws/* /admin /admin/* /static/*
+	handle @django {
+		reverse_proxy {
+			dynamic a web 8000
+		}
+	}
+
+	handle {
+		reverse_proxy frontend:3000
 	}
 }

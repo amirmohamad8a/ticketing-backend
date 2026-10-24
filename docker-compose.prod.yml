@@ -55,6 +55,27 @@ services:
     <<: *prod-app
     logging: *json-logging
 
+  frontend:
+    image: ticketing-frontend:prod
+    build:
+      context: ../ticketing-frontend
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-bookworm-slim}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+        NEXT_PUBLIC_DEMO: "0"
+    environment:
+      API_INTERNAL_URL: http://web:8000
+      API_PUBLIC_URL: ""
+      PUBLIC_DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      WIDGET_URL: https://${DOMAIN}/widget/v1/widget.js
+      SESSION_SECRET: ${FRONTEND_SESSION_SECRET:?set FRONTEND_SESSION_SECRET in .env}
+      NEXT_PUBLIC_DEMO: "0"
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *json-logging
+
   caddy:
     image: caddy:2-alpine
     environment:
@@ -70,6 +91,8 @@ services:
       - caddy_config:/config
     depends_on:
       web:
+        condition: service_healthy
+      frontend:
         condition: service_healthy
     restart: unless-stopped
     logging: *json-logging
