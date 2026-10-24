@@ -6,7 +6,9 @@ from tickets.rules import validate_assignee, validate_status_transition, validat
 from tickets.services import create_ticket, update_ticket
 from tickets.validators import MAX_BODY_LENGTH
 
-STAFF_ONLY_RESPONSE_FIELDS = frozenset({"tags", "first_response_due_at", "visitor", "site"})
+STAFF_ONLY_RESPONSE_FIELDS = frozenset(
+    {"tags", "first_response_due_at", "visitor", "site", "customer_name"}
+)
 
 
 class TicketVisitorSerializer(serializers.ModelSerializer):
@@ -27,6 +29,7 @@ class TicketSerializer(serializers.ModelSerializer):
     visitor = TicketVisitorSerializer(read_only=True, allow_null=True)
     site = TicketSiteSerializer(read_only=True, allow_null=True)
     unread_count = serializers.SerializerMethodField()
+    customer_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Ticket
@@ -38,6 +41,7 @@ class TicketSerializer(serializers.ModelSerializer):
             "priority",
             "channel",
             "customer",
+            "customer_name",
             "visitor",
             "site",
             "assignee",
@@ -59,6 +63,12 @@ class TicketSerializer(serializers.ModelSerializer):
 
     def get_unread_count(self, obj) -> int:
         return getattr(obj, "unread_count", 0)
+
+    def get_customer_name(self, obj) -> str | None:
+        customer = obj.customer
+        if customer is None:
+            return None
+        return customer.get_full_name() or customer.username
 
     def validate_status(self, value):
         if self.instance is None:

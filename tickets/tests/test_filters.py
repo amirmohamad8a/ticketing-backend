@@ -87,6 +87,19 @@ class TicketFilterTests(TestCase):
         query = f"?assignee={self.other_agent.id}"
         self._assert_result(self.agent, query, [self.progress_high])
 
+    def test_assignee_unassigned_returns_only_tickets_without_an_assignee(self):
+        extra = TicketFactory(customer=self.customer, assignee=None)
+        expected = list(Ticket.objects.filter(assignee__isnull=True))
+        self.assertIn(extra, expected)
+        self.assertNotIn(self.open_high, expected)
+        self._assert_result(self.agent, "?assignee=unassigned", expected)
+
+    def test_assignee_rejects_other_words(self):
+        _auth(self.client, self.agent)
+        response = self.client.get("/api/tickets/?assignee=nobody")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("assignee", response.data["error"]["details"])
+
     def test_assignee_id_without_tickets_returns_an_empty_page(self):
         self._assert_result(self.agent, "?assignee=999999", [])
 

@@ -1358,6 +1358,7 @@ paths:
         name: assignee
         schema:
           type: string
+        description: 'Filter by assignee: `me`, `unassigned` or a numeric user id.'
       - in: query
         name: channel
         schema:
@@ -2540,6 +2541,7 @@ paths:
         name: assignee
         schema:
           type: string
+        description: 'Filter by assignee: `me`, `unassigned` or a numeric user id.'
       - in: query
         name: channel
         schema:
@@ -4032,6 +4034,11 @@ components:
           maxLength: 4000
         is_internal:
           type: boolean
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -4041,6 +4048,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - attachments
       - author
       - body
       - created_at
@@ -4416,6 +4424,10 @@ components:
           title: Active
           description: Designates whether this user should be treated as active. Unselect
             this instead of deleting accounts.
+        max_concurrent_chats:
+          type: integer
+          maximum: 50
+          minimum: 1
         password:
           type: string
           writeOnly: true
@@ -4836,6 +4848,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        customer_name:
+          type: string
+          nullable: true
+          readOnly: true
         visitor:
           allOf:
           - $ref: '#/components/schemas/TicketVisitor'
@@ -4873,6 +4889,7 @@ components:
       - channel
       - created_at
       - customer
+      - customer_name
       - description
       - first_response_due_at
       - id
@@ -5104,6 +5121,9 @@ components:
           title: Active
           description: Designates whether this user should be treated as active. Unselect
             this instead of deleting accounts.
+        max_concurrent_chats:
+          type: integer
+          readOnly: true
         date_joined:
           type: string
           format: date-time
@@ -5114,6 +5134,7 @@ components:
       - id
       - is_active
       - last_name
+      - max_concurrent_chats
       - phone
       - role
       - username

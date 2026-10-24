@@ -17,7 +17,10 @@ def _is_staff(request):
 
 
 class TicketFilter(django_filters.FilterSet):
-    assignee = django_filters.CharFilter(method="filter_assignee")
+    assignee = django_filters.CharFilter(
+        method="filter_assignee",
+        help_text=_("Filter by assignee: `me`, `unassigned` or a numeric user id."),
+    )
     tag = django_filters.CharFilter(
         method="filter_tag",
         help_text=_("Filter by tag id."),
@@ -42,8 +45,12 @@ class TicketFilter(django_filters.FilterSet):
             if not self.request or not self.request.user.is_authenticated:
                 return queryset.none()
             return queryset.assigned_to(self.request.user)
+        if value == "unassigned":
+            return queryset.unassigned()
         if not (value.isascii() and value.isdigit()):
-            raise ValidationError({"assignee": _("Must be 'me' or a numeric user id.")})
+            raise ValidationError(
+                {"assignee": _("Must be 'me', 'unassigned' or a numeric user id.")}
+            )
         return queryset.assigned_to(int(value))
 
     def filter_tag(self, queryset, name, value):

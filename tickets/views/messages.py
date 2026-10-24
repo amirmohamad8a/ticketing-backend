@@ -18,7 +18,11 @@ class MessagesMixin:
         after = query.validated_data["after"]
         before = query.validated_data.get("before")
         participant = Participant.from_request(request)
-        queryset = visible_comments(ticket, participant).select_related("author")
+        queryset = (
+            visible_comments(ticket, participant)
+            .select_related("author")
+            .prefetch_related("attachments")
+        )
         rows, has_more = message_page(queryset, after, MESSAGES_PAGE_SIZE, before)
         payload = {
             "results": rows,
@@ -33,7 +37,7 @@ class MessagesMixin:
         ticket = self.get_object()
 
         if request.method == "GET":
-            queryset = ticket.comments.select_related("author")
+            queryset = ticket.comments.select_related("author").prefetch_related("attachments")
             if not Participant.from_request(request).sees_internal_notes:
                 queryset = queryset.filter(is_internal=False)
             latest = list(queryset.order_by("-id")[: MESSAGES_PAGE_SIZE + 1])

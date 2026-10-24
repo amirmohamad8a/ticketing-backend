@@ -45,7 +45,9 @@ class CoreActionsMixin:
         if user.role == User.Role.CUSTOMER:
             queryset = queryset.filter(customer=user)
         else:
-            queryset = queryset.select_related("visitor", "site").prefetch_related("tags")
+            queryset = queryset.select_related("visitor", "site", "customer").prefetch_related(
+                "tags"
+            )
         if self.action == "export":
             return queryset
         return annotate_unread(queryset, user)

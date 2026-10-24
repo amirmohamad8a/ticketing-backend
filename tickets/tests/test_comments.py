@@ -4,6 +4,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import User
+from core.tests.factories import AttachmentFactory
 from tickets.messages import MESSAGES_PAGE_SIZE
 from tickets.models import Comment, Ticket
 from tickets.validators import MAX_BODY_LENGTH
@@ -73,6 +74,61 @@ class MessagesBeforeCursorTests(TestCase):
         _auth(self.client, self.agent)
         staff = self.client.get(self.url, {"before": 0})
         self.assertIn(note.id, self._ids(staff))
+
+
+class MessageAttachmentsInPayloadTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.customer = User.objects.create_user(
+            username="ma_cust", password="pass12345", role=User.Role.CUSTOMER
+        )
+        self.agent = User.objects.create_user(
+            username="ma_agent", password="pass12345", role=User.Role.AGENT
+        )
+        self.ticket = Ticket.objects.create(title="t", description="d", customer=self.customer)
+        self.public = Comment.objects.create(ticket=self.ticket, author=self.customer, body="p")
+        self.internal = Comment.objects.create(
+            ticket=self.ticket, author=self.agent, body="n", is_internal=True
+        )
+        self.public_file = AttachmentFactory(
+            ticket=None, comment=self.public, uploaded_by=self.customer
+        )
+        self.internal_file = AttachmentFactory(
+            ticket=None, comment=self.internal, uploaded_by=self.agent
+        )
+        self.url = f"/api/tickets/{self.ticket.id}/messages/"
+
+    def _rows(self, user):
+        _auth(self.client, user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        return {row["id"]: row for row in response.data["results"]}
+
+    def test_messages_carry_their_attachments(self):
+        rows = self._rows(self.customer)
+        files = rows[self.public.id]["attachments"]
+        self.assertEqual([item["id"] for item in files], [self.public_file.id])
+        self.assertEqual(files[0]["original_name"], self.public_file.original_name)
+        self.assertIn("download_url", files[0])
+
+    def test_a_message_without_files_has_an_empty_list(self):
+        plain = Comment.objects.create(ticket=self.ticket, author=self.customer, body="plain")
+        self.assertEqual(self._rows(self.customer)[plain.id]["attachments"], [])
+
+    def test_customers_never_see_internal_notes_or_their_files(self):
+        rows = self._rows(self.customer)
+        self.assertNotIn(self.internal.id, rows)
+
+    def test_staff_see_the_files_of_internal_notes(self):
+        rows = self._rows(self.agent)
+        files = rows[self.internal.id]["attachments"]
+        self.assertEqual([item["id"] for item in files], [self.internal_file.id])
+
+    def test_the_before_cursor_carries_attachments_too(self):
+        _auth(self.client, self.customer)
+        response = self.client.get(self.url, {"before": 0})
+        row = next(item for item in response.data["results"] if item["id"] == self.public.id)
+        self.assertEqual(len(row["attachments"]), 1)
 
 
 class CommentVisibilityTests(TestCase):

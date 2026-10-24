@@ -222,3 +222,38 @@ class TicketSerializerSelectionTests(TestCase):
         )
         serializer.is_valid(raise_exception=True)
         self.assertEqual(set(serializer.validated_data), {"title", "description"})
+
+
+class CustomerNameTests(TestCase):
+    def setUp(self):
+        self.customer = UserFactory(first_name="Sara", last_name="Ahmadi")
+        self.agent = AgentFactory()
+        self.ticket = TicketFactory(customer=self.customer)
+
+    def _get(self, user, ticket=None):
+        ticket = ticket or self.ticket
+        return _client_for(user).get(f"/api/tickets/{ticket.id}/")
+
+    def test_staff_see_the_full_name_of_the_customer(self):
+        response = self._get(self.agent)
+        self.assertEqual(response.data["customer_name"], "Sara Ahmadi")
+
+    def test_staff_see_the_username_when_the_customer_has_no_name(self):
+        nameless = UserFactory(first_name="", last_name="")
+        ticket = TicketFactory(customer=nameless)
+        response = self._get(self.agent, ticket)
+        self.assertEqual(response.data["customer_name"], nameless.username)
+
+    def test_a_ticket_without_a_customer_has_no_name(self):
+        ticket = TicketFactory(from_visitor=True)
+        response = self._get(self.agent, ticket)
+        self.assertIsNone(response.data["customer_name"])
+
+    def test_the_name_is_in_the_staff_list(self):
+        response = _client_for(self.agent).get("/api/tickets/")
+        row = next(item for item in response.data["results"] if item["id"] == self.ticket.id)
+        self.assertEqual(row["customer_name"], "Sara Ahmadi")
+
+    def test_customers_do_not_receive_the_name(self):
+        response = self._get(self.customer)
+        self.assertNotIn("customer_name", response.data)

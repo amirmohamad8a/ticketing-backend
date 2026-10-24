@@ -183,6 +183,7 @@ class UserSerializer(serializers.ModelSerializer):
             "phone",
             "role",
             "is_active",
+            "max_concurrent_chats",
             "date_joined",
         ]
         read_only_fields = fields
@@ -224,11 +225,16 @@ class UserUpdateSerializer(ActorMixin, serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["role", "is_active", "password"]
+        fields = ["role", "is_active", "max_concurrent_chats", "password"]
 
     def validate(self, attrs):
         user = self.instance
         actor = self._get_actor()
+
+        if "max_concurrent_chats" in attrs and attrs.get("role", user.role) == User.Role.CUSTOMER:
+            raise serializers.ValidationError(
+                {"max_concurrent_chats": _("Only agents and admins have a chat limit.")}
+            )
 
         if actor is not None and actor.pk == user.pk:
             errors = {}

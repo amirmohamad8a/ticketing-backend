@@ -49,7 +49,9 @@ last name, phone and avatar. Agents and admins may also set
 
 A password change needs the current password, revokes every refresh token of the
 user and returns a fresh token pair. There is no email password reset: an admin
-sets a new password with `PATCH /api/users/{id}/`.
+sets a new password with `PATCH /api/users/{id}/`. Admins can also set
+`max_concurrent_chats` (1 to 50) of an agent or admin with that route; customers
+have no chat limit.
 
 Logout takes `{"refresh": "<token>"}` and answers `205`. A body that is not an
 object, or a `refresh` that is missing or not a string, is a `400` validation
@@ -87,9 +89,11 @@ themselves or reset their own password through user management.
 | `GET`, `POST` | `/api/tickets/{id}/comments/{comment_id}/attachments/` | Signed in | Comment attachments |
 | `GET`, `POST` | `/api/tickets/{id}/rating/` | Customer owner | Read or submit the ticket rating |
 
-Ticket list filters include `status`, `priority`, `assignee` (`assignee=me` is
-supported), `tag`, `search` and `is_overdue`. Customers only ever see their own
-tickets. Customers can edit only the title and description of their own open
+Ticket list filters include `status`, `priority`, `assignee` (`me`, `unassigned`
+or a user id), `tag`, `search` and `is_overdue`. Customers only ever see their own
+tickets. Staff responses carry `customer_name`, the customer's full name or, when
+there is none, the username. It is `null` for visitor tickets and is not sent to
+customers. Customers can edit only the title and description of their own open
 tickets; status, priority, assignee and tags are staff-only.
 
 The status workflow is validated: illegal transitions return `400` and write
@@ -123,6 +127,10 @@ newest 100 messages and `before=<smallest id of the previous page>` returns the
 page of older messages. Each page is in ascending order and `has_more` means
 older messages exist. `before` cannot be combined with `after`. The widget route
 supports only `after`.
+
+Every message carries its `attachments` (the same shape as the attachment routes),
+so a client does not need one request per message. Internal notes and their files
+are staff-only like the notes themselves.
 
 System messages carry a `system_code` (`offline_notice` today) that clients can
 map to their own text. It is an empty string for every other message, and an

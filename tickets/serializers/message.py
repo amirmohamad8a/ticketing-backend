@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from tickets.messages import comment_sender_type
 from tickets.models import Comment
+from tickets.serializers.attachment import AttachmentSerializer
 from tickets.validators import MAX_BODY_LENGTH
 
 
@@ -12,6 +13,7 @@ class CommentSerializer(serializers.ModelSerializer):
         max_length=64, required=False, allow_null=True, allow_blank=True
     )
     sender_type = serializers.SerializerMethodField()
+    attachments = AttachmentSerializer(many=True, read_only=True)
     system_code = serializers.CharField(
         read_only=True,
         help_text=(
@@ -33,6 +35,7 @@ class CommentSerializer(serializers.ModelSerializer):
             "client_msg_id",
             "body",
             "is_internal",
+            "attachments",
             "created_at",
             "updated_at",
         ]

@@ -22,6 +22,7 @@ USER_KEYS = {
     "phone",
     "role",
     "is_active",
+    "max_concurrent_chats",
     "date_joined",
 }
 
@@ -316,6 +317,31 @@ class UserUpdateTests(TestCase):
         self.assertEqual(response.data["error"]["code"], "validation_error")
         self.assertIn(field, response.data["error"]["details"])
         self.assertFalse(self._events().exists())
+
+    def test_admin_sets_the_chat_limit_of_another_agent(self):
+        response = self._patch({"max_concurrent_chats": 12})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["max_concurrent_chats"], 12)
+        self.assertEqual(self._stored().max_concurrent_chats, 12)
+
+    def test_chat_limit_outside_the_allowed_range_is_rejected(self):
+        for value in (0, User.MAX_CONCURRENT_CHATS_LIMIT + 1):
+            with self.subTest(value=value):
+                response = self._patch({"max_concurrent_chats": value})
+                self._assert_rejected(response, "max_concurrent_chats")
+        self.assertEqual(self._stored().max_concurrent_chats, self.target.max_concurrent_chats)
+
+    def test_a_customer_has_no_chat_limit(self):
+        customer = UserFactory()
+        response = self.client.patch(
+            f"{URL}{customer.id}/", {"max_concurrent_chats": 5}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("max_concurrent_chats", response.data["error"]["details"])
+
+    def test_demoting_to_customer_together_with_a_chat_limit_is_rejected(self):
+        response = self._patch({"role": User.Role.CUSTOMER, "max_concurrent_chats": 5})
+        self._assert_rejected(response, "max_concurrent_chats")
 
     def test_role_change_returns_the_profile_and_writes_an_audit_row(self):
         response = self._patch({"role": User.Role.ADMIN})
