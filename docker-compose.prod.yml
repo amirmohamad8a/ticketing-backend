@@ -69,6 +69,7 @@ services:
       PUBLIC_DOMAIN: ${DOMAIN:?set DOMAIN in .env}
       WIDGET_URL: https://${DOMAIN}/widget/v1/widget.js
       SESSION_SECRET: ${FRONTEND_SESSION_SECRET:?set FRONTEND_SESSION_SECRET in .env}
+      MEDIA_ORIGIN: ${MEDIA_ORIGIN:-}
       NEXT_PUBLIC_DEMO: "0"
     depends_on:
       web:
