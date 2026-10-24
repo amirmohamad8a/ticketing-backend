@@ -124,6 +124,19 @@ class TokenAuthTests(TestCase):
         reuse_response = self.client.post("/api/token/refresh/", {"refresh": refresh})
         self.assertEqual(reuse_response.status_code, 401)
 
+    def test_logout_blacklists_every_refresh_token_of_the_user(self):
+        first = self.client.post("/api/token/", {"username": "tokenuser", "password": "pass12345"})
+        second = self.client.post("/api/token/", {"username": "tokenuser", "password": "pass12345"})
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {first.data['access']}")
+        logout_response = self.client.post("/api/auth/logout/", {"refresh": first.data["refresh"]})
+        self.assertEqual(logout_response.status_code, 205)
+
+        self.client.credentials()
+        for refresh in (first.data["refresh"], second.data["refresh"]):
+            response = self.client.post("/api/token/refresh/", {"refresh": refresh})
+            self.assertEqual(response.status_code, 401)
+
     def test_logout_requires_authentication(self):
         self.client.credentials()
         response = self.client.post("/api/auth/logout/", {"refresh": "sometoken"})

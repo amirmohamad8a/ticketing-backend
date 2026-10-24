@@ -155,4 +155,5 @@ def logout_user(refresh_token, user, *, close_user_sockets_fn=close_user_sockets
         raise DomainValidationError({"refresh": _("Invalid or expired token.")}) from exc
     with transaction.atomic():
         token.blacklist()
+        blacklist_user_tokens(user)
         close_user_sockets_fn(user.pk)
