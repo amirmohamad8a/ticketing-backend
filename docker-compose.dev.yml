@@ -43,6 +43,8 @@ services:
       API_INTERNAL_URL: http://web:8000
       API_PUBLIC_URL: http://localhost:8000
       PUBLIC_DOMAIN: localhost
+      WIDGET_URL: http://localhost:3000/widget/v1/widget.js
+      SESSION_SECRET: ${FRONTEND_SESSION_SECRET:-dev-only-session-secret-not-for-production-use}
       NEXT_PUBLIC_DEMO: "1"
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
